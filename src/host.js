@@ -306,7 +306,7 @@ async function startVoice(store, secrets, itemId, onlyIds) {
     runVoiceBody(store, secrets, itemId, onlyIds, report, signal))
 }
 
-async function startImages(store, secrets, itemId, onlyIds) {
+async function startImages(store, secrets, itemId, onlyIds, note) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
@@ -321,8 +321,9 @@ async function startImages(store, secrets, itemId, onlyIds) {
     for (const row of targets) {
       if (signal.aborted) throw new Error('已停止')
       report(done, `第 ${done + 1}/${targets.length} 张画面`)
+      const fix = note && targets.length === 1 ? `。调整：${String(note).trim()}` : ''
       const buffer = await generateImage(settings, secrets, {
-        content: `${row.imagePrompt || row.text.slice(0, 400)}${anchorHint(item)}`,
+        content: `${row.imagePrompt || row.text.slice(0, 400)}${fix}${anchorHint(item)}`,
         width,
         height,
       })
@@ -975,7 +976,7 @@ async function route(ctx, store, req, res) {
       const id = String(body.id ?? '')
       const secrets = await store.readSecrets()
       const only = Array.isArray(body.only) ? body.only.map(String) : null
-      await startImages(store, secrets, id, only)
+      await startImages(store, secrets, id, only, typeof body.note === 'string' ? body.note.slice(0, 300) : '')
       return json(res, 200, { task: publicTask(id) })
     }
     case 'finish': {

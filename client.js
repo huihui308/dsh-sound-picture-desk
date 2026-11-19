@@ -129,6 +129,9 @@ window.__ModuleLoader__.load({
 .sd-ref-err{color:var(--dsw-alias-state-warn-primary);font-size:10.5px;white-space:nowrap}
 .sd-card[data-mode="script"] .sd-thumb,.sd-card[data-mode="script"] .sd-thumb-empty{width:132px;height:232px;flex:0 0 132px}
 .sd-readtext{font-size:12.5px;line-height:1.75;color:var(--dsw-alias-label-primary);white-space:pre-wrap}
+.sd-fixrow{display:flex;gap:6px;align-items:center;margin-top:7px}
+.sd-fixrow .sd-input{flex:1;min-width:0}
+.sd-fixrow .sd-btn{flex:0 0 auto}
 .sd-readprompt{font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-tertiary);border-left:2px solid var(--dsw-alias-border-l2);padding-left:8px;margin-top:2px}
 .sd-config{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:12px 13px}
 .sd-config-title{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary);font-weight:600;margin-bottom:10px}
@@ -1332,6 +1335,7 @@ window.__ModuleLoader__.load({
     function SegmentCard({ item, seg, mode, disabled, onAction, onReload, onZoom }) {
       const [text, setText] = useState(seg.text)
       const [prompt, setPrompt] = useState(seg.imagePrompt)
+      const [note, setNote] = useState('')
       const dirty = mode === 'script' && (text !== seg.text || prompt !== seg.imagePrompt)
 
       useEffect(() => { setText(seg.text) }, [seg.text])
@@ -1390,6 +1394,30 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'sd-readprompt' }, seg.imagePrompt || '（没有画面描述）')
             : null,
 
+          mode === 'image'
+            ? h('div', { className: 'sd-fixrow' },
+              h('input', {
+                className: 'sd-input', value: note, spellCheck: false,
+                placeholder: '这张哪里不对？例：太暗、人物太年轻、要更空旷',
+                onChange: event => setNote(event.target.value),
+                onKeyDown: event => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    onAction('image', { id: item.id, only: [seg.id], note }, null)
+                    setNote('')
+                  }
+                },
+              }),
+              h('button', {
+                className: 'sd-btn', 'data-kind': seg.imagePath ? undefined : 'primary', type: 'button',
+                disabled: disabled || (!seg.imagePrompt && !seg.text),
+                onClick: () => {
+                  onAction('image', { id: item.id, only: [seg.id], note }, null)
+                  setNote('')
+                },
+              }, seg.imagePath ? '按这条重出图' : '出这一张'))
+            : null,
+
           seg.error
             ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-warn-primary)', wordBreak: 'break-word' } }, seg.error)
             : null,
@@ -1405,12 +1433,7 @@ window.__ModuleLoader__.load({
                 onClick: () => onAction('tts', { id: item.id, only: [seg.id] }, null),
               }, seg.audioPath ? '重配音' : '配音')
               : null,
-            mode !== 'voice'
-              ? h('button', {
-                className: 'sd-btn', 'data-kind': 'ghost', disabled: disabled || (!seg.imagePrompt && !seg.text),
-                onClick: () => onAction('image', { id: item.id, only: [seg.id] }, null),
-              }, seg.imagePath ? '重出图' : '出图')
-              : null)))
+            null)))
     }
 
     // ------------------------------------------------------------------ 新建
