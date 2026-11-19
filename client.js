@@ -1004,20 +1004,13 @@ window.__ModuleLoader__.load({
           error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, error) : null),
 
         h('div', { className: 'sd-card-block' },
-          h('div', { className: 'sd-block-title' }, '第二步：用它配音'),
+          h('div', { className: 'sd-block-title' }, '第二步：进入下一步'),
           h('div', { className: 'sd-hint' },
-            ready
-              ? `全片已用「${pickedLabel}」配好，${formatSecs(item.totalSecs)}。下一步去「⑤ 分镜图」出画面。`
-              : `将用「${pickedLabel}」为 ${item.counts.segments} 段配音${missing < item.counts.segments ? `，其中 ${missing} 段待配` : ''}。`),
+            `音色定为「${pickedLabel}」。整片配音统一放到最后一步的「配音并合成」，那里缺多少补多少，不用现在等。`),
           h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8, alignItems: 'center' } },
-            h('button', {
-              className: 'sd-btn', 'data-kind': ready ? undefined : 'primary', type: 'button',
-              disabled: busy || Boolean(task?.running),
-              onClick: () => onAction('tts', { id: item.id }, null),
-            }, recording ? `配音中 ${task.done}/${task.total}` : missing > 0 ? `用「${pickedLabel}」配音` : '全部重新配音'),
-            ready ? h('button', { className: 'sd-btn', type: 'button', onClick: () => goTab('imaged') }, '去分镜图') : null,
-            h('span', { style: { flex: 1 } }),
-            item.totalSecs ? h('span', { className: 'sd-hint' }, `总长 ${formatSecs(item.totalSecs)}`) : null)),
+            h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: () => goTab('imaged') }, '去分镜图出画面'),
+            item.totalSecs ? h('span', { style: { flex: 1 } }) : null,
+            item.totalSecs ? h('span', { className: 'sd-hint' }, `已配 ${item.counts.voiced}/${item.counts.segments} 段`) : null)),
 
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'voice', disabled: busy, onAction, onReload,
@@ -1253,7 +1246,9 @@ window.__ModuleLoader__.load({
 
       const missingAudio = item.counts.segments - item.counts.voiced
       const missingImage = item.counts.segments - item.counts.imaged
-      const ready = item.counts.segments > 0 && missingAudio === 0 && missingImage === 0
+      // 音由这一步自己补，只有图必须先在分镜图页出好
+      const ready = item.counts.segments > 0 && missingImage === 0
+      const needDub = missingAudio > 0
 
       const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
 
@@ -1282,14 +1277,19 @@ window.__ModuleLoader__.load({
               '字幕压进画面')),
           !ready
             ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-warn-primary)' } },
-              missingAudio > 0 ? `还有 ${missingAudio} 段没配音。` : '',
-              missingImage > 0 ? `还有 ${missingImage} 张没出图。` : '')
-            : null,
+              missingImage > 0 ? `还有 ${missingImage} 张没出图，先去「分镜图」。` : '')
+            : h('div', { className: 'sd-hint', style: { marginTop: 8 } },
+              needDub
+                ? `还有 ${missingAudio} 段没配音，点下面的按钮会先用「${settings.voice}」补齐再合成。`
+                : '音画都齐了，直接合成。'),
           h('div', { className: 'sd-row', style: { marginTop: 12, gap: 8 } },
             h('button', {
-              className: 'sd-btn', 'data-kind': ready ? 'primary' : undefined, type: 'button', disabled: busy || !ready || Boolean(item.task?.running),
-              onClick: () => onAction('render', { id: item.id }, null),
-            }, item.render ? '重新合成' : '合成成片'))),
+              className: 'sd-btn', 'data-kind': ready ? 'primary' : undefined, type: 'button',
+              disabled: busy || !ready || Boolean(item.task?.running),
+              onClick: () => onAction('finish', { id: item.id }, null),
+            }, item.task?.running && item.task.kind === 'finish'
+              ? `${item.task.done}/${item.task.total}`
+              : needDub ? `配音并合成（${missingAudio} 段）` : item.render ? '重新合成' : '合成成片'))),
 
         item.render
           ? h('div', { className: 'sd-render' },

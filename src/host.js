@@ -243,56 +243,67 @@ async function startScript(ctx, store, secrets, itemId) {
   })
 }
 
-async function startVoice(store, secrets, itemId, onlyIds) {
+/** 配音核心：可被单独调用，也可被「配音并合成」复用。 */
+async function runVoiceBody(store, secrets, itemId, onlyIds, report, signal) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
-  const targets = item.segments.filter(row => (!onlyIds?.length || onlyIds.includes(row.id)))
+  const targets = item.segments.filter(row => (!onlyIds?.length || onlyIds.includes(row.id)) && (!onlyIds?.length ? true : true))
+  const pending = onlyIds?.length ? targets : targets.filter(row => !row.audioPath)
   if (!targets.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
   const dirs = await store.ensureItemDirs(itemId)
   const key = secrets.ttsKey
   if (!key) throw Object.assign(new Error('还没有配置音频密钥，去设置里填一次'), { status: 400 })
 
-  return startTask(itemId, 'tts', targets.length, async ({ report, signal }) => {
-    let done = 0
-    for (const row of targets) {
-      if (signal.aborted) throw new Error('已停止')
-      report(done, `第 ${done + 1}/${targets.length} 段配音`)
-      const buffer = await synthesize({
-        endpoint: settings.ttsEndpoint,
-        model: settings.ttsModel,
-        key,
-        voice: settings.voice,
-        text: row.text,
-        signal,
-      })
-      const name = `s${String(row.idx + 1).padStart(3, '0')}.mp3`
-      const file = join(dirs.audio, name)
-      await writeFile(file, buffer)
-      const secs = await probeDuration(file)
-      if (!secs) throw new Error(`第 ${row.idx + 1} 段音频读不出时长，可能合成损坏`)
-      await store.mutate(draft => {
-        const target = findItem(draft, itemId)
-        const seg = target.segments.find(s => s.id === row.id)
-        if (seg) {
-          seg.audioPath = `audio/${name}`
-          seg.audioSecs = Math.round(secs * 100) / 100
-          seg.error = null
-        }
-        target.updatedAt = new Date().toISOString()
-        return null
-      })
-      done += 1
-      report(done, `已完成 ${done}/${targets.length} 段`)
-    }
+  let done = 0
+  for (const row of pending) {
+    if (signal.aborted) throw new Error('已停止')
+    report(done, `第 ${done + 1}/${pending.length} 段配音「${settings.voice}」`)
+    const buffer = await synthesize({
+      endpoint: settings.ttsEndpoint,
+      model: settings.ttsModel,
+      key,
+      voice: settings.voice,
+      text: row.text,
+      signal,
+    })
+    const name = `s${String(row.idx + 1).padStart(3, '0')}.mp3`
+    const file = join(dirs.audio, name)
+    await writeFile(file, buffer)
+    const secs = await probeDuration(file)
+    if (!secs) throw new Error(`第 ${row.idx + 1} 段音频读不出时长，可能合成损坏`)
+    await store.mutate(draft => {
+      const target = findItem(draft, itemId)
+      const seg = target.segments.find(s2 => s2.id === row.id)
+      if (seg) {
+        seg.audioPath = `audio/${name}`
+        seg.audioSecs = Math.round(secs * 100) / 100
+        seg.error = null
+      }
+      target.updatedAt = new Date().toISOString()
+      return null
+    })
+    done += 1
+    report(done, `已完成 ${done}/${pending.length} 段`)
+  }
+  if (pending.length) {
     await store.mutate(draft => {
       const target = findItem(draft, itemId)
       target.render = null
-      target.log.push({ at: new Date().toISOString(), text: `配音：${targets.length} 段 · ${settings.voice}` })
+      target.log.push({ at: new Date().toISOString(), text: `配音：${pending.length} 段 · ${settings.voice}` })
       return null
     })
-    return { done, total: targets.length }
-  })
+  }
+  return { done, total: pending.length }
+}
+
+async function startVoice(store, secrets, itemId, onlyIds) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const targets = item.segments.filter(row => (!onlyIds?.length || onlyIds.includes(row.id)))
+  if (!targets.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
+  return startTask(itemId, 'tts', targets.length, async ({ report, signal }) =>
+    runVoiceBody(store, secrets, itemId, onlyIds, report, signal))
 }
 
 async function startImages(store, secrets, itemId, onlyIds) {
@@ -518,80 +529,107 @@ async function drawAnchor(store, secrets, itemId, anchorId, instruction) {
   })
 }
 
-async function startRender(store, itemId) {
+/** 合成核心：调用前必须确保音画齐全（由调用方检查）。 */
+async function runRenderBody(store, itemId, report, signal, offset = 0) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
   const missingAudio = item.segments.filter(row => !row.audioPath)
   const missingImage = item.segments.filter(row => !row.imagePath)
   if (!item.segments.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
-  if (missingAudio.length) throw Object.assign(new Error(`还有 ${missingAudio.length} 段没配音，先配音再合成`), { status: 400 })
-  if (missingImage.length) throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先出图再合成`), { status: 400 })
+  if (missingAudio.length) throw Object.assign(new Error(`还有 ${missingAudio.length} 段没配音`), { status: 400 })
+  if (missingImage.length) throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先去出图`), { status: 400 })
 
   const dirs = await store.ensureItemDirs(itemId)
-  const total = item.segments.length + 2
-  return startTask(itemId, 'render', total, async ({ report, signal }) => {
-    const shots = []
-    let done = 0
-    for (const row of item.segments) {
-      if (signal.aborted) throw new Error('已停止')
-      report(done, `合成第 ${done + 1}/${item.segments.length} 个镜头`)
-      const output = join(dirs.work, `shot-${String(row.idx + 1).padStart(3, '0')}.mp4`)
-      await renderShot({
-        image: join(dirs.base, row.imagePath),
-        audio: join(dirs.base, row.audioPath),
-        output,
-        seconds: row.audioSecs,
-        width: settings.width,
-        height: settings.height,
-        kenBurns: settings.kenBurns !== false,
-      })
-      shots.push(output)
-      done += 1
-      report(done, `已合成 ${done}/${item.segments.length} 个镜头`)
-    }
-
-    report(done, '正在拼接整片…')
-    const plain = join(dirs.renders, 'video.mp4')
-    await concatShots(shots, dirs.work, plain)
-    done += 1
-
-    // 字幕落两份：SRT 给剪辑软件用，ASS 带画布尺寸、用于压进画面
-    const srtFile = join(dirs.renders, 'video.srt')
-    const assFile = join(dirs.renders, 'video.ass')
-    await writeFile(srtFile, buildSrt(item.segments), 'utf8')
-    await writeFile(assFile, buildAss(item.segments, { width: settings.width, height: settings.height }), 'utf8')
-
-    let finalPath = plain
-    if (settings.burnSubtitles) {
-      report(done, '正在压字幕…')
-      const burned = join(dirs.renders, 'video-subtitled.mp4')
-      await burnSubtitles(plain, assFile, burned)
-      finalPath = burned
-      done += 1
-    }
-    report(total, '成片好了')
-
-    const secs = await probeDuration(finalPath)
-    await store.mutate(draft => {
-      const target = findItem(draft, itemId)
-      target.render = {
-        path: `renders/${finalPath.split(sep).pop()}`,
-        srtPath: 'renders/video.srt',
-        secs: Math.round(secs * 10) / 10,
-        at: new Date().toISOString(),
-        subtitles: Boolean(settings.burnSubtitles),
-        size: null,
-      }
-      target.updatedAt = new Date().toISOString()
-      target.log.push({ at: new Date().toISOString(), text: `合成：${Math.round(secs)} 秒` })
-      return null
+  const shots = []
+  let done = 0
+  for (const row of item.segments) {
+    if (signal.aborted) throw new Error('已停止')
+    report(offset + done, `合成第 ${done + 1}/${item.segments.length} 个镜头`)
+    const output = join(dirs.work, `shot-${String(row.idx + 1).padStart(3, '0')}.mp4`)
+    await renderShot({
+      image: join(dirs.base, row.imagePath),
+      audio: join(dirs.base, row.audioPath),
+      output,
+      seconds: row.audioSecs,
+      width: settings.width,
+      height: settings.height,
+      kenBurns: settings.kenBurns !== false,
     })
-    return { path: finalPath, secs }
+    shots.push(output)
+    done += 1
+    report(offset + done, `已合成 ${done}/${item.segments.length} 个镜头`)
+  }
+
+  report(offset + done, '正在拼接整片…')
+  const plain = join(dirs.renders, 'video.mp4')
+  await concatShots(shots, dirs.work, plain)
+  done += 1
+
+  const srtFile = join(dirs.renders, 'video.srt')
+  const assFile = join(dirs.renders, 'video.ass')
+  await writeFile(srtFile, buildSrt(item.segments), 'utf8')
+  await writeFile(assFile, buildAss(item.segments, { width: settings.width, height: settings.height }), 'utf8')
+
+  let finalPath = plain
+  if (settings.burnSubtitles) {
+    report(offset + done, '正在压字幕…')
+    const burned = join(dirs.renders, 'video-subtitled.mp4')
+    await burnSubtitles(plain, assFile, burned)
+    finalPath = burned
+  }
+
+  // finalPath 已经是绝对路径，不能再按项目目录拼一次
+  const secs = await probeDuration(finalPath)
+  const rel = finalPath.startsWith(dirs.base) ? finalPath.slice(dirs.base.length + 1) : finalPath
+  await store.mutate(draft => {
+    const target = findItem(draft, itemId)
+    target.render = {
+      path: rel,
+      secs: secs ? Math.round(secs * 10) / 10 : 0,
+      subtitles: Boolean(settings.burnSubtitles),
+      srtPath: srtFile.slice(dirs.base.length + 1),
+      at: new Date().toISOString(),
+    }
+    target.log.push({ at: new Date().toISOString(), text: `合成：${Math.round(secs || 0)} 秒` })
+    target.updatedAt = new Date().toISOString()
+    return null
   })
+  return { path: rel, secs }
 }
 
-// ------------------------------------------------------------------ 路由
+async function startRender(store, itemId) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const missingAudio = item.segments.filter(row => !row.audioPath)
+  const missingImage = item.segments.filter(row => !row.imagePath)
+  if (!item.segments.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
+  if (missingAudio.length) throw Object.assign(new Error(`还有 ${missingAudio.length} 段没配音，先配音再合成`), { status: 400 })
+  if (missingImage.length) throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先出图再合成`), { status: 400 })
+  return startTask(itemId, 'render', item.segments.length + 2, async ({ report, signal }) =>
+    runRenderBody(store, itemId, report, signal))
+}
+
+/** 最后一步：缺的配音补上，然后直接合成，一次点完。 */
+async function startFinish(store, secrets, itemId) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  if (!item.segments.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
+  const missingImage = item.segments.filter(row => !row.imagePath)
+  if (missingImage.length) {
+    throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先去「分镜图」出图`), { status: 400 })
+  }
+  const pending = item.segments.filter(row => !row.audioPath)
+  const total = pending.length + item.segments.length + 2
+  return startTask(itemId, 'finish', total, async ({ report, signal }) => {
+    if (pending.length) {
+      report(0, `先配音 ${pending.length} 段…`, total)
+      await runVoiceBody(store, secrets, itemId, null, (done, message) => report(done, message, total), signal)
+    }
+    report(pending.length, '配音就绪，开始合成…', total)
+    return runRenderBody(store, itemId, report, signal, pending.length)
+  })
+}
 
 async function route(ctx, store, req, res) {
   const url = new URL(req.url || '/', 'http://local')
@@ -938,6 +976,14 @@ async function route(ctx, store, req, res) {
       const secrets = await store.readSecrets()
       const only = Array.isArray(body.only) ? body.only.map(String) : null
       await startImages(store, secrets, id, only)
+      return json(res, 200, { task: publicTask(id) })
+    }
+    case 'finish': {
+      // 最后一步：缺的音补上、然后合成，一次点完
+      const id = String(body.id ?? '')
+      if (isBusy(id)) throw Object.assign(new Error('这个项目正在跑任务，等它结束'), { status: 409 })
+      const secrets = await store.readSecrets()
+      await startFinish(store, secrets, id)
       return json(res, 200, { task: publicTask(id) })
     }
     case 'render': {
