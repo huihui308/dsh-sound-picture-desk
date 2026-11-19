@@ -10,7 +10,7 @@ import { cpus, homedir } from 'node:os'
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
 import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
 import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
-import { encoderInfo, maxParallelSessions } from './encoders.js'
+import { encoderArgsSync, encoderInfo, maxParallelSessions } from './encoders.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
@@ -720,6 +720,30 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   else await concatShots(shots, dirs.work, plain, { signal })
   done += 1
 
+  // 封面：作为成片第一帧，平台抓封面时就有图可抓
+  const COVER_SECONDS = 0.8
+  const usesCover = Boolean(item.cover?.path) && settings.coverInVideo !== false
+  if (usesCover) {
+    report(offset + done, '正在把封面放进片头…')
+    try {
+      const coverClip = join(dirs.work, 'cover-clip.mp4')
+      await renderCoverClip(join(dirs.base, item.cover.path), coverClip, {
+        width: settings.width, height: settings.height, seconds: COVER_SECONDS, signal,
+      })
+      const withCover = join(dirs.renders, 'video-with-cover.mp4')
+      await concatShots([coverClip, plain], dirs.work, withCover, { signal })
+      await rm(plain, { force: true }).catch(() => {})
+      await copyFile(withCover, plain)
+      await rm(withCover, { force: true }).catch(() => {})
+    } catch (err) {
+      await store.mutate(draft => {
+        const target = findItem(draft, itemId)
+        target.log.push({ at: new Date().toISOString(), text: `封面跳过：${String(err.message).slice(0, 80)}` })
+        return null
+      })
+    }
+  }
+
   // 片头：HyperFrames 渲染标题卡，接在整片前面
   if (settings.intro === 'title') {
     report(offset + done, '正在渲染片头…')
@@ -754,7 +778,8 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   const hasFade = settings.transition && settings.transition !== 'none'
   const timelineOpts = {
     overlap: hasFade ? 0.4 : 0,
-    offset: settings.intro === 'title' ? INTRO_SECONDS : 0,
+    offset: (settings.intro === 'title' ? INTRO_SECONDS : 0)
+      + (Boolean(item.cover?.path) && settings.coverInVideo !== false ? 0.8 : 0),
   }
   const srtFile = join(dirs.renders, 'video.srt')
   const assFile = join(dirs.renders, 'video.ass')
@@ -852,6 +877,37 @@ async function makeCover(store, itemId, { ref, title, width = 1206, height = 216
     return null
   })
   return { cover: { path: outName, title: text, width: w, height: h } }
+}
+
+/**
+ * 把封面图做成一小段静帧视频，拼在成片最前面。
+ * 平台多数默认取第一帧当封面候选，这样就不用再单独上传一张。
+ */
+async function renderCoverClip(coverPath, output, { width, height, seconds = 0.8, signal } = {}) {
+  const w = Math.round(width / 2) * 2
+  const h = Math.round(height / 2) * 2
+  await new Promise((resolve, reject) => {
+    execFile('ffmpeg', ['-y', '-v', 'error',
+      '-loop', '1', '-framerate', '30', '-i', coverPath,
+      '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+      '-t', seconds.toFixed(2),
+      '-vf', `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},format=yuv420p`,
+      '-r', '30',
+      ...encoderArgsSyncFallback(),
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+      '-shortest', '-movflags', '+faststart', output,
+    ], { timeout: 120_000, signal }, err => (err ? reject(err) : resolve()))
+  })
+  return output
+}
+
+/** 拿渲染用的编码参数；这里只做封面，用不到硬件编码的特殊处理。 */
+function encoderArgsSyncFallback() {
+  try {
+    return encoderArgsSync()
+  } catch {
+    return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21']
+  }
 }
 
 async function startRender(store, itemId) {
@@ -1103,7 +1159,7 @@ async function route(ctx, store, req, res) {
       // 只存创作相关的那几项，连接类配置仍走全局设置
       const id = String(body.id ?? '')
       const patch = body.settings && typeof body.settings === 'object' ? body.settings : {}
-      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro', 'renderWorkers']
+      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro', 'renderWorkers', 'coverInVideo']
       const clean = {}
       for (const key of allowed) {
         if (!(key in patch)) continue

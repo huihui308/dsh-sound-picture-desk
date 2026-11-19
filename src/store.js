@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS = {
   segmentSeconds: 40,
   trashDays: 7,
   renderWorkers: 0,
+  coverInVideo: true,
   width: 1080,
   height: 1920,
   imageWidth: 1024,

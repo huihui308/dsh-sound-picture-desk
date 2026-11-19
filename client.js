@@ -1592,9 +1592,15 @@ window.__ModuleLoader__.load({
                   h('a', {
                     className: 'sd-btn', 'data-kind': 'ghost',
                     href: mediaUrl(item.id, item.cover.path), download: `${downloadName(item, ' 封面')}.png`, target: '_blank', rel: 'noreferrer',
-                  }, '下载封面'))))
+                  }, '下载封面')),
+                h('label', { className: 'sd-hint', style: { display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', marginTop: 12 } },
+                  h('input', {
+                    type: 'checkbox', checked: settings.coverInVideo !== false,
+                    onChange: event => patch({ coverInVideo: event.target.checked }),
+                  }),
+                  '合成时放进视频开头（平台抓第一帧当封面）')))
             : h('div', { className: 'sd-hint', style: { marginTop: 8 } },
-              '封面是单独上传给平台的图，不嵌进视频。选一张底图，标题会自动压在画面底部。')),
+              '选一张底图，标题会自动压在画面底部。勾选下面那项就会作为视频第一帧；不勾则只导出独立图片，单独上传给平台。')),
 
         item.render
           ? h('div', { className: 'sd-render' },
