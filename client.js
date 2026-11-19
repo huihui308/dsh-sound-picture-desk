@@ -1926,7 +1926,17 @@ window.__ModuleLoader__.load({
                     onChange: event => set('trashDays', Math.max(1, Math.min(365, Number(event.target.value) || 7))),
                   }),
                   h('div', { className: 'sd-hint', style: { marginTop: 5 } },
-                    '删掉的项目先进回收站，超过这个天数自动彻底删除。改小之后，回收站里已过期的项目下次启动会被清掉。')))
+                    '删掉的项目先进回收站，超过这个天数自动彻底删除。改小之后，回收站里已过期的项目下次启动会被清掉。')),
+                h('div', { className: 'sd-section-title', style: { marginTop: 18 } }, '成片'),
+                h('div', { className: 'sd-row', style: { gap: 18, flexWrap: 'wrap' } },
+                  h('label', { className: 'sd-hint', style: { display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' } },
+                    h('input', { type: 'checkbox', checked: Boolean(form.burnSubtitles), onChange: event => set('burnSubtitles', event.target.checked) }),
+                    '字幕压进画面'),
+                  h('label', { className: 'sd-hint', style: { display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' } },
+                    h('input', { type: 'checkbox', checked: Boolean(form.kenBurns), onChange: event => set('kenBurns', event.target.checked) }),
+                    '默认开启推近运镜')),
+                h('div', { className: 'sd-hint', style: { marginTop: 6 } },
+                  '运镜方向、调色、转场、片头在「成片」页逐个项目调，这里只给新项目定个默认。'))
               : null,
             tab === 'image'
               ? h('div', { className: 'sd-section' },
@@ -2005,7 +2015,8 @@ window.__ModuleLoader__.load({
                 disabled: test.image?.busy, onClick: () => runTest('image'),
               }, test.image?.busy ? '检测中…' : '检测连接')),
             h(TestResult, { state: test.image }))
-              : h('div', { className: 'sd-section' },
+              : tab === 'tts'
+                ? h('div', { className: 'sd-section' },
                 h('div', { className: 'sd-section-title' }, '生成声音'),
             h('div', { className: 'sd-field' },
               h('label', null, '服务商'),
@@ -2049,17 +2060,10 @@ window.__ModuleLoader__.load({
                 className: 'sd-btn', type: 'button',
                 disabled: test.tts?.busy, onClick: () => runTest('tts'),
               }, test.tts?.busy ? '检测中…' : '检测连接')),
-            h(TestResult, { state: test.tts }))),
+            h(TestResult, { state: test.tts }))
+              : null),
 
           // ------------------------------------------------------ 装配开关
-          h('div', { className: 'sd-row', style: { gap: 18, marginTop: 14, flexWrap: 'wrap' } },
-            h('label', { className: 'sd-hint', style: { display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' } },
-              h('input', { type: 'checkbox', checked: Boolean(form.kenBurns), onChange: event => set('kenBurns', event.target.checked) }),
-              '画面缓慢推近'),
-            h('label', { className: 'sd-hint', style: { display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' } },
-              h('input', { type: 'checkbox', checked: Boolean(form.burnSubtitles), onChange: event => set('burnSubtitles', event.target.checked) }),
-              '字幕压进画面')),
-
           error ? h('div', { className: 'sd-error' }, error) : null,
 
           h('div', { className: 'sd-dialog-foot' },
