@@ -81,17 +81,70 @@ async function generatePlatform({ endpoint, key, model, prompt, width, height })
   return Buffer.from(b64, 'base64')
 }
 
-/** 生成一张分镜图，返回 PNG 字节。 */
-/** 生图只有一种协议：OpenAI 兼容的 /images/generations。 */
+/** image-01 系列只活在 MiniMax 原生接口上，OpenAI 兼容入口不认它。 */
+const MINIMAX_NATIVE_MODEL = /^image-01(-live)?$/i
+
+export function isMinimaxNativeModel(model) {
+  return MINIMAX_NATIVE_MODEL.test(String(model ?? '').trim())
+}
+
+/**
+ * MiniMax 原生接口 POST /v1/image_generation（下划线，不是 /images/generations）。
+ * 只有这条能吃 image-01，也正是它便宜的原因：固定 ¥0.025/张，与分辨率无关。
+ * 请求体认 width/height（512–2048，8 的倍数），响应在 data.image_base64[] 里。
+ */
+async function generateMinimaxNative({ endpoint, key, model, prompt, width, height }) {
+  if (!key) throw new Error('还没有配置平台生图密钥')
+  const { response, raw } = await withTimeout(
+    async signal => {
+      const hit = await fetch(`${trimSlash(endpoint)}/image_generation`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          // 官方上限 1500 字符，超了整个请求直接 400
+          prompt: String(prompt ?? '').slice(0, 1500),
+          width: Math.round(Number(width) / 8) * 8,
+          height: Math.round(Number(height) / 8) * 8,
+          response_format: 'base64',
+          n: 1,
+        }),
+        signal,
+      })
+      return { response: hit, raw: await hit.text() }
+    },
+    300_000,
+    '平台生图',
+  )
+  if (!response.ok) throw new Error(describeFailure(response.status, raw, endpoint))
+  let parsed = null
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('平台生图返回的不是 JSON')
+  }
+  // 这条接口连鉴权失败都回 HTTP 200，真正的结论在 base_resp 里
+  if (parsed?.base_resp) {
+    const code = Number(parsed.base_resp.status_code)
+    const detail = String(parsed.base_resp.status_msg ?? '').slice(0, 160)
+    if (code === 1004 || code === 1008) throw new Error(`生图密钥被拒绝（${code}），地址是通的：${detail || '换一个 key 试试'}`)
+    if (code === 1002) throw new Error(`生图通道限流（${code}）：${detail}`)
+    if (code !== 0) throw new Error(`MiniMax 生图失败（${code}）：${detail}`)
+  }
+  const b64 = parsed?.data?.image_base64?.[0]
+  if (typeof b64 !== 'string' || !b64) throw new Error('平台生图没有返回图片数据')
+  return Buffer.from(b64, 'base64')
+}
+
+/** 生成一张分镜图，返回图片字节（PNG/JPEG 不论，调用方会统一规范化）。 */
 export async function generateImage(settings, secrets, { content, width, height }) {
-  return generatePlatform({
-    endpoint: settings.imageEndpoint,
-    key: secrets?.imageKey,
-    model: settings.imageModel,
-    prompt: buildPrompt(content, settings.visualStyle),
-    width,
-    height,
-  })
+  const endpoint = settings.imageEndpoint
+  const model = settings.imageModel
+  const key = secrets?.imageKey
+  const prompt = buildPrompt(content, settings.visualStyle)
+  return isMinimaxNativeModel(model)
+    ? generateMinimaxNative({ endpoint, key, model, prompt, width, height })
+    : generatePlatform({ endpoint, key, model, prompt, width, height })
 }
 
 /**
@@ -102,19 +155,28 @@ export async function generateImage(settings, secrets, { content, width, height 
 export const IMAGE_PRESETS = [
   {
     id: 'qwen-maas',
-    label: '阿里云 MaaS',
+    label: '阿里云 MaaS（qwen-image）',
     endpoint: 'https://maas.qianwenaiapi.com/compatible-mode/v1',
     model: 'qwen-image-2.1-turbo',
     needsKey: true,
-    note: '阿里云百炼的 OpenAI 兼容入口，按张计费。',
+    note: '阿里云百炼的 OpenAI 兼容入口，按张计费（约 ¥0.1/张）。',
   },
   {
-    id: 'minimax',
-    label: 'MiniMax',
-    endpoint: 'https://api.minimax.cn/v1',
-    model: 'MiniMax-H3-Image',
+    // 便宜一档：固定 ¥0.025/张，走原生接口，代码里按模型名自动认路
+    id: 'minimax-image-01',
+    label: 'MiniMax（image-01 · ¥0.025/张）',
+    endpoint: 'https://api.minimaxi.com/v1',
+    model: 'image-01',
     needsKey: true,
-    note: 'MiniMax 海螺，OpenAI 兼容入口（国际站把地址换成 api.minimax.io/v1）。',
+    note: '海螺原生接口 /v1/image_generation，固定 ¥0.025/张、与分辨率无关；文生图几秒一张，画质比 H3 低一档。',
+  },
+  {
+    id: 'minimax-h3',
+    label: 'MiniMax（H3-Image · 按 token）',
+    endpoint: 'https://api.minimaxi.com/v1',
+    model: 'MiniMax-H3-Image-Highspeed',
+    needsKey: true,
+    note: 'OpenAI 兼容入口，按 token 计费：1024×1792 约 ¥0.25/张（极速版 6–8 秒）；标准版约 ¥0.15，但实测很慢。',
   },
   {
     id: 'openai',
@@ -135,6 +197,8 @@ export async function testImageChannel({ endpoint, model, key }) {
   if (!base) return { ok: false, detail: '地址为空' }
   const started = Date.now()
   const elapsed = () => Date.now() - started
+
+  if (isMinimaxNativeModel(model)) return probeMinimaxNative({ base, model, key, elapsed })
 
   // 先问 /models：不花钱，同时验了地址与密钥。本机部署免密钥，所以没 key 也照样请求。
   let response
@@ -170,4 +234,46 @@ export async function testImageChannel({ endpoint, model, key }) {
   }
   const text = await response.text().catch(() => '')
   return { ok: false, detail: `HTTP ${response.status}：${text.slice(0, 160)}` }
+}
+
+/**
+ * image-01 不在 /models 列表里，所以换个免费的问法：发一个空请求体。
+ * 密钥错时原生接口回 HTTP 200 + base_resp 1004（登录失败），
+ * 密钥对时回 1004 以外的参数错误码（2013）——空请求不生成图，不计费。
+ */
+async function probeMinimaxNative({ base, model, key, elapsed }) {
+  let response
+  let text = ''
+  try {
+    response = await fetch(`${base}/image_generation`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
+      body: '{}',
+      signal: AbortSignal.timeout(15_000),
+    })
+    text = await response.text()
+  } catch (err) {
+    return { ok: false, detail: `连不上 ${base}：${err?.message ?? err}` }
+  }
+  if (response.status === 404 || response.status === 405) {
+    return { ok: false, detail: `地址可达，但 ${base} 上没有 /image_generation（HTTP ${response.status}）。地址要填到 /v1 为止。` }
+  }
+  if (!response.ok) return { ok: false, detail: `HTTP ${response.status}：${text.slice(0, 160)}` }
+  let parsed = null
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    parsed = null
+  }
+  const code = Number(parsed?.base_resp?.status_code)
+  if (code === 1004 || code === 1008) {
+    return { ok: false, detail: `密钥被拒绝（${code}），地址是通的：换一个 key 试试` }
+  }
+  if (parsed?.base_resp) {
+    return {
+      ok: true,
+      detail: `地址与密钥可用（${elapsed()} ms），${model} 走原生 /image_generation，出图按 ¥0.025/张计费`,
+    }
+  }
+  return { ok: false, detail: `返回的不是 MiniMax 原生格式：${text.slice(0, 140)}` }
 }
