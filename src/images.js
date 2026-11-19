@@ -12,17 +12,39 @@ export function buildPrompt(content, styleId) {
   return `${body}. ${style.suffix}`
 }
 
-async function withTimeout(fn, ms, label) {
+/**
+ * 带超时的请求。外层传进来的 signal（用户点「停止」）也要能立刻中断，
+ * 否则出图要等满 300 秒，界面上的停止按钮等于没用。
+ */
+function combineSignals(a, b) {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([a, b])
+  // 老一点的 Node 没有 AbortSignal.any：手动跟随任一信号
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), ms)
-  try {
-    return await fn(controller.signal, label)
-  } catch (err) {
-    if (err?.name === 'AbortError') throw new Error(`${label}超时（${Math.round(ms / 1000)} 秒）`)
-    throw err
-  } finally {
-    clearTimeout(timer)
+  for (const source of [a, b]) {
+    if (source.aborted) { controller.abort(); break }
+    source.addEventListener('abort', () => controller.abort(), { once: true })
   }
+  return controller.signal
+}
+
+async function withTimeout(fn, ms, label, outer) {
+  const timeout = AbortSignal.timeout(ms)
+  const signal = outer ? combineSignals(outer, timeout) : timeout
+  try {
+    return await fn(signal, label)
+  } catch (err) {
+    if (outer?.aborted) throw new Error(`${label}已停止`)
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+      throw new Error(`${label}超时（${Math.round(ms / 1000)} 秒）`)
+    }
+    throw err
+  }
+}
+
+/** 生图尺寸统一夹到合法区间，避免把 0 或 9999 直接发给服务端。 */
+export function clampImageSize(value, fallback) {
+  const n = Math.round(Number(value) || fallback)
+  return Math.max(512, Math.min(2048, n))
 }
 
 /** 把各家五花八门的报错翻成人话，并说清下一步该干什么。 */
@@ -53,14 +75,19 @@ function describeFailure(status, raw, endpoint) {
   return `生图失败（HTTP ${status}）：${message || raw.slice(0, 160)}`
 }
 
-async function generatePlatform({ endpoint, key, model, prompt, width, height }) {
-  if (!key) throw new Error('还没有配置平台生图密钥')
+function isLocalEndpoint(endpoint) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::|\/|$)/i.test(String(endpoint ?? ''))
+}
+
+async function generatePlatform({ endpoint, key, model, prompt, width, height, signal }) {
+  // 本机自建服务免密钥；平台通道必须填 key
+  if (!key && !isLocalEndpoint(endpoint)) throw new Error('还没有配置平台生图密钥')
   // 读 body 也要算进超时：b64 大图有上百 KB，卡在读取阶段时只包住建连是没用的
   const { response, raw } = await withTimeout(
     async signal => {
       const hit = await fetch(`${trimSlash(endpoint)}/images/generations`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
         body: JSON.stringify({ model, prompt, size: `${width}x${height}`, response_format: 'b64_json', n: 1 }),
         signal,
       })
@@ -68,6 +95,7 @@ async function generatePlatform({ endpoint, key, model, prompt, width, height })
     },
     300_000,
     '平台生图',
+    signal,
   )
   if (!response.ok) throw new Error(describeFailure(response.status, raw, endpoint))
   let parsed
@@ -93,7 +121,7 @@ export function isMinimaxNativeModel(model) {
  * 只有这条能吃 image-01，也正是它便宜的原因：固定 ¥0.025/张，与分辨率无关。
  * 请求体认 width/height（512–2048，8 的倍数），响应在 data.image_base64[] 里。
  */
-async function generateMinimaxNative({ endpoint, key, model, prompt, width, height }) {
+async function generateMinimaxNative({ endpoint, key, model, prompt, width, height, signal }) {
   if (!key) throw new Error('还没有配置平台生图密钥')
   const { response, raw } = await withTimeout(
     async signal => {
@@ -104,8 +132,9 @@ async function generateMinimaxNative({ endpoint, key, model, prompt, width, heig
           model,
           // 官方上限 1500 字符，超了整个请求直接 400
           prompt: String(prompt ?? '').slice(0, 1500),
-          width: Math.round(Number(width) / 8) * 8,
-          height: Math.round(Number(height) / 8) * 8,
+          // 官方范围 512–2048、8 的倍数；越界会直接 400
+          width: Math.round(clampImageSize(width, 1024) / 8) * 8,
+          height: Math.round(clampImageSize(height, 1792) / 8) * 8,
           response_format: 'base64',
           n: 1,
         }),
@@ -115,6 +144,7 @@ async function generateMinimaxNative({ endpoint, key, model, prompt, width, heig
     },
     300_000,
     '平台生图',
+    signal,
   )
   if (!response.ok) throw new Error(describeFailure(response.status, raw, endpoint))
   let parsed = null
@@ -137,14 +167,14 @@ async function generateMinimaxNative({ endpoint, key, model, prompt, width, heig
 }
 
 /** 生成一张分镜图，返回图片字节（PNG/JPEG 不论，调用方会统一规范化）。 */
-export async function generateImage(settings, secrets, { content, width, height }) {
+export async function generateImage(settings, secrets, { content, width, height, signal }) {
   const endpoint = settings.imageEndpoint
   const model = settings.imageModel
   const key = secrets?.imageKey
   const prompt = buildPrompt(content, settings.visualStyle)
   return isMinimaxNativeModel(model)
-    ? generateMinimaxNative({ endpoint, key, model, prompt, width, height })
-    : generatePlatform({ endpoint, key, model, prompt, width, height })
+    ? generateMinimaxNative({ endpoint, key, model, prompt, width, height, signal })
+    : generatePlatform({ endpoint, key, model, prompt, width, height, signal })
 }
 
 /**

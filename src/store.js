@@ -1,6 +1,6 @@
-// 持久化：$DSH_HOME/story-desk/state.json。桌面端与 Web 端读同一份数据，所以每次
-// 写入前都按 mtime 判断是否需要重读，避免两个 Host 进程互相覆盖。
-import { mkdir, readFile, rename, stat, writeFile, chmod } from 'node:fs/promises'
+// 持久化：$DSH_HOME/story-desk/state.json。桌面端与 Web 端读同一份数据，
+// 所以「读—改—写」全程持锁（state.json.lock），避免两个 Host 进程互相覆盖。
+import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -19,8 +19,8 @@ export const STAGES = ['idea', 'scripted', 'anchors', 'voiced', 'imaged', 'rende
 export const STAGE_LABEL = {
   idea: '选题',
   scripted: '说书稿',
-  voiced: '旁白',
   anchors: '参考图',
+  voiced: '旁白',
   imaged: '分镜图',
   rendered: '成片',
 }
@@ -106,10 +106,12 @@ export class Store {
     this.projectsDir = join(root, 'projects')
     this.state = null
     this.mtimeMs = 0
+    /** 读到的文件版本（mtime+size），写回前用来判断有没有被别人改过。 */
+    this.stamp = null
     this.queue = Promise.resolve()
   }
 
-  async refresh() {
+  async refresh(force = false) {
     await mkdir(this.projectsDir, { recursive: true })
     let info = null
     try {
@@ -117,11 +119,12 @@ export class Store {
     } catch (err) {
       if (err.code !== 'ENOENT') throw err
     }
-    // 文件没变就直接用内存里的，省掉一次解析
-    if (this.state && info?.mtimeMs === this.mtimeMs) return this.state
+    // 文件没变就直接用内存里的，省掉一次解析；持锁写入时必须强制重读
+    if (!force && this.state && info?.mtimeMs === this.mtimeMs) return this.state
     if (!info) {
       this.state = emptyState()
       this.mtimeMs = 0
+      this.stamp = null
       return this.state
     }
     const raw = await readFile(this.file, 'utf8')
@@ -133,6 +136,7 @@ export class Store {
     }
     this.state = migrateState(parsed)
     this.mtimeMs = info.mtimeMs
+    this.stamp = `${info.mtimeMs}:${info.size}`
     return this.state
   }
 
@@ -140,6 +144,40 @@ export class Store {
     return this.refresh()
   }
 
+  /**
+   * 跨进程写锁：两个 Host（桌面端 + Web）可能同时改同一份 state.json。
+   * 用 O_EXCL 建锁文件，拿到锁才「读—改—写」；进程崩了留下的锁超过 10 秒视为陈旧。
+   */
+  async acquireLock(timeoutMs = 8000) {
+    await mkdir(this.root, { recursive: true })
+    const lockFile = `${this.file}.lock`
+    const started = Date.now()
+    for (;;) {
+      try {
+        const handle = await open(lockFile, 'wx')
+        await handle.writeFile(String(process.pid))
+        await handle.close()
+        return
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err
+        const info = await stat(lockFile).catch(() => null)
+        if (info && Date.now() - info.mtimeMs > 10_000) {
+          await rm(lockFile, { force: true }).catch(() => {})
+          continue
+        }
+        if (Date.now() - started > timeoutMs) {
+          throw Object.assign(new Error('state.json 正被另一个进程写入，请稍后重试'), { status: 503 })
+        }
+        await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
+      }
+    }
+  }
+
+  async releaseLock() {
+    await rm(`${this.file}.lock`, { force: true }).catch(() => {})
+  }
+
+  /** 写回 state.json。调用方必须已经持有写锁（mutate 会保证）。 */
   async write(state) {
     await mkdir(this.projectsDir, { recursive: true })
     const tmp = `${this.file}.${process.pid}.tmp`
@@ -148,20 +186,27 @@ export class Store {
     const info = await stat(this.file)
     this.state = state
     this.mtimeMs = info.mtimeMs
+    this.stamp = `${info.mtimeMs}:${info.size}`
     return state
   }
 
   /**
    * 读-改-写串行化。mutator 直接改 draft，返回值会连同最新 state 一起返回。
-   * 两个 Host 进程并发写同一份文件时，后写的按最新 mtime 重读，不会丢别人的改动。
+   * 持跨进程锁后强制重读再写，两个 Host 同时改也不会丢更新。
    */
   async mutate(mutator) {
     const run = async () => {
-      const state = await this.refresh()
-      const draft = structuredClone(state)
-      const result = await mutator(draft)
-      await this.write(draft)
-      return { result, state: draft }
+      await this.acquireLock()
+      try {
+        // 持锁后强制重读，避免拿同毫秒内的旧缓存覆盖别人的写入
+        const state = await this.refresh(true)
+        const draft = structuredClone(state)
+        const result = await mutator(draft)
+        await this.write(draft)
+        return { result, state: draft }
+      } finally {
+        await this.releaseLock()
+      }
     }
     const next = this.queue.then(run, run)
     // 队列本身不能因为一次失败就断掉

@@ -225,6 +225,11 @@ window.__ModuleLoader__.load({
       return version ? `${url}?v=${version}` : url
     }
 
+    /** 成片版本号：重合成后 URL 要变，否则 <video> 会继续放旧片。 */
+    function renderStamp(item) {
+      return item.render?.at ? Date.parse(item.render.at) : undefined
+    }
+
     function formatSecs(value) {
       const total = Math.max(0, Math.round(Number(value) || 0))
       const minutes = Math.floor(total / 60)
@@ -1604,7 +1609,7 @@ window.__ModuleLoader__.load({
 
         item.render
           ? h('div', { className: 'sd-render' },
-            h('video', { className: 'sd-video', controls: true, preload: 'metadata', src: mediaUrl(item.id, item.render.path) }),
+            h('video', { className: 'sd-video', controls: true, preload: 'metadata', src: mediaUrl(item.id, item.render.path, renderStamp(item)) }),
             h('div', { className: 'sd-render-side' },
               h('div', { className: 'sd-kicker' }, '成片'),
               h('div', { className: 'sd-h1', style: { fontSize: 14 } },
@@ -1628,11 +1633,11 @@ window.__ModuleLoader__.load({
               h('div', { className: 'sd-card-foot', style: { marginTop: 6 } },
                 h('a', {
                   className: 'sd-btn', 'data-kind': 'ghost',
-                  href: mediaUrl(item.id, item.render.path), download: `${downloadName(item)}.mp4`, target: '_blank', rel: 'noreferrer',
+                  href: mediaUrl(item.id, item.render.path, renderStamp(item)), download: `${downloadName(item)}.mp4`, target: '_blank', rel: 'noreferrer',
                 }, '下载成片'),
                 item.render.srtPath ? h('a', {
                   className: 'sd-btn', 'data-kind': 'ghost',
-                  href: mediaUrl(item.id, item.render.srtPath), download: `${downloadName(item)}.srt`, target: '_blank', rel: 'noreferrer',
+                  href: mediaUrl(item.id, item.render.srtPath, renderStamp(item)), download: `${downloadName(item)}.srt`, target: '_blank', rel: 'noreferrer',
                 }, '下载 SRT') : null)))
           : h('div', { className: 'sd-empty' }, ready ? '素材齐了，点「合成成片」。' : '音画还不齐，先去③④补上。'))
     }
@@ -1651,9 +1656,9 @@ window.__ModuleLoader__.load({
 
       const save = useCallback(async () => {
         if (!dirty) return
-        const next = item.segments.map(row => (row.id === seg.id ? { ...row, text, imagePrompt: prompt } : row))
         try {
-          await post('segments', { id: item.id, segments: next })
+          // 只提交本段，避免两段连着保存时用旧快照盖掉前一段的改动
+          await post('segments', { id: item.id, segment: { id: seg.id, text, imagePrompt: prompt } })
           await onReload()
         } catch {
           // 保存失败时保留输入，不闪回旧稿
@@ -1706,8 +1711,7 @@ window.__ModuleLoader__.load({
               onChange: event => setPrompt(event.target.value),
               onBlur: async () => {
                 if (prompt === seg.imagePrompt) return
-                const next = item.segments.map(row => (row.id === seg.id ? { ...row, imagePrompt: prompt } : row))
-                await post('segments', { id: item.id, segments: next })
+                await post('segments', { id: item.id, segment: { id: seg.id, imagePrompt: prompt } })
                 await onReload()
               },
             })

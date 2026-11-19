@@ -83,9 +83,17 @@ async function sendFile(req, res, file) {
   } catch {
     return json(res, 404, { error: '文件不存在' })
   }
+  // 文件名是固定的（s001.png / video.mp4），重出后会覆盖同名文件。
+  // 用 ETag + no-cache 让浏览器每次回来问一句，改过才重新下，没改只回 304。
+  const etag = `W/"${info.size}-${Math.floor(info.mtimeMs)}"`
+  res.setHeader('etag', etag)
+  res.setHeader('cache-control', 'private, no-cache')
+  if (req.headers['if-none-match'] === etag) {
+    res.statusCode = 304
+    return res.end()
+  }
   res.setHeader('content-type', await sniffType(file, type))
   res.setHeader('accept-ranges', 'bytes')
-  res.setHeader('cache-control', 'private, max-age=600')
   res.setHeader('x-content-type-options', 'nosniff')
   const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
   if (range && (range[1] || range[2])) {
@@ -163,6 +171,31 @@ function itemView(item) {
 function publicSettings(settings) {
   // 密钥不进这里，界面只知道「有没有配过」
   return { ...settings }
+}
+
+/** 数值设置的合法区间：超界直接夹住，别把 2px 宽或 100000px 的画面塞给 ffmpeg。 */
+const SETTING_LIMITS = {
+  width: [240, 4320],
+  height: [240, 4320],
+  imageWidth: [512, 2048],
+  imageHeight: [512, 2048],
+  segmentSeconds: [10, 300],
+  trashDays: [1, 365],
+  renderWorkers: [0, 16],
+}
+
+/** 改这些设置会让已成片作废（画面/声音/字幕装配方式变了）。 */
+const RENDER_SETTING_KEYS = new Set(['width', 'height', 'kenBurns', 'motion', 'grade', 'transition', 'intro', 'coverInVideo', 'burnSubtitles'])
+
+function clampNumberSetting(key, value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const range = SETTING_LIMITS[key]
+  if (!range) return n
+  let out = Math.max(range[0], Math.min(range[1], n))
+  // 视频宽高必须是偶数，否则编码器拒绝
+  if (key === 'width' || key === 'height') out = Math.round(out / 2) * 2
+  return out
 }
 
 // ------------------------------------------------------------------ 编排动作
@@ -276,7 +309,7 @@ async function runVoiceBody(store, secrets, itemId, onlyIds, report, signal) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
-  const targets = item.segments.filter(row => (!onlyIds?.length || onlyIds.includes(row.id)) && (!onlyIds?.length ? true : true))
+  const targets = item.segments.filter(row => !onlyIds?.length || onlyIds.includes(row.id))
   const pending = onlyIds?.length ? targets : targets.filter(row => !row.audioPath)
   if (!targets.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
   const dirs = await store.ensureItemDirs(itemId)
@@ -404,8 +437,9 @@ async function startImages(store, secrets, itemId, onlyIds, note) {
         content,
         width,
         height,
+        signal,
       })
-      const norm = await normalizeImageBuffer(raw, dirs, width, height)
+      const norm = await normalizeImageBuffer(raw, dirs, width, height, signal)
       const buffer = norm.buffer
       const name = `s${String(row.idx + 1).padStart(3, '0')}.png`
       await writeFile(join(dirs.images, name), buffer)
@@ -457,8 +491,8 @@ async function startStyleSamples(store, secrets, itemId) {
     for (const styleId of styleIds) {
       if (signal.aborted) throw new Error('已停止')
       report(done, `正在画「${styleLabel(styleId)}」`)
-      const rawStyle = await generateImage({ ...settings, visualStyle: styleId }, secrets, { content, width, height })
-      const { buffer } = await normalizeImageBuffer(rawStyle, dirs, width, height)
+      const rawStyle = await generateImage({ ...settings, visualStyle: styleId }, secrets, { content, width, height, signal })
+      const { buffer } = await normalizeImageBuffer(rawStyle, dirs, width, height, signal)
       const rel = `samples/style-${styleId}.png`
       await writeFile(join(dirs.base, rel), buffer)
       await store.mutate(draft => {
@@ -518,7 +552,7 @@ async function startVoiceSamples(store, secrets, itemId) {
  * 浏览器尊重标记、ffmpeg 或别的看图工具不尊重，同一张图在两边方向就不一样。
  * 所以统一用 ffmpeg 转成标准 PNG：旋转烘进像素、元数据清掉，谁看都一样。
  */
-async function normalizeImageBuffer(buffer, dirs, wantW, wantH) {
+async function normalizeImageBuffer(buffer, dirs, wantW, wantH, signal) {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const raw = join(dirs.work, `raw-${stamp}.img`)
   const out = join(dirs.work, `norm-${stamp}.png`)
@@ -526,7 +560,7 @@ async function normalizeImageBuffer(buffer, dirs, wantW, wantH) {
     await writeFile(raw, buffer)
     await new Promise((resolve, reject) => {
       execFile('ffmpeg', ['-y', '-v', 'error', '-i', raw, '-map_metadata', '-1', '-frames:v', '1', out],
-        { timeout: 60_000 }, err => (err ? reject(err) : resolve()))
+        { timeout: 60_000, signal }, err => (err ? reject(err) : resolve()))
     })
     const png = await readFile(out)
     let width = 0
@@ -572,10 +606,13 @@ async function extractAnchors(ctx, store, itemId) {
   const script = item.segments.length
     ? item.segments.map((row, index) => `#${index + 1} ${row.text}`).join('\n')
     : '（还没有稿子，请根据题材判断这类故事里通常必须出现、且需要统一形象的人物与主场景）'
-  const { text } = await callModel(ctx, {
-    route: item.model ?? null,
-    maxTokens: 3000,
-    system: `你在为一部说书短视频建立「人物与场景参考表」。读完全部旁白，列出其中需要保持同一形象的对象。
+  let text
+  try {
+    ({ text } = await callModel(ctx, {
+      route: item.model ?? null,
+      maxTokens: 3000,
+      signal: AbortSignal.timeout(180_000),
+      system: `你在为一部说书短视频建立「人物与场景参考表」。读完全部旁白，列出其中需要保持同一形象的对象。
 
 只列两类：
 - person：有名有姓、反复出现的角色（主角、关键对手）。路人、群众、无名士兵不要列。
@@ -586,8 +623,14 @@ async function extractAnchors(ctx, store, itemId) {
 最多 8 条，按重要程度排序。
 
 只输出 JSON：{"anchors":[{"name":"李世民","kind":"person","desc":"..."}]}`,
-    user: `题材：${item.topic}\n\n旁白全文：\n${script}`,
-  })
+      user: `题材：${item.topic}\n\n旁白全文：\n${script}`,
+    }))
+  } catch (err) {
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+      throw Object.assign(new Error('提取参考图超时（3 分钟），换个更快的模型再试'), { status: 504 })
+    }
+    throw err
+  }
   const plan = extractJson(text)
   const rows = Array.isArray(plan.anchors) ? plan.anchors : []
   const dirs = await store.ensureItemDirs(itemId)
@@ -631,7 +674,7 @@ async function drawAnchor(store, secrets, itemId, anchorId, instruction) {
   const tail = String(instruction ?? '').trim()
   const content = [target.desc, tail && `调整：${tail}`].filter(Boolean).join('。')
 
-  return startTask(itemId, 'anchor', 1, async ({ report }) => {
+  return startTask(itemId, 'anchor', 1, async ({ report, signal }) => {
     report(0, `正在画「${target.name}」`)
     const wantW = Number(settings.imageWidth) || 1024
     const wantH = Number(settings.imageHeight) || 1792
@@ -639,8 +682,9 @@ async function drawAnchor(store, secrets, itemId, anchorId, instruction) {
       content,
       width: wantW,
       height: wantH,
+      signal,
     })
-    const { buffer } = await normalizeImageBuffer(raw, dirs, wantW, wantH)
+    const { buffer } = await normalizeImageBuffer(raw, dirs, wantW, wantH, signal)
     const name = `anchors/${anchorId}-${Date.now()}.png`
     await writeFile(join(dirs.base, name), buffer)
     await store.mutate(draft => {
@@ -724,6 +768,10 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   await rename(tmpPlain, plain)
   done += 1
 
+  // 片头/封面都可能失败，字幕偏移只能按「真的接上了」算，不能按设置算
+  let introApplied = false
+  let coverApplied = false
+
   // 片头：HyperFrames 渲染标题卡，接在整片前面
   if (settings.intro === 'title') {
     report(offset + done, '正在渲染片头…')
@@ -744,6 +792,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
       await rm(plain, { force: true }).catch(() => {})
       await copyFile(withIntro, plain)
       await rm(withIntro, { force: true }).catch(() => {})
+      introApplied = true
     } catch (err) {
       // 片头是锦上添花，装不上就跳过，别让整片失败
       await store.mutate(draft => {
@@ -769,6 +818,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
       await rm(plain, { force: true }).catch(() => {})
       await copyFile(withCover, plain)
       await rm(withCover, { force: true }).catch(() => {})
+      coverApplied = true
     } catch (err) {
       await store.mutate(draft => {
         const target = findItem(draft, itemId)
@@ -782,8 +832,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   const hasFade = settings.transition && settings.transition !== 'none'
   const timelineOpts = {
     overlap: hasFade ? 0.4 : 0,
-    offset: (settings.intro === 'title' ? INTRO_SECONDS : 0)
-      + (Boolean(item.cover?.path) && settings.coverInVideo !== false ? 0.8 : 0),
+    offset: (introApplied ? INTRO_SECONDS : 0) + (coverApplied ? COVER_SECONDS : 0),
   }
   const srtFile = join(dirs.renders, 'video.srt')
   const assFile = join(dirs.renders, 'video.ass')
@@ -1177,8 +1226,8 @@ async function route(ctx, store, req, res) {
       for (const key of allowed) {
         if (!(key in patch)) continue
         if (typeof DEFAULT_SETTINGS[key] === 'number') {
-          const n = Number(patch[key])
-          if (Number.isFinite(n)) clean[key] = n
+          const n = clampNumberSetting(key, patch[key])
+          if (n !== null) clean[key] = n
         } else if (typeof DEFAULT_SETTINGS[key] === 'boolean') {
           clean[key] = Boolean(patch[key])
         } else if (typeof patch[key] === 'string') {
@@ -1188,6 +1237,8 @@ async function route(ctx, store, req, res) {
       const { state } = await store.mutate(draft => {
         const target = findItem(draft, id)
         target.settings = { ...(target.settings ?? {}), ...clean }
+        // 装配参数变了，旧成片就不代表当前设置，阶段回退到「分镜图」
+        if (Object.keys(clean).some(key => RENDER_SETTING_KEYS.has(key))) target.render = null
         target.updatedAt = new Date().toISOString()
         return null
       })
@@ -1247,6 +1298,7 @@ async function route(ctx, store, req, res) {
     case 'remove': {
       // 软删除：只打时间戳，文件和记录都留着，方便回收站恢复
       const id = String(body.id ?? '')
+      if (isBusy(id)) throw Object.assign(new Error('这个项目正在跑任务，等它结束或先点「停止」再删'), { status: 409 })
       const state = await store.read()
       findItem(state, id)
       await store.mutate(draft => {
@@ -1320,6 +1372,35 @@ async function route(ctx, store, req, res) {
     case 'segments': {
       // 手改稿：只动文字和画面提示词，已有音画保留（改了文字会提示重新配音）
       const id = String(body.id ?? '')
+
+      // 单段更新：客户端只提交自己这一段。两段连着改时不会用旧快照覆盖前一段。
+      if (body.segment && typeof body.segment === 'object') {
+        const segId = String(body.segment.id ?? '')
+        if (!segId) throw Object.assign(new Error('缺少分段 id'), { status: 400 })
+        const { state } = await store.mutate(draft => {
+          const target = findItem(draft, id)
+          const seg = target.segments.find(row => row.id === segId)
+          if (!seg) throw Object.assign(new Error('找不到这一段'), { status: 404 })
+          if (typeof body.segment.text === 'string') {
+            const text = body.segment.text.trim()
+            if (!text) throw Object.assign(new Error('旁白不能为空'), { status: 400 })
+            if (text !== seg.text) {
+              seg.text = text
+              seg.audioPath = null
+              seg.audioSecs = 0
+            }
+          }
+          if (typeof body.segment.imagePrompt === 'string') {
+            seg.imagePrompt = body.segment.imagePrompt.trim()
+          }
+          seg.error = null
+          target.render = null
+          target.updatedAt = new Date().toISOString()
+          return null
+        })
+        return json(res, 200, { item: itemView(findItem(state, id)) })
+      }
+
       const rows = Array.isArray(body.segments) ? body.segments : []
       const { state } = await store.mutate(draft => {
         const target = findItem(draft, id)
@@ -1389,8 +1470,8 @@ async function route(ctx, store, req, res) {
         if (!(key in patch)) continue
         const value = patch[key]
         if (typeof DEFAULT_SETTINGS[key] === 'number') {
-          const n = Number(value)
-          if (Number.isFinite(n)) clean[key] = n
+          const n = clampNumberSetting(key, value)
+          if (n !== null) clean[key] = n
         } else if (typeof DEFAULT_SETTINGS[key] === 'boolean') {
           clean[key] = Boolean(value)
         } else if (typeof value === 'string') {
@@ -1462,7 +1543,7 @@ function hookCrashLog() {
   crashHooked = true
   const write = (kind, payload) => {
     try {
-      const dir = join(homedir(), '.dsh', 'story-desk')
+      const dir = join(dshHome(), 'story-desk')
       mkdir(dir, { recursive: true })
         .then(() => appendFile(join(dir, 'crash.log'), `${new Date().toISOString()} ${kind} ${payload}\n`))
         .catch(() => {})

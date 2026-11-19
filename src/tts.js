@@ -65,7 +65,7 @@ export async function synthesize({ endpoint, model, key, voice, text, signal }) 
       { role: 'user', content: INSTRUCTION },
       { role: 'assistant', content },
     ],
-    audio: { voice: VOICES.includes(voice) ? voice : 'mimo_default', format: 'mp3' },
+    audio: { voice: VOICES.some(row => row.id === voice) ? voice : 'mimo_default', format: 'mp3' },
     stream: false,
   }
   let response

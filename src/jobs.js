@@ -2,6 +2,18 @@
 // 一个项目同时只允许一个任务在跑——它们都写同一个项目目录，并发只会互相踩。
 const tasks = new Map()
 
+/** 跑完的任务保留一会儿给界面看结果，超过这个时长就从内存里清掉。 */
+const KEEP_FINISHED_MS = 30 * 60 * 1000
+
+function pruneFinished() {
+  const cutoff = Date.now() - KEEP_FINISHED_MS
+  for (const [id, task] of tasks) {
+    if (task.running) continue
+    const ended = task.finishedAt ? Date.parse(task.finishedAt) : 0
+    if (ended && ended < cutoff) tasks.delete(id)
+  }
+}
+
 export function taskOf(itemId) {
   return tasks.get(itemId) ?? null
 }
@@ -18,6 +30,7 @@ export function isBusy(itemId) {
  * @param {(api: {report: Function, signal: AbortSignal}) => Promise<any>} runner - 任务体。
  */
 export function startTask(itemId, kind, total, runner) {
+  pruneFinished()
   if (isBusy(itemId)) {
     const current = tasks.get(itemId)
     const where = current ? `（${current.kind} ${current.done}/${current.total}）` : ''

@@ -64,7 +64,17 @@ export async function chatTurn(ctx, store, body) {
     `用户这次说：${message}`,
   ].join('\n')
 
-  const { text } = await callModel(ctx, { system: SYSTEM, user, maxTokens: 4000 })
+  // 助手调用没有任务条可以停，给个硬超时，别让请求永远挂着
+  const signal = AbortSignal.timeout(180_000)
+  let text
+  try {
+    ({ text } = await callModel(ctx, { system: SYSTEM, user, maxTokens: 4000, signal }))
+  } catch (err) {
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+      throw Object.assign(new Error('助手响应超时（3 分钟），换个更快的模型或把问题说短一点'), { status: 504 })
+    }
+    throw err
+  }
   let plan
   try {
     plan = extractJson(text)

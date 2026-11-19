@@ -8,6 +8,8 @@ import { join } from 'node:path'
 
 const FFMPEG = process.env.STORY_DESK_FFMPEG || 'ffmpeg'
 const FFPROBE = process.env.STORY_DESK_FFPROBE || 'ffprobe'
+/** 片头渲染器固定版本，避免每次合成都去 npm 拉 latest（版本漂移 + 离线失败）。 */
+const HYPERFRAMES = process.env.STORY_DESK_HYPERFRAMES || 'hyperframes@0.9.70'
 
 function run(bin, args, { timeout = 30 * 60 * 1000, signal } = {}) {
   return new Promise((resolve, reject) => {
@@ -91,7 +93,7 @@ export async function renderIntroCard({ title, subtitle, workDir, output, width,
   await writeFile(join(compDir, 'intro.html'), html, 'utf8')
   const raw = join(workDir, 'intro-raw.mp4')
   await new Promise((resolve, reject) => {
-    execFile('npx', ['--yes', 'hyperframes@latest', 'render',
+    execFile('npx', ['--yes', '--prefer-offline', HYPERFRAMES, 'render',
       // 尺寸由 composition 的 data-width/height 决定，--resolution 只吃预设名，不要传
       '--composition', 'compositions/intro.html', '--output', raw],
       { timeout: 240_000, cwd: projectDir, maxBuffer: 16 * 1024 * 1024 },
@@ -282,7 +284,8 @@ function srtTime(seconds) {
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const secs = Math.floor(total % 60)
-  const ms = Math.round((total - Math.floor(total)) * 1000)
+  // 四舍五入到 1000 会生成 ",1000" 这种非法时间码，夹到 999
+  const ms = Math.min(999, Math.round((total - Math.floor(total)) * 1000))
   const pad = (n, size = 2) => String(n).padStart(size, '0')
   return `${pad(hours)}:${pad(minutes)}:${pad(secs)},${pad(ms, 3)}`
 }
@@ -396,7 +399,7 @@ function assTime(seconds) {
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const secs = Math.floor(total % 60)
-  const cs = Math.round((total - Math.floor(total)) * 100)
+  const cs = Math.min(99, Math.round((total - Math.floor(total)) * 100))
   const pad = (n, size = 2) => String(n).padStart(size, '0')
   return `${hours}:${pad(minutes)}:${pad(secs)}.${pad(cs)}`
 }
