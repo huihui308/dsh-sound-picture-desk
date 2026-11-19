@@ -1393,6 +1393,11 @@ window.__ModuleLoader__.load({
               '字幕压进画面')),
           h('div', { className: 'sd-hint', style: { marginTop: 6 } },
             `${settings.intro === 'title' ? '片头用 HyperFrames 渲染，首次约 25 秒；' : ''}${settings.transition === 'fade' ? '淡入淡出需要重编码整片，会慢一些。' : ''}`.trim() || '特效在合成时生效，改完重新合成即可。'),
+          h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
+            '渲染引擎：',
+            data.encoder?.hardware
+              ? h('span', { style: { color: 'var(--dsw-alias-state-success-primary)' } }, `${data.encoder.label} · 硬件加速`)
+              : `${data.encoder?.label ?? 'CPU'} · 未检测到可用的硬件编码器`),
           !ready
             ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-warn-primary)' } },
               missingImage > 0 ? `还有 ${missingImage} 张没出图，先去「分镜图」。` : '')

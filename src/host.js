@@ -10,6 +10,7 @@ import { homedir } from 'node:os'
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
 import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
 import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
+import { encoderInfo } from './encoders.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
@@ -782,6 +783,7 @@ async function route(ctx, store, req, res) {
         imagePresets: IMAGE_PRESETS,
         ttsPresets: TTS_PRESETS,
         engines: await listEngines(ctx),
+        encoder: await encoderInfo(),
         chat: (state.chat ?? []).slice(-60),
         model: model ? { provider: model.provider, model: model.model } : null,
         home: dshHome(),

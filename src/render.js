@@ -1,6 +1,8 @@
 // 装配：每段「静图 + 旁白」拼成一个镜头，再按顺序接成整片。
 // 只用 ffmpeg/ffprobe，全部走 execFile（不经 shell），路径里的空格和引号不会出事。
 import { execFile } from 'node:child_process'
+
+import { encoderArgsSync, resolveEncoder } from './encoders.js'
 import { mkdir, rm, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -101,7 +103,7 @@ export async function renderIntroCard({ title, subtitle, workDir, output, width,
     '-i', raw,
     '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
     '-vf', `scale=${w}:${h},format=yuv420p`, '-r', '30',
-    '-shortest', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
+    '-shortest', ...encoderArgsSync(),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-movflags', '+faststart', output])
   await rm(raw, { force: true }).catch(() => {})
@@ -121,6 +123,7 @@ const GRADES = {
 }
 
 export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade }) {
+  await resolveEncoder()
   const w = even(width)
   const h = even(height)
   const duration = Math.max(0.8, Number(seconds) || 0) + 0.25
@@ -155,7 +158,7 @@ export async function renderShot({ image, audio, output, seconds, width, height,
   }
 
   args.push(
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
+    ...encoderArgsSync(),
     '-r', '30', '-t', duration.toFixed(3),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-movflags', '+faststart',
@@ -186,7 +189,7 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
       `[0:v][1:v]xfade=transition=fade:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v];` +
       '[0:a][1:a]acrossfade=d=' + fadeSeconds + ':c1=tri:c2=tri[a]',
       '-map', '[v]', '-map', '[a]',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-r', '30',
+      ...encoderArgsSync(), '-r', '30',
       '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
       '-movflags', '+faststart', next,
     ])
@@ -357,7 +360,7 @@ export async function burnSubtitles(input, subtitleFile, output) {
     '-y', '-hide_banner', '-loglevel', 'error',
     '-i', input,
     '-vf', filter,
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
+    ...encoderArgsSync(),
     '-c:a', 'copy', '-movflags', '+faststart',
     output,
   ])
