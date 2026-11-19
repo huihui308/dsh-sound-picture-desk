@@ -841,6 +841,9 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------ ① 选题
 
     function IdeaPage({ item, data, busy, onAction, onReload }) {
+      // 这个组件的父级是 Project，拿不到它的局部变量，设置要自己算一份
+      const settings = { ...data.settings, ...(item.settings ?? {}) }
+      const segSeconds = Math.max(12, Math.min(90, Number(settings.segmentSeconds) || 40))
       const [topic, setTopic] = useState(item.topic ?? '')
       const [minutes, setMinutes] = useState(item.targetMinutes ?? 5)
       const [raw, setRaw] = useState(item.rawText ?? '')
