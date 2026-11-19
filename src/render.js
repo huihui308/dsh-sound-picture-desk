@@ -52,7 +52,7 @@ function even(value) {
  * 片头标题卡：交给 HyperFrames 用 HTML 渲染，能做文字动画和排版。
  * 它依赖 npx 拉包，装不上就抛错，由调用方降级成「不做片头」。
  */
-export async function renderIntroCard({ title, subtitle, workDir, output, width, height, seconds = 3 }) {
+export async function renderIntroCard({ title, subtitle, workDir, output, width, height, seconds = 3, signal }) {
   const w = even(width)
   const h = even(height)
   const projectDir = join(workDir, 'intro')
@@ -105,7 +105,7 @@ export async function renderIntroCard({ title, subtitle, workDir, output, width,
     '-vf', `scale=${w}:${h},format=yuv420p`, '-r', '30',
     '-shortest', ...encoderArgsSync(),
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-    '-movflags', '+faststart', output])
+    '-movflags', '+faststart', output], { signal })
   await rm(raw, { force: true }).catch(() => {})
   return output
 }
@@ -125,7 +125,7 @@ const GRADES = {
   film: 'eq=contrast=1.08:saturation=.9:gamma_r=1.03:gamma_b=1.02,vignette=PI/5',
 }
 
-export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade }) {
+export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade, signal }) {
   await resolveEncoder()
   const w = even(width)
   const h = even(height)
@@ -167,7 +167,7 @@ export async function renderShot({ image, audio, output, seconds, width, height,
     '-movflags', '+faststart',
     output,
   )
-  await run(FFMPEG, args)
+  await run(FFMPEG, args, { signal })
   return output
 }
 
@@ -190,10 +190,10 @@ export const XFADE_PRESETS = new Set([
   'fade', 'fadeblack', 'dissolve', 'wipeleft', 'wiperight', 'circleopen', 'circleclose', 'smoothleft',
 ])
 
-export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds = 0.4, transition = 'fade' } = {}) {
+export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds = 0.4, transition = 'fade', signal } = {}) {
   const kind = XFADE_PRESETS.has(transition) ? transition : 'fade'
   if (shotPaths.length === 1) {
-    await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', '-i', shotPaths[0], '-c', 'copy', output])
+    await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', '-i', shotPaths[0], '-c', 'copy', output], { signal })
     return output
   }
   let current = shotPaths[0]
@@ -212,7 +212,7 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
       args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2')
     }
     args.push(...encoderArgsSync(), '-r', '30', '-movflags', '+faststart', next)
-    await run(FFMPEG, args)
+    await run(FFMPEG, args, { signal })
     if (i > 1) await rm(current, { force: true }).catch(() => {})
     current = next
   }
@@ -220,7 +220,7 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
 }
 
 /** 按顺序硬接所有镜头。同编码参数，可以直接 copy，不重编码。 */
-export async function concatShots(shotPaths, workDir, output) {
+export async function concatShots(shotPaths, workDir, output, { signal } = {}) {
   const listFile = join(workDir, 'concat.txt')
   const lines = shotPaths.map(path => `file '${path.replace(/'/g, "'\\''")}'`)
   await writeFile(listFile, `${lines.join('\n')}\n`, 'utf8')
@@ -228,7 +228,7 @@ export async function concatShots(shotPaths, workDir, output) {
     '-y', '-hide_banner', '-loglevel', 'error',
     '-f', 'concat', '-safe', '0', '-i', listFile,
     '-c', 'copy', '-movflags', '+faststart', output,
-  ])
+  ], { signal })
   return output
 }
 
@@ -387,7 +387,7 @@ export function buildAss(segments, { width = 1080, height = 1920, overlap = 0, o
 /**
  * 把字幕压进画面。传 ASS 文件，样式与画布尺寸都写在文件头里。
  */
-export async function burnSubtitles(input, subtitleFile, output) {
+export async function burnSubtitles(input, subtitleFile, output, { signal } = {}) {
   const filter = `subtitles=${escapeFilterPath(subtitleFile)}`
   await run(FFMPEG, [
     '-y', '-hide_banner', '-loglevel', 'error',
@@ -396,7 +396,7 @@ export async function burnSubtitles(input, subtitleFile, output) {
     ...encoderArgsSync(),
     '-c:a', 'copy', '-movflags', '+faststart',
     output,
-  ])
+  ], { signal })
   return output
 }
 

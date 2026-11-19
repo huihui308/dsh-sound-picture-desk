@@ -668,6 +668,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
       kenBurns: settings.kenBurns !== false,
       motion: settings.motion || 'zoom-in',
       grade: settings.grade || 'none',
+      signal,
     })
     shots.push(output)
     done += 1
@@ -677,8 +678,8 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   report(offset + done, '正在拼接整片…')
   const plain = join(dirs.renders, 'video.mp4')
   const trans = settings.transition && settings.transition !== 'none' ? settings.transition : null
-  if (trans) await concatWithFade(shots, dirs.work, plain, { transition: trans })
-  else await concatShots(shots, dirs.work, plain)
+  if (trans) await concatWithFade(shots, dirs.work, plain, { transition: trans, signal })
+  else await concatShots(shots, dirs.work, plain, { signal })
   done += 1
 
   // 片头：HyperFrames 渲染标题卡，接在整片前面
@@ -694,9 +695,10 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
         width: settings.width,
         height: settings.height,
         seconds: INTRO_SECONDS,
+        signal,
       })
       const withIntro = join(dirs.renders, 'video-with-intro.mp4')
-      await concatShots([introFile, plain], dirs.work, withIntro)
+      await concatShots([introFile, plain], dirs.work, withIntro, { signal })
       await rm(plain, { force: true }).catch(() => {})
       await copyFile(withIntro, plain)
       await rm(withIntro, { force: true }).catch(() => {})
@@ -727,7 +729,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   if (settings.burnSubtitles) {
     report(offset + done, '正在压字幕…')
     const burned = join(dirs.renders, 'video-subtitled.mp4')
-    await burnSubtitles(plain, assFile, burned)
+    await burnSubtitles(plain, assFile, burned, { signal })
     finalPath = burned
   }
 

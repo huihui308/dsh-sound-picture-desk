@@ -63,6 +63,12 @@ export function startTask(itemId, kind, total, runner) {
       clearTimeout(watchdog)
       task.running = false
       task.finishedAt = new Date().toISOString()
+      // 用户点了停止就别把 ffmpeg 的中止报错甩给用户看
+      if (controller.signal.aborted) {
+        task.error = null
+        task.message = '已停止'
+        return { ok: false, stopped: true }
+      }
       task.error = err?.message ?? String(err)
       task.message = task.error
       return { ok: false, error: task.error }

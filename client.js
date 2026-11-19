@@ -41,6 +41,9 @@ window.__ModuleLoader__.load({
 .sd-body{flex:1;min-height:0;overflow:auto;padding:16px 22px 28px}
 .sd-progress{height:3px;border-radius:2px;background:var(--dsw-alias-bg-layer-2);overflow:hidden}
 .sd-progress-bar{height:100%;background:var(--dsw-alias-brand-primary);transition:width .3s ease}
+.sd-stop{flex:0 0 auto;margin-left:auto;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;padding:2px 10px;border-radius:5px;cursor:pointer;line-height:1.7}
+.sd-stop:hover:not(:disabled){border-color:var(--dsw-alias-state-error-base, #c0392b);color:var(--dsw-alias-state-error-primary, #c0392b)}
+.sd-stop:disabled{opacity:.55;cursor:default}
 .sd-taskline{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .sd-card{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:11px;display:flex;gap:12px;margin-bottom:9px}
 .sd-thumb{width:84px;height:147px;flex:0 0 84px;border-radius:7px;background:var(--dsw-alias-bg-layer-2);object-fit:cover;display:block}
@@ -621,6 +624,7 @@ window.__ModuleLoader__.load({
     }
 
     function Project({ item, data, busy, notice, onAction, onReload, onSettings }) {
+      const [stopping, setStopping] = useState(false)
       const [picked, setPicked] = useState(null)
       // 换项目时回到自动落页
       useEffect(() => { setPicked(null) }, [item.id])
@@ -678,7 +682,24 @@ window.__ModuleLoader__.load({
               task.running && task.startedAt
                 ? h('span', { style: { opacity: .7 } }, `${elapsedLabel(task.startedAt)}`)
                 : null,
-              task.error ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary)' } }, task.error) : null))
+              task.error ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary)' } }, task.error) : null,
+              // 跑着的时候给一个出口，不然只能干等
+              task.running
+                ? h('button', {
+                  className: 'sd-stop', type: 'button',
+                  disabled: stopping,
+                  onClick: async () => {
+                    setStopping(true)
+                    try {
+                      await post('cancel', { id: item.id })
+                    } catch {
+                      // 已经结束了也无所谓
+                    } finally {
+                      setTimeout(() => setStopping(false), 1500)
+                    }
+                  },
+                }, stopping ? '正在停止…' : '停止')
+              : null))
             : null,
 
           notice ? h('div', {
