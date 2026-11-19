@@ -10,7 +10,7 @@ import { cpus, homedir } from 'node:os'
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
 import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
 import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
-import { encoderArgsSync, encoderInfo, maxParallelSessions } from './encoders.js'
+import { encoderArgsSync, encoderInfo, maxParallelSessions, resolveEncoder } from './encoders.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
@@ -671,6 +671,8 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
 
   const dirs = await store.ensureItemDirs(itemId)
   const shots = new Array(item.segments.length)
+  // 先确保编码器探测跑过，否则并发上限会误判成「无限制」
+  await resolveEncoder()
   const wanted = Number(settings.renderWorkers) > 0
     ? Math.round(Number(settings.renderWorkers))
     : autoRenderWorkers()
