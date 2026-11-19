@@ -648,8 +648,8 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
 
   report(offset + done, '正在拼接整片…')
   const plain = join(dirs.renders, 'video.mp4')
-  const useFade = settings.transition === 'fade'
-  if (useFade) await concatWithFade(shots, dirs.work, plain)
+  const trans = settings.transition && settings.transition !== 'none' ? settings.transition : null
+  if (trans) await concatWithFade(shots, dirs.work, plain, { transition: trans })
   else await concatShots(shots, dirs.work, plain)
   done += 1
 

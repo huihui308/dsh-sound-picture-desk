@@ -1376,8 +1376,12 @@ window.__ModuleLoader__.load({
                 className: 'sd-select', value: settings.transition || 'none',
                 onChange: event => patch({ transition: event.target.value }),
               },
-                h('option', { value: 'none' }, '硬切（快）'),
-                h('option', { value: 'fade' }, '淡入淡出（要重编码，慢）'))),
+                h('option', { value: 'none' }, '硬切（最快）'),
+                h('option', { value: 'fade' }, '淡入淡出'),
+                h('option', { value: 'fadeblack' }, '经过黑场'),
+                h('option', { value: 'dissolve' }, '溶解'),
+                h('option', { value: 'wipeleft' }, '向左擦除'),
+                h('option', { value: 'circleopen' }, '圆形展开'))),
             h('div', { className: 'sd-field', style: { flex: 1, minWidth: 150 } },
               h('label', null, '片头'),
               h('select', {
@@ -1392,7 +1396,7 @@ window.__ModuleLoader__.load({
               h('input', { type: 'checkbox', checked: Boolean(settings.burnSubtitles), onChange: event => patch({ burnSubtitles: event.target.checked }) }),
               '字幕压进画面')),
           h('div', { className: 'sd-hint', style: { marginTop: 6 } },
-            `${settings.intro === 'title' ? '片头用 HyperFrames 渲染，首次约 25 秒；' : ''}${settings.transition === 'fade' ? '淡入淡出需要重编码整片，会慢一些。' : ''}`.trim() || '特效在合成时生效，改完重新合成即可。'),
+            `${settings.intro === 'title' ? '片头用 HyperFrames 渲染，首次约 25 秒；' : ''}${settings.transition && settings.transition !== 'none' ? '转场需要逐段重编码（有硬件编码时很快）。' : ''}`.trim() || '特效在合成时生效，改完重新合成即可。'),
           h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
             '渲染引擎：',
             data.encoder?.hardware

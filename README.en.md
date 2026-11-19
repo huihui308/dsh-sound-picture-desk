@@ -121,6 +121,21 @@ Choose **visual style** (cinematic / gongbi / comic / ink / dark mystery) and **
 
 Click **Dub and render**: missing audio is filled in first, then shots are rendered, concatenated, and subtitled — all in one pass.
 
+**Effects** (applied at render time):
+
+| Option | Choices | Notes |
+|---|---|---|
+| Motion | slow push-in / slow pull-out / static | zoompan-based; upscales 2× first to avoid jitter |
+| Grade | none / warm / cool / film | ffmpeg colorbalance + eq; film adds a vignette |
+| Transition | cut / fade / through black / dissolve / wipe left / circle open | xfade + acrossfade; requires re-encoding |
+| Intro | none / title card | HyperFrames renders an HTML title card (3 s) with the project title |
+
+**Rendering prefers a hardware encoder** — Apple VideoToolbox, NVIDIA NVENC, Intel QSV, AMD AMF — and falls back to CPU when none is usable. The active encoder is shown at the bottom of this tab.
+
+Measured on the same 10-second clip: CPU 35.4 s → NVENC 3.97 s; a 2-minute video went from 640 s to about 100 s.
+
+Force CPU with `STORY_DESK_ENCODER=cpu`.
+
 Preview the result in place, or **Export** to a chosen folder (defaults to `~/Downloads`), named after the project title.
 
 ---

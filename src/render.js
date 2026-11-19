@@ -114,12 +114,15 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
-/** 调色滤镜：都是 ffmpeg 内置滤镜，不额外依赖。 */
+/**
+ * 调色滤镜。全部用 eq 的分通道 gamma 做色温，不用 colorbalance/lutrgb——
+ * 那两个在 RGB 域逐像素转来转去，1080p 下比 eq 慢十倍（实测 48 秒素材：160 秒 vs 16 秒）。
+ */
 const GRADES = {
   none: null,
-  warm: 'colorbalance=rs=.07:gs=.02:bs=-.05,eq=saturation=1.06:contrast=1.02',
-  cool: 'colorbalance=rs=-.05:gs=0:bs=.07,eq=saturation=.98:contrast=1.03',
-  film: 'eq=contrast=1.08:saturation=.9:brightness=-.01,colorbalance=rs=.03:bs=.02,vignette=PI/5',
+  warm: 'eq=gamma_r=1.06:gamma_g=1.01:gamma_b=0.94:saturation=1.05',
+  cool: 'eq=gamma_r=0.94:gamma_g=1.0:gamma_b=1.06:saturation=0.98',
+  film: 'eq=contrast=1.08:saturation=.9:gamma_r=1.03:gamma_b=1.02,vignette=PI/5',
 }
 
 export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade }) {
@@ -172,7 +175,23 @@ export async function renderShot({ image, audio, output, seconds, width, height,
  * 带淡入淡出的拼接：xfade 必须重编码，所以只在用户开了转场时走这条。
  * 逐段两两合并，避免一次性塞几十个输入。
  */
-export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds = 0.4 } = {}) {
+/** 这段视频有没有音轨。转场拼接时决定要不要做音频交叉淡化。 */
+function hasAudioStream(file) {
+  return new Promise(resolve => {
+    execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index',
+      '-of', 'csv=p=0', file], { timeout: 15_000 }, (err, stdout) => {
+      resolve(!err && String(stdout).trim().length > 0)
+    })
+  })
+}
+
+/** xfade 支持的转场名，插件里只暴露适合说书节奏的几种。 */
+export const XFADE_PRESETS = new Set([
+  'fade', 'fadeblack', 'dissolve', 'wipeleft', 'wiperight', 'circleopen', 'circleclose', 'smoothleft',
+])
+
+export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds = 0.4, transition = 'fade' } = {}) {
+  const kind = XFADE_PRESETS.has(transition) ? transition : 'fade'
   if (shotPaths.length === 1) {
     await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', '-i', shotPaths[0], '-c', 'copy', output])
     return output
@@ -182,17 +201,18 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
     const next = i === shotPaths.length - 1 ? output : join(workDir, `fade-${String(i).padStart(3, '0')}.mp4`)
     const merged = await probeDuration(current)
     const offset = Math.max(0, (merged || 0) - fadeSeconds)
-    await run(FFMPEG, [
-      '-y', '-hide_banner', '-loglevel', 'error',
-      '-i', current, '-i', shotPaths[i],
-      '-filter_complex',
-      `[0:v][1:v]xfade=transition=fade:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v];` +
-      '[0:a][1:a]acrossfade=d=' + fadeSeconds + ':c1=tri:c2=tri[a]',
-      '-map', '[v]', '-map', '[a]',
-      ...encoderArgsSync(), '-r', '30',
-      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-      '-movflags', '+faststart', next,
-    ])
+    // 两段都有音轨才做音频交叉淡化；缺音轨时只转场画面，否则 ffmpeg 会报匹配不到流
+    const bothHaveAudio = (await hasAudioStream(current)) && (await hasAudioStream(shotPaths[i]))
+    const filter = bothHaveAudio
+      ? `[0:v][1:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v];[0:a][1:a]acrossfade=d=${fadeSeconds}:c1=tri:c2=tri[a]`
+      : `[0:v][1:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v]`
+    const args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', current, '-i', shotPaths[i],
+      '-filter_complex', filter, '-map', '[v]']
+    if (bothHaveAudio) {
+      args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2')
+    }
+    args.push(...encoderArgsSync(), '-r', '30', '-movflags', '+faststart', next)
+    await run(FFMPEG, args)
     if (i > 1) await rm(current, { force: true }).catch(() => {})
     current = next
   }
