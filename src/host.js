@@ -123,6 +123,7 @@ function segmentSummary(row, index) {
     imagePath: row.imagePath ?? null,
     imageAt: row.imageAt ?? null,
     lastPrompt: row.lastPrompt ?? null,
+    imageSize: row.imageSize ?? null,
     audioPath: row.audioPath ?? null,
     audioSecs: row.audioSecs ?? 0,
     error: row.error ?? null,
@@ -352,11 +353,13 @@ async function startImages(store, secrets, itemId, onlyIds, note) {
       const content = fix
         ? `画面要求：${fix}。${base}${anchorHint(item)}`
         : `${base}${anchorHint(item)}`
-      const buffer = await generateImage(settings, secrets, {
+      const raw = await generateImage(settings, secrets, {
         content,
         width,
         height,
       })
+      const norm = await normalizeImageBuffer(raw, dirs, width, height)
+      const buffer = norm.buffer
       const name = `s${String(row.idx + 1).padStart(3, '0')}.png`
       await writeFile(join(dirs.images, name), buffer)
       await store.mutate(draft => {
@@ -368,7 +371,9 @@ async function startImages(store, secrets, itemId, onlyIds, note) {
           seg.imageAt = Date.now()
           // 存下来，用户能核对「我的意见到底有没有被用上」
           seg.lastPrompt = content.slice(0, 800)
-          seg.error = null
+          seg.imageSize = `${norm.width}×${norm.height}`
+          // 返回的图宽高和请求正好对调，说明模型给了一张横图，提示用户
+          seg.error = norm.turned ? `模型返回了横图（${norm.width}×${norm.height}），建议重出` : null
         }
         target.updatedAt = new Date().toISOString()
         return null
@@ -405,7 +410,8 @@ async function startStyleSamples(store, secrets, itemId) {
     for (const styleId of styleIds) {
       if (signal.aborted) throw new Error('已停止')
       report(done, `正在画「${styleLabel(styleId)}」`)
-      const buffer = await generateImage({ ...settings, visualStyle: styleId }, secrets, { content, width, height })
+      const rawStyle = await generateImage({ ...settings, visualStyle: styleId }, secrets, { content, width, height })
+      const { buffer } = await normalizeImageBuffer(rawStyle, dirs, width, height)
       const rel = `samples/style-${styleId}.png`
       await writeFile(join(dirs.base, rel), buffer)
       await store.mutate(draft => {
@@ -457,6 +463,44 @@ async function startVoiceSamples(store, secrets, itemId) {
     }
     return { count: done }
   })
+}
+
+/**
+ * 生图服务返回的字节不能直接落盘：
+ * 常见它给的是 JPEG（我们存成 .png），还可能带 EXIF 旋转标记——
+ * 浏览器尊重标记、ffmpeg 或别的看图工具不尊重，同一张图在两边方向就不一样。
+ * 所以统一用 ffmpeg 转成标准 PNG：旋转烘进像素、元数据清掉，谁看都一样。
+ */
+async function normalizeImageBuffer(buffer, dirs, wantW, wantH) {
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const raw = join(dirs.work, `raw-${stamp}.img`)
+  const out = join(dirs.work, `norm-${stamp}.png`)
+  try {
+    await writeFile(raw, buffer)
+    await new Promise((resolve, reject) => {
+      execFile('ffmpeg', ['-y', '-v', 'error', '-i', raw, '-map_metadata', '-1', '-frames:v', '1', out],
+        { timeout: 60_000 }, err => (err ? reject(err) : resolve()))
+    })
+    const png = await readFile(out)
+    let width = 0
+    let height = 0
+    try {
+      const dict = await new Promise((resolve, reject) => {
+        execFile('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+          '-show_entries', 'stream=width,height', '-of', 'csv=p=0', out],
+          { timeout: 20_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout).trim())))
+      })
+      const [w, h] = dict.split(',').map(Number)
+      width = w || 0
+      height = h || 0
+    } catch {
+      // 读不到尺寸就交给调用方按未知处理
+    }
+    return { buffer: png, width, height, turned: Boolean(wantW && wantH && width === wantH && height === wantW) }
+  } finally {
+    await rm(raw, { force: true }).catch(() => {})
+    await rm(out, { force: true }).catch(() => {})
+  }
 }
 
 /** 试听样本文本：约 15 秒。实测这批音色 3.1 字/秒（64 字念了 20.5 秒），所以取 47 字。 */
@@ -542,11 +586,14 @@ async function drawAnchor(store, secrets, itemId, anchorId, instruction) {
 
   return startTask(itemId, 'anchor', 1, async ({ report }) => {
     report(0, `正在画「${target.name}」`)
-    const buffer = await generateImage(settings, secrets, {
+    const wantW = Number(settings.imageWidth) || 1024
+    const wantH = Number(settings.imageHeight) || 1792
+    const raw = await generateImage(settings, secrets, {
       content,
-      width: Number(settings.imageWidth) || 1024,
-      height: Number(settings.imageHeight) || 1792,
+      width: wantW,
+      height: wantH,
     })
+    const { buffer } = await normalizeImageBuffer(raw, dirs, wantW, wantH)
     const name = `anchors/${anchorId}-${Date.now()}.png`
     await writeFile(join(dirs.base, name), buffer)
     await store.mutate(draft => {

@@ -1519,6 +1519,10 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-warn-primary)', wordBreak: 'break-word' } }, seg.error)
             : null,
 
+          mode === 'image' && seg.imageSize
+            ? h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .7 } }, `实际尺寸 ${seg.imageSize}`)
+            : null,
+
           h('div', { className: 'sd-card-foot' },
             mode !== 'image' && seg.audioPath
               ? h('audio', { className: 'sd-audio', controls: true, preload: 'none', src: mediaUrl(item.id, seg.audioPath) })
