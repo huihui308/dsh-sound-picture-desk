@@ -29,9 +29,11 @@ The usual workflow is "write a script → hunt for footage → record voiceover 
 | **ffmpeg** | Required for rendering (`ffmpeg` and `ffprobe` on PATH) |
 | **Writing model** | Uses models already configured in DSH — no extra key |
 | **Speech synthesis** | Xiaomi MiMo TTS (audio returned via `chat/completions`); without it you can pick a voice but not dub |
-| **Image generation** | Any OpenAI-compatible `/v1/images/generations`, or a local service |
+| **Image generation** | Any OpenAI-compatible `/v1/images/generations`, or a local service; MiniMax `image-01` uses its own native endpoint |
 
 Any OpenAI-compatible image endpoint works: Alibaba MaaS, MiniMax, OpenAI, or self-hosted. Presets for these ship with the plugin.
+
+MiniMax ships two lanes, routed automatically by model name: `image-01` / `image-01-live` use the native `POST /v1/image_generation` (flat ¥0.025 per image, slower), while the `MiniMax-H3-Image` family uses the OpenAI-compatible entry (token-billed, ~¥0.25 per 1024×1792 image but only a few seconds). Both appear in the provider dropdown.
 
 ---
 

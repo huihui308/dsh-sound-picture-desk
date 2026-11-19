@@ -29,9 +29,11 @@
 | **ffmpeg** | 合成成片必需（`ffmpeg`、`ffprobe` 在 PATH 里） |
 | **写作模型** | 用 DSH 里已经接好的模型，不用另外配密钥 |
 | **语音合成** | 支持小米 MiMo TTS（`chat/completions` 返回音频）；不配就只能选音色不能配音 |
-| **图像生成** | 任意 OpenAI 兼容的 `/v1/images/generations`；或本机自建服务 |
+| **图像生成** | 任意 OpenAI 兼容的 `/v1/images/generations`；或本机自建服务；MiniMax `image-01` 走它自己的原生接口 |
 
 生图只要符合 OpenAI 兼容接口就行：阿里云 MaaS、MiniMax、OpenAI 官方、自建都行，插件里预置了这几家的地址。
+
+MiniMax 有两条通道，插件按模型名自动分流：`image-01` / `image-01-live` 走原生 `POST /v1/image_generation`（固定 ¥0.025/张，慢一些），`MiniMax-H3-Image` 系列走 OpenAI 兼容入口（按 token 计费，1024×1792 约 ¥0.25/张但只需几秒）。选服务商时下拉里两条都列着。
 
 ---
 
