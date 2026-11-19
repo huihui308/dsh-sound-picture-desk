@@ -2,7 +2,7 @@
 // 文案走 DSH 当前模型，旁白走 MiMo TTS，画面走本机/平台生图，成片走 ffmpeg。
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { appendFile, copyFile, open, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
+import { appendFile, copyFile, open, rename, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cpus, homedir } from 'node:os'
@@ -716,8 +716,10 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   report(offset + done, '正在拼接整片…')
   const plain = join(dirs.renders, 'video.mp4')
   const trans = settings.transition && settings.transition !== 'none' ? settings.transition : null
-  if (trans) await concatWithFade(shots, dirs.work, plain, { transition: trans, signal })
-  else await concatShots(shots, dirs.work, plain, { signal })
+  const tmpPlain = join(dirs.work, 'plain.mp4')
+  if (trans) await concatWithFade(shots, dirs.work, tmpPlain, { transition: trans, signal })
+  else await concatShots(shots, dirs.work, tmpPlain, { signal })
+  await rename(tmpPlain, plain)
   done += 1
 
   // 封面：作为成片第一帧，平台抓封面时就有图可抓
@@ -792,8 +794,17 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   if (settings.burnSubtitles) {
     report(offset + done, '正在压字幕…')
     const burned = join(dirs.renders, 'video-subtitled.mp4')
-    await burnSubtitles(plain, assFile, burned, { signal })
-    finalPath = burned
+    // 先写 .tmp，成功再改名。中途被打断只会留下临时文件，
+    // 不会把上一版能播的成片覆盖成半成品。
+    const tmpBurned = `${burned}.tmp.mp4`
+    try {
+      await burnSubtitles(plain, assFile, tmpBurned, { signal })
+      await rename(tmpBurned, burned)
+      finalPath = burned
+    } catch (err) {
+      await rm(tmpBurned, { force: true }).catch(() => {})
+      throw err
+    }
     done += 1
   }
 
