@@ -722,30 +722,6 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   await rename(tmpPlain, plain)
   done += 1
 
-  // 封面：作为成片第一帧，平台抓封面时就有图可抓
-  const COVER_SECONDS = 0.8
-  const usesCover = Boolean(item.cover?.path) && settings.coverInVideo !== false
-  if (usesCover) {
-    report(offset + done, '正在把封面放进片头…')
-    try {
-      const coverClip = join(dirs.work, 'cover-clip.mp4')
-      await renderCoverClip(join(dirs.base, item.cover.path), coverClip, {
-        width: settings.width, height: settings.height, seconds: COVER_SECONDS, signal,
-      })
-      const withCover = join(dirs.renders, 'video-with-cover.mp4')
-      await concatShots([coverClip, plain], dirs.work, withCover, { signal })
-      await rm(plain, { force: true }).catch(() => {})
-      await copyFile(withCover, plain)
-      await rm(withCover, { force: true }).catch(() => {})
-    } catch (err) {
-      await store.mutate(draft => {
-        const target = findItem(draft, itemId)
-        target.log.push({ at: new Date().toISOString(), text: `封面跳过：${String(err.message).slice(0, 80)}` })
-        return null
-      })
-    }
-  }
-
   // 片头：HyperFrames 渲染标题卡，接在整片前面
   if (settings.intro === 'title') {
     report(offset + done, '正在渲染片头…')
@@ -771,6 +747,30 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
       await store.mutate(draft => {
         const target = findItem(draft, itemId)
         target.log.push({ at: new Date().toISOString(), text: `片头跳过：${String(err.message).slice(0, 80)}` })
+        return null
+      })
+    }
+  }
+
+  // 封面：作为成片第一帧，平台抓封面时就有图可抓
+  const COVER_SECONDS = 0.8
+  const usesCover = Boolean(item.cover?.path) && settings.coverInVideo !== false
+  if (usesCover) {
+    report(offset + done, '正在把封面放进片头…')
+    try {
+      const coverClip = join(dirs.work, 'cover-clip.mp4')
+      await renderCoverClip(join(dirs.base, item.cover.path), coverClip, {
+        width: settings.width, height: settings.height, seconds: COVER_SECONDS, signal,
+      })
+      const withCover = join(dirs.renders, 'video-with-cover.mp4')
+      await concatShots([coverClip, plain], dirs.work, withCover, { signal })
+      await rm(plain, { force: true }).catch(() => {})
+      await copyFile(withCover, plain)
+      await rm(withCover, { force: true }).catch(() => {})
+    } catch (err) {
+      await store.mutate(draft => {
+        const target = findItem(draft, itemId)
+        target.log.push({ at: new Date().toISOString(), text: `封面跳过：${String(err.message).slice(0, 80)}` })
         return null
       })
     }
