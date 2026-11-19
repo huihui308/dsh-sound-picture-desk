@@ -122,6 +122,7 @@ function segmentSummary(row, index) {
     imagePrompt: row.imagePrompt,
     imagePath: row.imagePath ?? null,
     imageAt: row.imageAt ?? null,
+    lastPrompt: row.lastPrompt ?? null,
     audioPath: row.audioPath ?? null,
     audioSecs: row.audioSecs ?? 0,
     error: row.error ?? null,
@@ -345,9 +346,14 @@ async function startImages(store, secrets, itemId, onlyIds, note) {
     for (const row of targets) {
       if (signal.aborted) throw new Error('已停止')
       report(done, `第 ${done + 1}/${targets.length} 张画面`)
-      const fix = note && targets.length === 1 ? `。调整：${String(note).trim()}` : ''
+      const fix = note && targets.length === 1 ? String(note).trim() : ''
+      // 修改要求放最前面：追加在长描述末尾时，模型往往当没看见
+      const base = row.imagePrompt || row.text.slice(0, 400)
+      const content = fix
+        ? `画面要求：${fix}。${base}${anchorHint(item)}`
+        : `${base}${anchorHint(item)}`
       const buffer = await generateImage(settings, secrets, {
-        content: `${row.imagePrompt || row.text.slice(0, 400)}${fix}${anchorHint(item)}`,
+        content,
         width,
         height,
       })
@@ -360,6 +366,8 @@ async function startImages(store, secrets, itemId, onlyIds, note) {
           seg.imagePath = `images/${name}`
           // 文件名固定会被浏览器缓存，带个时间戳让重出的图真正刷新
           seg.imageAt = Date.now()
+          // 存下来，用户能核对「我的意见到底有没有被用上」
+          seg.lastPrompt = content.slice(0, 800)
           seg.error = null
         }
         target.updatedAt = new Date().toISOString()

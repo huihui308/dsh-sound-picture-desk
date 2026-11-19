@@ -129,6 +129,11 @@ window.__ModuleLoader__.load({
 .sd-ref-err{color:var(--dsw-alias-state-warn-primary);font-size:10.5px;white-space:nowrap}
 .sd-card[data-mode="script"] .sd-thumb,.sd-card[data-mode="script"] .sd-thumb-empty{width:132px;height:232px;flex:0 0 132px}
 .sd-readtext{font-size:12.5px;line-height:1.75;color:var(--dsw-alias-label-primary);white-space:pre-wrap}
+.sd-readprompt.sd-editable{width:100%;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);padding:7px 9px;font:inherit;font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary);resize:vertical;margin-top:4px}
+.sd-readprompt.sd-editable:focus{outline:none;border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}
+.sd-lastprompt{margin-top:6px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.sd-lastprompt summary{cursor:pointer;user-select:none}
+.sd-lastprompt>div{margin-top:4px;padding:6px 8px;background:var(--dsw-alias-bg-layer-2);border-radius:6px;line-height:1.6;word-break:break-word;white-space:pre-wrap;max-height:120px;overflow:auto}
 .sd-fixrow{display:flex;gap:6px;align-items:center;margin-top:7px}
 .sd-fixrow .sd-input{flex:1;min-width:0}
 .sd-fixrow .sd-btn{flex:0 0 auto}
@@ -1464,8 +1469,26 @@ window.__ModuleLoader__.load({
               }))
             : h('div', { className: 'sd-readtext' }, seg.text),
 
-          mode !== 'script' && mode === 'image'
-            ? h('div', { className: 'sd-readprompt' }, seg.imagePrompt || '（没有画面描述）')
+          mode === 'image'
+            ? h('textarea', {
+              className: 'sd-readprompt sd-editable',
+              value: prompt, rows: 3,
+              placeholder: '这一段的画面描述，直接改，离开输入框保存',
+              onChange: event => setPrompt(event.target.value),
+              onBlur: async () => {
+                if (prompt === seg.imagePrompt) return
+                const next = item.segments.map(row => (row.id === seg.id ? { ...row, imagePrompt: prompt } : row))
+                await post('segments', { id: item.id, segments: next })
+                await onReload()
+              },
+            })
+            : null,
+
+          // 把真正发给模型的提示词摊开，方便核对意见有没有被用上
+          mode === 'image' && seg.lastPrompt
+            ? h('details', { className: 'sd-lastprompt' },
+              h('summary', null, '上次实际发给模型的提示词'),
+              h('div', null, seg.lastPrompt))
             : null,
 
           mode === 'image'
