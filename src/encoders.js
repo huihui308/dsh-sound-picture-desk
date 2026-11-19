@@ -10,7 +10,10 @@ const CANDIDATES = [
   {
     id: 'h264_videotoolbox',
     label: 'Apple VideoToolbox（Mac 硬件编码）',
+    // -q:v 只有 Apple Silicon + ffmpeg 4.4 以上才认；Intel Mac 上会直接报错，
+    // 所以留一套按码率的参数做兜底（Intel Mac 只能这样）。
     args: ['-c:v', 'h264_videotoolbox', '-q:v', '55'],
+    fallbackArgs: ['-c:v', 'h264_videotoolbox', '-b:v', '8M', '-maxrate', '10M', '-bufsize', '16M'],
     platform: 'darwin',
   },
   {
@@ -82,6 +85,14 @@ export async function resolveEncoder() {
     if (result.ok) {
       cached = { ...enc, hardware: true, forced: false }
       return cached
+    }
+    // 首套参数不成立时试兜底参数（Intel Mac 的 VideoToolbox 不支持 -q:v）
+    if (enc.fallbackArgs) {
+      const retry = await canUse({ ...enc, args: enc.fallbackArgs })
+      if (retry.ok) {
+        cached = { ...enc, args: enc.fallbackArgs, hardware: true, forced: false }
+        return cached
+      }
     }
   }
   cached = { ...CPU, hardware: false, forced: false }
