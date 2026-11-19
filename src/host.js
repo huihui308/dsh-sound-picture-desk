@@ -2,7 +2,7 @@
 // 文案走 DSH 当前模型，旁白走 MiMo TTS，画面走本机/平台生图，成片走 ffmpeg。
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { appendFile, copyFile, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
+import { appendFile, copyFile, open, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
@@ -50,6 +50,29 @@ async function readJson(req) {
 }
 
 /** 支持 Range，成片才能在页面里拖动进度条。 */
+/**
+ * 按文件头判断真实类型。生图服务常把 JPEG 直接回给我们，我们存成 .png，
+ * 浏览器按 image/png 解码就会错乱——所以以字节为准，扩展名只作兜底。
+ */
+async function sniffType(file, fallback) {
+  try {
+    const handle = await open(file, 'r')
+    try {
+      const head = Buffer.alloc(12)
+      await handle.read(head, 0, 12, 0)
+      if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return 'image/jpeg'
+      if (head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+      if (head.subarray(0, 4).toString('ascii') === 'RIFF' && head.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp'
+      if (head.subarray(0, 3).toString('ascii') === 'GIF') return 'image/gif'
+    } finally {
+      await handle.close()
+    }
+  } catch {
+    // 读不到就用扩展名
+  }
+  return fallback
+}
+
 async function sendFile(req, res, file) {
   const type = MIME[extname(file).toLowerCase()]
   if (!type) return json(res, 404, { error: '不支持的文件类型' })
@@ -59,7 +82,7 @@ async function sendFile(req, res, file) {
   } catch {
     return json(res, 404, { error: '文件不存在' })
   }
-  res.setHeader('content-type', type)
+  res.setHeader('content-type', await sniffType(file, type))
   res.setHeader('accept-ranges', 'bytes')
   res.setHeader('cache-control', 'private, max-age=600')
   res.setHeader('x-content-type-options', 'nosniff')
@@ -98,6 +121,7 @@ function segmentSummary(row, index) {
     text: row.text,
     imagePrompt: row.imagePrompt,
     imagePath: row.imagePath ?? null,
+    imageAt: row.imageAt ?? null,
     audioPath: row.audioPath ?? null,
     audioSecs: row.audioSecs ?? 0,
     error: row.error ?? null,
@@ -334,6 +358,8 @@ async function startImages(store, secrets, itemId, onlyIds, note) {
         const seg = target.segments.find(s => s.id === row.id)
         if (seg) {
           seg.imagePath = `images/${name}`
+          // 文件名固定会被浏览器缓存，带个时间戳让重出的图真正刷新
+          seg.imageAt = Date.now()
           seg.error = null
         }
         target.updatedAt = new Date().toISOString()

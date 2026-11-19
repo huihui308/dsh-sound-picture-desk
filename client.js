@@ -196,8 +196,10 @@ window.__ModuleLoader__.load({
 
     const post = (path, payload) => api(path, { method: 'POST', body: JSON.stringify(payload ?? {}) })
 
-    function mediaUrl(itemId, rel) {
-      return `${API}/media/${itemId}/${String(rel).split('/').map(encodeURIComponent).join('/')}`
+    /** version 用来破缓存：同名图片重出后 URL 跟着变，浏览器才会真去重新取。 */
+    function mediaUrl(itemId, rel, version) {
+      const url = `${API}/media/${itemId}/${String(rel).split('/').map(encodeURIComponent).join('/')}`
+      return version ? `${url}?v=${version}` : url
     }
 
     function formatSecs(value) {
@@ -945,7 +947,7 @@ window.__ModuleLoader__.load({
 
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'script', disabled: busy, onAction, onReload,
-          onZoom: seg.imagePath ? () => setViewed({ src: mediaUrl(item.id, seg.imagePath), caption: `第 ${seg.idx + 1} 段` }) : undefined,
+          onZoom: seg.imagePath ? () => setViewed({ src: mediaUrl(item.id, seg.imagePath, seg.imageAt), caption: `第 ${seg.idx + 1} 段` }) : undefined,
         })),
         viewed ? h(ImageViewer, { ...viewed, onClose: () => setViewed(null) }) : null,
         h('div', { className: 'sd-hint', style: { marginTop: 4 } },
@@ -1305,7 +1307,7 @@ window.__ModuleLoader__.load({
 
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'image', disabled: busy, onAction, onReload,
-          onZoom: () => setViewed({ src: mediaUrl(item.id, seg.imagePath), caption: `第 ${seg.idx + 1} 段`, meta: `${seg.audioSecs ? formatSecs(seg.audioSecs) : '未配音'}` }),
+          onZoom: () => setViewed({ src: mediaUrl(item.id, seg.imagePath, seg.imageAt), caption: `第 ${seg.idx + 1} 段`, meta: `${seg.audioSecs ? formatSecs(seg.audioSecs) : '未配音'}` }),
         })),
 
         viewed ? h(ImageViewer, { ...viewed, onClose: () => setViewed(null) }) : null)
@@ -1432,7 +1434,7 @@ window.__ModuleLoader__.load({
           : seg.imagePath
             ? h('img', {
               className: onZoom ? 'sd-thumb sd-imgzoom' : 'sd-thumb',
-              src: mediaUrl(item.id, seg.imagePath),
+              src: mediaUrl(item.id, seg.imagePath, seg.imageAt),
               alt: `第 ${seg.idx + 1} 段画面`,
               title: onZoom ? '点开看大图' : undefined,
               onClick: onZoom,
