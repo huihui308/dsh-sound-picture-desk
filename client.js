@@ -564,6 +564,14 @@ window.__ModuleLoader__.load({
       return `已用 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒`
     }
 
+    /** 下载用的文件名：用项目标题，去掉文件系统不认的字符，留个兜底名。 */
+    function downloadName(item, suffix = '') {
+      const raw = String(item?.title ?? '').trim()
+      // / \ : * ? " < > | 在 Windows/macOS/Linux 上至少有一个不认，统一换掉
+      const clean = raw.replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
+      return `${clean || '说书成片'}${suffix}`
+    }
+
     /** 并行档位：1、2、4、8，以及不超过本机核数上限的值。 */
     function workerOptions(data) {
       const cores = Number(data?.cpuCores) || 8
@@ -1583,7 +1591,7 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'sd-row', style: { gap: 8, marginTop: 10 } },
                   h('a', {
                     className: 'sd-btn', 'data-kind': 'ghost',
-                    href: mediaUrl(item.id, item.cover.path), download: '', target: '_blank', rel: 'noreferrer',
+                    href: mediaUrl(item.id, item.cover.path), download: `${downloadName(item, ' 封面')}.png`, target: '_blank', rel: 'noreferrer',
                   }, '下载封面'))))
             : h('div', { className: 'sd-hint', style: { marginTop: 8 } },
               '封面是单独上传给平台的图，不嵌进视频。选一张底图，标题会自动压在画面底部。')),
@@ -1614,11 +1622,11 @@ window.__ModuleLoader__.load({
               h('div', { className: 'sd-card-foot', style: { marginTop: 6 } },
                 h('a', {
                   className: 'sd-btn', 'data-kind': 'ghost',
-                  href: mediaUrl(item.id, item.render.path), download: '', target: '_blank', rel: 'noreferrer',
+                  href: mediaUrl(item.id, item.render.path), download: `${downloadName(item)}.mp4`, target: '_blank', rel: 'noreferrer',
                 }, '下载成片'),
                 item.render.srtPath ? h('a', {
                   className: 'sd-btn', 'data-kind': 'ghost',
-                  href: mediaUrl(item.id, item.render.srtPath), target: '_blank', rel: 'noreferrer',
+                  href: mediaUrl(item.id, item.render.srtPath), download: `${downloadName(item)}.srt`, target: '_blank', rel: 'noreferrer',
                 }, '下载 SRT') : null)))
           : h('div', { className: 'sd-empty' }, ready ? '素材齐了，点「合成成片」。' : '音画还不齐，先去③④补上。'))
     }
