@@ -155,6 +155,20 @@ window.__ModuleLoader__.load({
 .sd-voice:hover{border-color:var(--dsw-alias-border-l2)}
 .sd-voice[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
 .sd-voice audio{height:24px;flex:1;min-width:0}
+.sd-item{position:relative}
+.sd-item-del{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:20px;height:20px;padding:0;border:none;border-radius:4px;background:transparent;color:var(--dsw-alias-label-tertiary);font-size:15px;line-height:1;cursor:pointer;opacity:0;transition:opacity .12s}
+.sd-item:hover .sd-item-del,.sd-item-del:focus-visible{opacity:1}
+.sd-item-del:hover{background:var(--dsw-alias-state-error-base, #c0392b);color:#fff}
+.sd-item:hover .sd-item-meta{padding-right:22px}
+.sd-rail-foot{margin-top:auto;padding:8px 10px;border-top:1px solid var(--dsw-alias-border-l1)}
+.sd-trash-link{width:100%;display:flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11.5px;padding:5px 2px;cursor:pointer;border-radius:5px}
+.sd-trash-link:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.sd-trash-count{margin-left:auto;min-width:17px;height:17px;line-height:17px;text-align:center;border-radius:9px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);font-size:10px;padding:0 5px}
+.sd-trash-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.sd-trash-row:last-child{border-bottom:none}
+.sd-trash-main{flex:1;min-width:0}
+.sd-trash-name{font-size:12.5px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-trash-meta{font-size:11px;color:var(--dsw-alias-label-tertiary);margin-top:3px}
 .sd-chat{width:300px;flex:0 0 300px;display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
 .sd-chat[data-open="0"]{width:40px;flex:0 0 40px}
 .sd-chat-railbtn{width:100%;height:100%;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:14px;font:inherit;font-size:11px;writing-mode:vertical-rl}
@@ -250,6 +264,9 @@ window.__ModuleLoader__.load({
       const [settingsOpen, setSettingsOpen] = useState(false)
       const [busy, setBusy] = useState(false)
       const [notice, setNotice] = useState(null)
+      const [pendingDelete, setPendingDelete] = useState(null)
+      const [deletingBusy, setDeletingBusy] = useState(false)
+      const [trashOpen, setTrashOpen] = useState(false)
       const [chatOpen, setChatOpen] = useState(true)
       const [chatInput, setChatInput] = useState('')
       const [sending, setSending] = useState(false)
@@ -359,6 +376,9 @@ window.__ModuleLoader__.load({
           h(Rail, {
             items: data.items, currentId, onPick: setCurrentId,
             onCreate: () => setCreating(true),
+            onDelete: item => setPendingDelete(item),
+            trashCount: data.trashCount ?? 0,
+            onOpenTrash: () => setTrashOpen(true),
           }),
           h('div', { className: 'sd-pane' },
             current
@@ -368,6 +388,31 @@ window.__ModuleLoader__.load({
                 })
               : h(EmptyState, { onCreate: () => setCreating(true), model: data.model })),
           // 助手栏已按需求移除：chat 相关逻辑保留，界面不再渲染
+          pendingDelete ? h(ConfirmDelete, {
+            item: pendingDelete,
+            days: data.trashDays ?? 7,
+            busy: deletingBusy,
+            onCancel: () => setPendingDelete(null),
+            onConfirm: async () => {
+              setDeletingBusy(true)
+              try {
+                await post('remove', { id: pendingDelete.id })
+                setPendingDelete(null)
+                // 删的正好是当前打开的项目，就回到空状态
+                if (pendingDelete.id === currentId) setCurrentId(null)
+                await load()
+                setNotice('已移入回收站，7 天内可还原')
+              } catch (err) {
+                setNotice({ tone: 'error', text: err.message })
+              } finally {
+                setDeletingBusy(false)
+              }
+            },
+          }) : null,
+          trashOpen ? h(TrashDialog, {
+            onClose: () => setTrashOpen(false),
+            onChanged: load,
+          }) : null,
           settingsOpen ? h(SettingsDialog, {
             data, onClose: () => setSettingsOpen(false),
             onSaved: async () => { await load(); setSettingsOpen(false) },
@@ -452,7 +497,7 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ 左栏
 
-    function Rail({ items, currentId, onPick, onCreate }) {
+    function Rail({ items, currentId, onPick, onCreate, onDelete, trashCount, onOpenTrash }) {
       return h('div', { className: 'sd-rail' },
         h('div', { className: 'sd-rail-head' },
           h(DeskIcon, { size: 17 }),
@@ -460,17 +505,30 @@ window.__ModuleLoader__.load({
           h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onCreate, title: '新建一个说书项目' }, '＋')),
         h('div', { className: 'sd-rail-list' },
           items.length
-            ? items.map(item => h('button', {
-                key: item.id, type: 'button', className: 'sd-item',
+            ? items.map(item => h('div', {
+                key: item.id, className: 'sd-item',
                 'data-on': item.id === currentId ? '1' : '0',
+                role: 'button', tabIndex: 0,
                 onClick: () => onPick(item.id),
+                onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') onPick(item.id) },
               },
               h('span', { className: 'sd-item-title' }, item.title || '未命名'),
               h('span', { className: 'sd-item-meta' },
                 h('span', { className: 'sd-dot', 'data-on': item.stage === 'rendered' ? '1' : '0' }),
                 h('span', null, item.stageLabel),
-                item.counts.segments ? h('span', null, `· ${item.counts.segments} 段`) : null)))
-            : h('div', { className: 'sd-hint', style: { padding: '10px 6px' } }, '还没有项目。点上面的 ＋ 建一个。')))
+                item.counts.segments ? h('span', null, `· ${item.counts.segments} 段`) : null),
+              // 删除入口：平时藏着，鼠标移到这一行才出现
+              h('button', {
+                className: 'sd-item-del', type: 'button', title: '删除这个项目',
+                onClick: event => { event.stopPropagation(); onDelete(item) },
+              }, '×')))
+            : h('div', { className: 'sd-hint', style: { padding: '10px 6px' } }, '还没有项目。点上面的 ＋ 建一个。')),
+        h('div', { className: 'sd-rail-foot' },
+          h('button', {
+            className: 'sd-trash-link', type: 'button', onClick: onOpenTrash,
+          },
+            '回收站',
+            trashCount ? h('span', { className: 'sd-trash-count' }, String(trashCount)) : null)))
     }
 
     // ------------------------------------------------------------------ 空状态
@@ -1649,6 +1707,96 @@ window.__ModuleLoader__.load({
       return hit ? hit.id : 'custom'
     }
 
+    /** 删除前的确认。文案说清「进回收站还能找回」，免得用户以为是彻底删除。 */
+    function ConfirmDelete({ item, days, onCancel, onConfirm, busy }) {
+      return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onCancel() } },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '删除项目', style: { width: 'min(420px,92vw)' } },
+          h('h3', null, '删除这个项目？'),
+          h('div', { className: 'sd-hint', style: { marginTop: 6, lineHeight: 1.8 } },
+            '「', item.title || '未命名', '」会移进回收站，',
+            h('b', null, `${days} 天内可以还原`),
+            '，到期自动彻底删除。'),
+          h('div', { className: 'sd-dialog-foot' },
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: onCancel, disabled: busy }, '取消'),
+            h('button', {
+              className: 'sd-btn', 'data-kind': 'primary', type: 'button', disabled: busy,
+              style: { background: 'var(--dsw-alias-state-error-base, #c0392b)' },
+              onClick: onConfirm,
+            }, busy ? '删除中…' : '删除'))))
+    }
+
+    /** 回收站：列出来、能还原、也能提前彻底删。 */
+    function TrashDialog({ onClose, onChanged }) {
+      const [data, setData] = useState(null)
+      const [busy, setBusy] = useState(null)
+      const [error, setError] = useState(null)
+
+      const load = useCallback(async () => {
+        try {
+          setData(await post('trash-list', {}))
+          setError(null)
+        } catch (err) {
+          setError(err.message)
+        }
+      }, [])
+
+      useEffect(() => { load() }, [load])
+
+      const act = async (path, payload) => {
+        setBusy(payload.id ?? 'all')
+        try {
+          await post(path, payload)
+          await load()
+          await onChanged()
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setBusy(null)
+        }
+      }
+
+      const left = iso => {
+        const ms = Date.parse(iso) - Date.now()
+        if (!Number.isFinite(ms) || ms <= 0) return '即将删除'
+        const days = Math.floor(ms / 86400_000)
+        const hours = Math.floor((ms % 86400_000) / 3600_000)
+        return days > 0 ? `还剩 ${days} 天` : `还剩 ${hours} 小时`
+      }
+
+      const items = data?.items ?? []
+
+      return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onClose() } },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '回收站', style: { width: 'min(520px,94vw)' } },
+          h('h3', null, '回收站'),
+          h('div', { className: 'sd-hint', style: { marginTop: 4 } },
+            `保留 ${data?.days ?? 7} 天，到期自动彻底删除。天数可在设置里改。`),
+          error ? h('div', { className: 'sd-hint', style: { color: 'var(--dsw-alias-state-error-primary, #c0392b)', marginTop: 8 } }, error) : null,
+          h('div', { style: { marginTop: 12 } },
+            items.length
+              ? items.map(row => h('div', { className: 'sd-trash-row', key: row.id },
+                h('div', { className: 'sd-trash-main' },
+                  h('div', { className: 'sd-trash-name' }, row.title || '未命名'),
+                  h('div', { className: 'sd-trash-meta' }, `${row.segments} 段 · 删除于 ${String(row.deletedAt).slice(5, 16).replace('T', ' ')} · ${left(row.expiresAt)}`)),
+                h('button', {
+                  className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
+                  onClick: () => act('trash-restore', { id: row.id }),
+                }, '还原'),
+                h('button', {
+                  className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
+                  style: { color: 'var(--dsw-alias-state-error-primary, #c0392b)' },
+                  onClick: () => act('trash-purge', { id: row.id }),
+                }, '彻底删除')))
+              : h('div', { className: 'sd-hint', style: { padding: '14px 0' } }, '回收站是空的。')),
+          h('div', { className: 'sd-dialog-foot' },
+            items.length
+              ? h('button', {
+                className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
+                onClick: () => act('trash-purge', { all: true }),
+              }, '清空回收站')
+              : null,
+            h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: onClose }, '关闭'))))
+    }
+
     function SettingsDialog({ data, onClose, onSaved }) {
       const settings = data.settings
       const [form, setForm] = useState(() => ({ ...settings }))
@@ -1739,8 +1887,26 @@ window.__ModuleLoader__.load({
               className: 'sd-tab', type: 'button', role: 'tab',
               'data-on': tab === 'tts' ? '1' : '0', 'aria-selected': tab === 'tts' ? 'true' : 'false',
               onClick: () => setTab('tts'),
-            }, '生成声音')),
+            }, '生成声音'),
+            h('button', {
+              className: 'sd-tab', type: 'button', role: 'tab',
+              'data-on': tab === 'general' ? '1' : '0', 'aria-selected': tab === 'general' ? 'true' : 'false',
+              onClick: () => setTab('general'),
+            }, '通用')),
           h('div', { className: 'sd-tabpanel' },
+            tab === 'general'
+              ? h('div', { className: 'sd-section' },
+                h('div', { className: 'sd-section-title' }, '回收站'),
+                h('div', { className: 'sd-field' },
+                  h('label', null, '保留天数'),
+                  h('input', {
+                    className: 'sd-input', type: 'number', min: 1, max: 365,
+                    value: form.trashDays ?? 7,
+                    onChange: event => set('trashDays', Math.max(1, Math.min(365, Number(event.target.value) || 7))),
+                  }),
+                  h('div', { className: 'sd-hint', style: { marginTop: 5 } },
+                    '删掉的项目先进回收站，超过这个天数自动彻底删除。改小之后，回收站里已过期的项目下次启动会被清掉。')))
+              : null,
             tab === 'image'
               ? h('div', { className: 'sd-section' },
                 h('div', { className: 'sd-section-title' }, '生成图片'),

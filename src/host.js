@@ -333,6 +333,31 @@ async function startVoice(store, secrets, itemId, onlyIds) {
     runVoiceBody(store, secrets, itemId, onlyIds, report, signal))
 }
 
+/** 回收站保留天数，取设置里的值，默认 7。 */
+function trashDays(state) {
+  const n = Number(state.settings?.trashDays)
+  return Number.isFinite(n) && n >= 1 && n <= 365 ? n : 7
+}
+
+/** 清理超过保留期的回收站项目。启动时和每次读状态时都跑一次。 */
+async function purgeExpiredTrash(store) {
+  const state = await store.read()
+  const days = trashDays(state)
+  const cutoff = Date.now() - days * 86400_000
+  const expired = (state.items ?? []).filter(item =>
+    item.deletedAt && Date.parse(item.deletedAt) < cutoff)
+  if (!expired.length) return 0
+  await store.mutate(draft => {
+    const ids = new Set(expired.map(item => item.id))
+    draft.items = draft.items.filter(row => !ids.has(row.id))
+    return null
+  })
+  for (const item of expired) {
+    await rm(store.itemDir(item.id), { recursive: true, force: true }).catch(() => {})
+  }
+  return expired.length
+}
+
 async function startImages(store, secrets, itemId, onlyIds, note) {
   const state = await store.read()
   const item = findItem(state, itemId)
@@ -774,7 +799,7 @@ async function route(ctx, store, req, res) {
       const secrets = await store.readSecrets()
       const model = modelInfo(ctx)
       return json(res, 200, {
-        items: state.items.map(itemView),
+        items: state.items.filter(item => !item.deletedAt).map(itemView),
         settings: publicSettings(settings),
         secrets: { ttsKey: Boolean(secrets.ttsKey), imageKey: Boolean(secrets.imageKey) },
         voices: TTS_VOICES,
@@ -784,6 +809,8 @@ async function route(ctx, store, req, res) {
         ttsPresets: TTS_PRESETS,
         engines: await listEngines(ctx),
         encoder: await encoderInfo(),
+        trashCount: (state.items ?? []).filter(item => item.deletedAt).length,
+        trashDays: trashDays(state),
         chat: (state.chat ?? []).slice(-60),
         model: model ? { provider: model.provider, model: model.model } : null,
         home: dshHome(),
@@ -1031,15 +1058,60 @@ async function route(ctx, store, req, res) {
       return json(res, 200, { id, items: state.items.map(itemView) })
     }
     case 'remove': {
+      // 软删除：只打时间戳，文件和记录都留着，方便回收站恢复
       const id = String(body.id ?? '')
       const state = await store.read()
       findItem(state, id)
       await store.mutate(draft => {
-        draft.items = draft.items.filter(row => row.id !== id)
+        const target = findItem(draft, id)
+        target.deletedAt = new Date().toISOString()
         return null
       })
-      await rm(store.itemDir(id), { recursive: true, force: true }).catch(() => {})
-      return json(res, 200, { removed: id })
+      return json(res, 200, { trashed: id })
+    }
+    case 'trash-list': {
+      const state = await store.read()
+      const days = trashDays(state)
+      const rows = await Promise.all((state.items ?? [])
+        .filter(item => item.deletedAt)
+        .sort((a, b) => String(b.deletedAt).localeCompare(String(a.deletedAt)))
+        .map(async item => ({
+          id: item.id,
+          title: item.title,
+          deletedAt: item.deletedAt,
+          expiresAt: new Date(Date.parse(item.deletedAt) + days * 86400_000).toISOString(),
+          segments: (item.segments ?? []).length,
+          hasRender: Boolean(item.render?.path),
+        })))
+      return json(res, 200, { items: rows, days })
+    }
+    case 'trash-restore': {
+      const id = String(body.id ?? '')
+      await store.mutate(draft => {
+        const target = draft.items.find(row => row.id === id)
+        if (!target) throw Object.assign(new Error('回收站里没有这一项'), { status: 404 })
+        delete target.deletedAt
+        return null
+      })
+      return json(res, 200, { restored: id })
+    }
+    case 'trash-purge': {
+      // 单个彻底删除，或传 all 清空
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const victims = body.all
+        ? (state.items ?? []).filter(item => item.deletedAt)
+        : (state.items ?? []).filter(item => item.id === id && item.deletedAt)
+      if (!victims.length) throw Object.assign(new Error('没有可删除的项'), { status: 404 })
+      await store.mutate(draft => {
+        const ids = new Set(victims.map(item => item.id))
+        draft.items = draft.items.filter(row => !ids.has(row.id))
+        return null
+      })
+      for (const item of victims) {
+        await rm(store.itemDir(item.id), { recursive: true, force: true }).catch(() => {})
+      }
+      return json(res, 200, { purged: victims.map(item => item.id) })
     }
     case 'script': {
       const id = String(body.id ?? '')
@@ -1213,6 +1285,10 @@ export default {
     const store = new Store()
     // 首次启动时把 story-video-pipeline 已配好的密钥接过来，省一次手工填写
     store.importLegacySecrets().catch(() => {})
+    // 回收站里过期的项目顺手清掉；之后每小时再看一次
+    purgeExpiredTrash(store).catch(() => {})
+    const trashTimer = setInterval(() => { purgeExpiredTrash(store).catch(() => {}) }, 3600_000)
+    if (typeof trashTimer.unref === 'function') trashTimer.unref()
     ctx.effect(() => ctx.webServer.register({
       kind: 'prefix',
       path: '/story-desk',

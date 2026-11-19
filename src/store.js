@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS = {
   voice: '白桦',
   visualStyle: 'cinematic',
   segmentSeconds: 40,
+  trashDays: 7,
   width: 1080,
   height: 1920,
   imageWidth: 1024,
