@@ -679,7 +679,8 @@ window.__ModuleLoader__.load({
                 h('span', null, stage?.label ?? key))
             })),
 
-          task ? h('div', null,
+          // 只在跑着或出错时占位：跑完就把进度条撤掉，免得停在一句中间文案上像没结束
+          task && (task.running || task.error) ? h('div', null,
             h('div', { className: 'sd-progress' },
               h('div', { className: 'sd-progress-bar', style: { width: `${pct}%` } })),
             h('div', { className: 'sd-taskline' },

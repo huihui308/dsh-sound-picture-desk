@@ -57,7 +57,8 @@ export function startTask(itemId, kind, total, runner) {
       clearTimeout(watchdog)
       task.running = false
       task.finishedAt = new Date().toISOString()
-      task.message = task.message || '完成'
+      // 成功的任务不该停在「正在…」这类中间文案上，否则界面看着像没跑完
+      if (!task.message || /^正在/.test(task.message)) task.message = '完成'
       return { ok: true, result }
     } catch (err) {
       clearTimeout(watchdog)

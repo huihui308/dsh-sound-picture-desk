@@ -760,6 +760,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
     const burned = join(dirs.renders, 'video-subtitled.mp4')
     await burnSubtitles(plain, assFile, burned, { signal })
     finalPath = burned
+    done += 1
   }
 
   // finalPath 已经是绝对路径，不能再按项目目录拼一次
@@ -778,6 +779,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
     target.updatedAt = new Date().toISOString()
     return null
   })
+  report(offset + done, '合成完成')
   return { path: rel, secs }
 }
 
