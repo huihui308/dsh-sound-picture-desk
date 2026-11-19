@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS = {
   visualStyle: 'cinematic',
   segmentSeconds: 40,
   trashDays: 7,
+  renderWorkers: 0,
   width: 1080,
   height: 1920,
   imageWidth: 1024,

@@ -5,7 +5,7 @@ import { execFile } from 'node:child_process'
 import { appendFile, copyFile, open, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
+import { cpus, homedir } from 'node:os'
 
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
 import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
@@ -333,6 +333,15 @@ async function startVoice(store, secrets, itemId, onlyIds) {
     runVoiceBody(store, secrets, itemId, onlyIds, report, signal))
 }
 
+/**
+ * 默认并行路数。每个镜头的滤镜是 CPU 密集的，ffmpeg 自己还会开几个线程，
+ * 所以一路按 4 个逻辑核算比较稳；再夹在 2–8 之间，避免把小机器拖死或在大机器上排队。
+ */
+function autoRenderWorkers() {
+  const cores = cpus()?.length || 4
+  return Math.max(1, Math.min(8, Math.floor(cores / 4) || 1))
+}
+
 /** 片头标题卡时长，渲染和字幕时间轴共用同一个值。 */
 const INTRO_SECONDS = 3
 
@@ -652,28 +661,42 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   if (missingImage.length) throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先去出图`), { status: 400 })
 
   const dirs = await store.ensureItemDirs(itemId)
-  const shots = []
+  const shots = new Array(item.segments.length)
+  const wanted = Number(settings.renderWorkers) > 0
+    ? Math.round(Number(settings.renderWorkers))
+    : autoRenderWorkers()
+  const workers = Math.max(1, Math.min(wanted, item.segments.length))
   let done = 0
-  for (const row of item.segments) {
-    if (signal.aborted) throw new Error('已停止')
-    report(offset + done, `合成第 ${done + 1}/${item.segments.length} 个镜头`)
-    const output = join(dirs.work, `shot-${String(row.idx + 1).padStart(3, '0')}.mp4`)
-    await renderShot({
-      image: join(dirs.base, row.imagePath),
-      audio: join(dirs.base, row.audioPath),
-      output,
-      seconds: row.audioSecs,
-      width: settings.width,
-      height: settings.height,
-      kenBurns: settings.kenBurns !== false,
-      motion: settings.motion || 'zoom-in',
-      grade: settings.grade || 'none',
-      signal,
-    })
-    shots.push(output)
-    done += 1
-    report(offset + done, `已合成 ${done}/${item.segments.length} 个镜头`)
+  let cursor = 0
+  report(offset, `合成 ${item.segments.length} 个镜头（${workers} 路并行）`)
+
+  // 并发池：N 路同时跑，谁空谁领下一个；结果按下标放回 shots，拼接顺序不变
+  const runOne = async () => {
+    for (;;) {
+      if (signal.aborted) throw new Error('已停止')
+      const index = cursor
+      cursor += 1
+      if (index >= item.segments.length) return
+      const row = item.segments[index]
+      const output = join(dirs.work, `shot-${String(row.idx + 1).padStart(3, '0')}.mp4`)
+      await renderShot({
+        image: join(dirs.base, row.imagePath),
+        audio: join(dirs.base, row.audioPath),
+        output,
+        seconds: row.audioSecs,
+        width: settings.width,
+        height: settings.height,
+        kenBurns: settings.kenBurns !== false,
+        motion: settings.motion || 'zoom-in',
+        grade: settings.grade || 'none',
+        signal,
+      })
+      shots[index] = output
+      done += 1
+      report(offset + done, `已完成 ${done}/${item.segments.length} 个镜头`)
+    }
   }
+  await Promise.all(Array.from({ length: workers }, runOne))
 
   report(offset + done, '正在拼接整片…')
   const plain = join(dirs.renders, 'video.mp4')
@@ -824,6 +847,8 @@ async function route(ctx, store, req, res) {
         encoder: await encoderInfo(),
         trashCount: (state.items ?? []).filter(item => item.deletedAt).length,
         trashDays: trashDays(state),
+        cpuCores: cpus()?.length || 0,
+        autoWorkers: autoRenderWorkers(),
         chat: (state.chat ?? []).slice(-60),
         model: model ? { provider: model.provider, model: model.model } : null,
         home: dshHome(),
@@ -998,7 +1023,7 @@ async function route(ctx, store, req, res) {
       // 只存创作相关的那几项，连接类配置仍走全局设置
       const id = String(body.id ?? '')
       const patch = body.settings && typeof body.settings === 'object' ? body.settings : {}
-      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro']
+      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro', 'renderWorkers']
       const clean = {}
       for (const key of allowed) {
         if (!(key in patch)) continue

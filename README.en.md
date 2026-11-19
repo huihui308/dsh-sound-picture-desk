@@ -144,6 +144,7 @@ Click **Dub and render**: missing audio is filled in first, then shots are rende
 | Grade | none / warm / cool / film | ffmpeg colorbalance + eq; film adds a vignette |
 | Transition | cut / fade / through black / dissolve / wipe left / circle open | xfade + acrossfade; requires re-encoding |
 | Intro | none / title card | HyperFrames renders an HTML title card (3 s) with the project title |
+| Parallel render | auto / 1 / 2 / 4 / 8 workers | Renders several shots at once. Auto mode derives from the logical core count (one worker per 4 cores, clamped to 1–8) |
 
 **Rendering prefers a hardware encoder** — Apple VideoToolbox, NVIDIA NVENC, Intel QSV, AMD AMF — and falls back to CPU when none is usable. The active encoder is shown at the bottom of this tab.
 

@@ -563,6 +563,13 @@ window.__ModuleLoader__.load({
       return `已用 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒`
     }
 
+    /** 并行档位：1、2、4、8，以及不超过本机核数上限的值。 */
+    function workerOptions(data) {
+      const cores = Number(data?.cpuCores) || 8
+      const all = [1, 2, 4, 8, 16]
+      return all.filter(n => n <= Math.max(2, cores))
+    }
+
     /** 按当前画面比例给一组常用出图尺寸。 */
     function resolutionPresets(settings) {
       const portrait = Number(settings.imageHeight) >= Number(settings.imageWidth)
@@ -1457,6 +1464,15 @@ window.__ModuleLoader__.load({
                 h('option', { value: 'wipeleft' }, '向左擦除'),
                 h('option', { value: 'circleopen' }, '圆形展开'))),
             h('div', { className: 'sd-field', style: { flex: 1, minWidth: 150 } },
+              h('label', null, '并行渲染'),
+              h('select', {
+                className: 'sd-select',
+                value: String(settings.renderWorkers ?? 0),
+                onChange: event => patch({ renderWorkers: Number(event.target.value) }),
+              },
+                h('option', { value: '0' }, `自动（${data.autoWorkers ?? 2} 路）`),
+                ...workerOptions(data).map(n => h('option', { key: n, value: String(n) }, `${n} 路`)))),
+            h('div', { className: 'sd-field', style: { flex: 1, minWidth: 150 } },
               h('label', null, '片头'),
               h('select', {
                 className: 'sd-select', value: settings.intro || 'none',
@@ -1471,6 +1487,8 @@ window.__ModuleLoader__.load({
               '字幕压进画面')),
           h('div', { className: 'sd-hint', style: { marginTop: 6 } },
             `${settings.intro === 'title' ? '片头用 HyperFrames 渲染，首次约 25 秒；' : ''}${settings.transition && settings.transition !== 'none' ? '转场需要逐段重编码（有硬件编码时很快）。' : ''}`.trim() || '特效在合成时生效，改完重新合成即可。'),
+          h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
+            `这台机器有 ${data.cpuCores ?? '?'} 个逻辑核，自动档会开 ${data.autoWorkers ?? 2} 路同时渲染；核多可以往上调，机器同时还跑别的就往「1 路」调。`),
           h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
             '渲染引擎：',
             data.encoder?.hardware
