@@ -1,0 +1,5 @@
+# dsh-story-desk bundle patch：同一个包提供 host 半片（/story-desk 接口与生成编排）
+# 与浏览器半片（工作台页面）。
+- insert:
+    - id: story-desk
+      name: 'dsh-story-desk'

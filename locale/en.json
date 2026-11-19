@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Story desk",
+    "description": "Turn a topic or a book into a vertical storytelling video: write the narration, synthesize the voice, generate one image per beat, and assemble the final cut with ffmpeg — all inside the panel.",
+    "detail": "docs/DETAIL.md"
+  }
+}

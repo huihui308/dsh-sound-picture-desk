@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "说书工作台",
+    "description": "把一个题材或一本书做成竖屏说书视频：写说书稿、合成旁白、逐段出分镜图、ffmpeg 装配成片，全在面板里跑。",
+    "detail": "docs/DETAIL.md"
+  }
+}
