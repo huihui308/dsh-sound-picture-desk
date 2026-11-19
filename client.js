@@ -500,6 +500,31 @@ window.__ModuleLoader__.load({
       return `已用 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒`
     }
 
+    /** 按当前画面比例给一组常用出图尺寸。 */
+    function resolutionPresets(settings) {
+      const portrait = Number(settings.imageHeight) >= Number(settings.imageWidth)
+      return portrait
+        ? [
+          { w: 720, h: 1280, note: '快' },
+          { w: 1024, h: 1792, note: '标准' },
+          { w: 1152, h: 2048, note: '更清晰' },
+          { w: 1440, h: 2560, note: '高清，慢' },
+        ]
+        : [
+          { w: 1280, h: 720, note: '快' },
+          { w: 1792, h: 1024, note: '标准' },
+          { w: 2048, h: 1152, note: '更清晰' },
+          { w: 2560, h: 1440, note: '高清，慢' },
+        ]
+    }
+
+    /** 当前尺寸命中预设就返回它，否则返回空串（下拉显示为自定义）。 */
+    function resolutionKey(settings) {
+      const hit = resolutionPresets(settings).find(row =>
+        row.w === Number(settings.imageWidth) && row.h === Number(settings.imageHeight))
+      return hit ? `${hit.w}x${hit.h}` : ''
+    }
+
     /** 一句话说清现在用哪家在出图，省得去设置里翻。 */
     function providerLabel(settings) {
       let host = settings.imageEndpoint || ''
@@ -1199,6 +1224,53 @@ window.__ModuleLoader__.load({
               className: 'sd-btn', type: 'button', disabled: busy || drawing,
               onClick: () => onAction('style-samples', { id: item.id }, null),
             }, drawing ? `试画 ${task.done}/${task.total}` : styleKeys.length ? '换风格重看' : '看 5 种')),
+
+          // 出图分辨率：不同通道支持的尺寸不一样，给常用档 + 自定义
+          h('div', { className: 'sd-row', style: { gap: 12, marginTop: 10, alignItems: 'flex-end' } },
+            h('div', { className: 'sd-field', style: { flex: 1 } },
+              h('label', null, '出图分辨率'),
+              h('select', {
+                className: 'sd-select',
+                value: resolutionKey(settings),
+                onChange: event => {
+                  const [w, hh] = event.target.value.split('x').map(Number)
+                  if (!w || !hh) return
+                  patch({ imageWidth: w, imageHeight: hh })
+                },
+              },
+                resolutionPresets(settings).map(row => h('option', {
+                  key: `${row.w}x${row.h}`, value: `${row.w}x${row.h}`,
+                }, `${row.w}×${row.h}${row.note ? `（${row.note}）` : ''}`)),
+                h('option', { value: `custom`, disabled: true }, '—— 自定义 ——'))),
+            h('div', { className: 'sd-field', style: { flex: 1 } },
+              h('label', null, '宽 × 高'),
+              h('div', { className: 'sd-row', style: { gap: 6 } },
+                h('input', {
+                  key: `iw-${item.id}-${settings.imageWidth}`,
+                  className: 'sd-input', type: 'number', min: 256, max: 4096, step: 8,
+                  defaultValue: settings.imageWidth,
+                  onBlur: async event => {
+                    const w = Math.max(256, Math.min(4096, Number(event.target.value) || 1024))
+                    if (w === settings.imageWidth) return
+                    await post('item-settings', { id: item.id, settings: { imageWidth: w } })
+                    await onReload()
+                  },
+                }),
+                h('span', { className: 'sd-hint', style: { alignSelf: 'center' } }, '×'),
+                h('input', {
+                  key: `ih-${item.id}-${settings.imageHeight}`,
+                  className: 'sd-input', type: 'number', min: 256, max: 4096, step: 8,
+                  defaultValue: settings.imageHeight,
+                  onBlur: async event => {
+                    const hh = Math.max(256, Math.min(4096, Number(event.target.value) || 1792))
+                    if (hh === settings.imageHeight) return
+                    await post('item-settings', { id: item.id, settings: { imageHeight: hh } })
+                    await onReload()
+                  },
+                }))),
+            h('div', { style: { flex: 2, paddingBottom: 6 } },
+              h('div', { className: 'sd-hint' },
+                `改分辨率只影响之后出的图，已出的 ${item.counts.imaged} 张不会自动重画。`))),
 
           h('div', { className: 'sd-hint', style: { marginTop: 8 } },
             '出图通道：', providerLabel(settings), ' · ',
