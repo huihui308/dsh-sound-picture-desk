@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf }
 import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
 import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
-import { buildAss, buildSrt, burnSubtitles, concatShots, probeDuration, renderShot } from './render.js'
+import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, publicTask, startTask } from './jobs.js'
@@ -637,6 +637,8 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
       width: settings.width,
       height: settings.height,
       kenBurns: settings.kenBurns !== false,
+      motion: settings.motion || 'zoom-in',
+      grade: settings.grade || 'none',
     })
     shots.push(output)
     done += 1
@@ -645,8 +647,39 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
 
   report(offset + done, '正在拼接整片…')
   const plain = join(dirs.renders, 'video.mp4')
-  await concatShots(shots, dirs.work, plain)
+  const useFade = settings.transition === 'fade'
+  if (useFade) await concatWithFade(shots, dirs.work, plain)
+  else await concatShots(shots, dirs.work, plain)
   done += 1
+
+  // 片头：HyperFrames 渲染标题卡，接在整片前面
+  if (settings.intro === 'title') {
+    report(offset + done, '正在渲染片头…')
+    const introFile = join(dirs.work, 'intro.mp4')
+    try {
+      await renderIntroCard({
+        title: item.title,
+        subtitle: item.angle ? String(item.angle).slice(0, 24) : '',
+        workDir: dirs.work,
+        output: introFile,
+        width: settings.width,
+        height: settings.height,
+        seconds: 3,
+      })
+      const withIntro = join(dirs.renders, 'video-with-intro.mp4')
+      await concatShots([introFile, plain], dirs.work, withIntro)
+      await rm(plain, { force: true }).catch(() => {})
+      await copyFile(withIntro, plain)
+      await rm(withIntro, { force: true }).catch(() => {})
+    } catch (err) {
+      // 片头是锦上添花，装不上就跳过，别让整片失败
+      await store.mutate(draft => {
+        const target = findItem(draft, itemId)
+        target.log.push({ at: new Date().toISOString(), text: `片头跳过：${String(err.message).slice(0, 80)}` })
+        return null
+      })
+    }
+  }
 
   const srtFile = join(dirs.renders, 'video.srt')
   const assFile = join(dirs.renders, 'video.ass')
@@ -923,7 +956,7 @@ async function route(ctx, store, req, res) {
       // 只存创作相关的那几项，连接类配置仍走全局设置
       const id = String(body.id ?? '')
       const patch = body.settings && typeof body.settings === 'object' ? body.settings : {}
-      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles']
+      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro']
       const clean = {}
       for (const key of allowed) {
         if (!(key in patch)) continue

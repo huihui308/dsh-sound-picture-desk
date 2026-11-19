@@ -1,7 +1,7 @@
 // 装配：每段「静图 + 旁白」拼成一个镜头，再按顺序接成整片。
 // 只用 ffmpeg/ffprobe，全部走 execFile（不经 shell），路径里的空格和引号不会出事。
 import { execFile } from 'node:child_process'
-import { writeFile, readdir } from 'node:fs/promises'
+import { mkdir, rm, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const FFMPEG = process.env.STORY_DESK_FFMPEG || 'ffmpeg'
@@ -46,28 +46,111 @@ function even(value) {
  * 一个镜头：图片铺满画幅 + 旁白音频，时长以音频为准。
  * kenBurns 打开时做极缓慢推近，让静图不死板。
  */
-export async function renderShot({ image, audio, output, seconds, width, height, kenBurns }) {
+/**
+ * 片头标题卡：交给 HyperFrames 用 HTML 渲染，能做文字动画和排版。
+ * 它依赖 npx 拉包，装不上就抛错，由调用方降级成「不做片头」。
+ */
+export async function renderIntroCard({ title, subtitle, workDir, output, width, height, seconds = 3 }) {
+  const w = even(width)
+  const h = even(height)
+  const projectDir = join(workDir, 'intro')
+  const compDir = join(projectDir, 'compositions')
+  await mkdir(compDir, { recursive: true })
+  const safeTitle = escapeHtml(title || '')
+  const safeSub = escapeHtml(subtitle || '')
+  const html = `<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<style>
+  html,body{margin:0;padding:0;background:#0a0e14;width:${w}px;height:${h}px;overflow:hidden}
+  #stage{width:${w}px;height:${h}px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 42%, #1b2430 0%, #0a0e14 68%);font-family:"Noto Serif CJK SC",serif}
+  h1{color:#e9d6a9;font-size:${Math.round(w * 0.098)}px;margin:0;letter-spacing:${Math.round(w * 0.012)}px;
+    text-shadow:0 0 34px rgba(233,214,169,.28);opacity:0}
+  .rule{width:0;height:2px;background:linear-gradient(90deg,transparent,#c9a961,transparent);margin:${Math.round(h * 0.028)}px 0}
+  p{color:#8b97a5;font-size:${Math.round(w * 0.026)}px;margin:0;letter-spacing:${Math.round(w * 0.004)}px;opacity:0}
+</style></head>
+<body>
+<div id="stage" data-composition-id="intro" data-start="0" data-width="${w}" data-height="${h}">
+  <h1 id="t" class="clip" data-start="0" data-duration="${seconds}" data-track-index="0">${safeTitle}</h1>
+  <div id="r" data-start="0" data-duration="${seconds}" data-track-index="1" class="rule"></div>
+  <p id="s" class="clip" data-start="0" data-duration="${seconds}" data-track-index="2">${safeSub}</p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  tl.to('#t', { opacity: 1, y: -6, duration: 1.1, ease: 'power2.out' }, 0.15)
+    .to('#r', { width: ${Math.round(w * 0.52)}, duration: 1.0, ease: 'power2.inOut' }, 0.5)
+    .to('#s', { opacity: 1, duration: 0.9 }, 0.8)
+    // 把时间轴撑到目标时长，否则渲染出来的片子只有动画那么长
+    .set({}, {}, ${seconds});
+  window.__timelines = { intro: tl };
+</script>
+</body></html>`
+  await writeFile(join(compDir, 'intro.html'), html, 'utf8')
+  const raw = join(workDir, 'intro-raw.mp4')
+  await new Promise((resolve, reject) => {
+    execFile('npx', ['--yes', 'hyperframes@latest', 'render',
+      // 尺寸由 composition 的 data-width/height 决定，--resolution 只吃预设名，不要传
+      '--composition', 'compositions/intro.html', '--output', raw],
+      { timeout: 240_000, cwd: projectDir, maxBuffer: 16 * 1024 * 1024 },
+      err => (err ? reject(new Error(`HyperFrames 渲染失败：${String(err.message).slice(0, 200)}`)) : resolve()))
+  })
+  // 统一编码参数，才能和主片直接拼接
+  // 片头本身没有音轨，补一条静音，才能和主片无缝拼接
+  await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error',
+    '-i', raw,
+    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+    '-vf', `scale=${w}:${h},format=yuv420p`, '-r', '30',
+    '-shortest', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
+    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+    '-movflags', '+faststart', output])
+  await rm(raw, { force: true }).catch(() => {})
+  return output
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+
+/** 调色滤镜：都是 ffmpeg 内置滤镜，不额外依赖。 */
+const GRADES = {
+  none: null,
+  warm: 'colorbalance=rs=.07:gs=.02:bs=-.05,eq=saturation=1.06:contrast=1.02',
+  cool: 'colorbalance=rs=-.05:gs=0:bs=.07,eq=saturation=.98:contrast=1.03',
+  film: 'eq=contrast=1.08:saturation=.9:brightness=-.01,colorbalance=rs=.03:bs=.02,vignette=PI/5',
+}
+
+export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade }) {
   const w = even(width)
   const h = even(height)
   const duration = Math.max(0.8, Number(seconds) || 0) + 0.25
   const args = ['-y', '-hide_banner', '-loglevel', 'error', '-loop', '1', '-framerate', '30', '-i', image, '-i', audio]
+  // 运镜方向：默认推近；zoom-out 从 1.10 退回 1.0；none 完全静止
+  const mode = motion || (kenBurns === false ? 'none' : 'zoom-in')
+  const gradeFilter = GRADES[grade] ?? null
 
-  if (kenBurns) {
+  if (mode === 'none') {
+    const vf = [
+      `scale=${w}:${h}:force_original_aspect_ratio=increase`,
+      `crop=${w}:${h}`,
+      gradeFilter,
+      'format=yuv420p',
+    ].filter(Boolean).join(',')
+    args.push('-vf', vf)
+  } else {
     // 先放大到 2 倍再 zoompan，避免推近时出现像素抖动
     const frames = Math.max(2, Math.round(duration * 30))
+    // 两个方向都用增量式：靠 on 逐帧算会让 zoompan 每帧重算，慢十几倍
+    const z = mode === 'zoom-out'
+      ? `'if(eq(on,0),1.10,max(zoom-0.00022,1.001))'`
+      : `'min(zoom+0.00022,1.10)'`
     const vf = [
       `scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase`,
       `crop=${w * 2}:${h * 2}`,
-      `zoompan=z='min(zoom+0.00022,1.10)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=30`,
+      `zoompan=z=${z}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${frames}:s=${w}x${h}:fps=30`,
+      gradeFilter,
       'format=yuv420p',
-    ].join(',')
-    args.push('-vf', vf)
-  } else {
-    const vf = [
-      `scale=${w}:${h}:force_original_aspect_ratio=decrease`,
-      `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`,
-      'format=yuv420p',
-    ].join(',')
+    ].filter(Boolean).join(',')
     args.push('-vf', vf)
   }
 
@@ -79,6 +162,37 @@ export async function renderShot({ image, audio, output, seconds, width, height,
     output,
   )
   await run(FFMPEG, args)
+  return output
+}
+
+/**
+ * 带淡入淡出的拼接：xfade 必须重编码，所以只在用户开了转场时走这条。
+ * 逐段两两合并，避免一次性塞几十个输入。
+ */
+export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds = 0.4 } = {}) {
+  if (shotPaths.length === 1) {
+    await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', '-i', shotPaths[0], '-c', 'copy', output])
+    return output
+  }
+  let current = shotPaths[0]
+  for (let i = 1; i < shotPaths.length; i += 1) {
+    const next = i === shotPaths.length - 1 ? output : join(workDir, `fade-${String(i).padStart(3, '0')}.mp4`)
+    const merged = await probeDuration(current)
+    const offset = Math.max(0, (merged || 0) - fadeSeconds)
+    await run(FFMPEG, [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-i', current, '-i', shotPaths[i],
+      '-filter_complex',
+      `[0:v][1:v]xfade=transition=fade:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v];` +
+      '[0:a][1:a]acrossfade=d=' + fadeSeconds + ':c1=tri:c2=tri[a]',
+      '-map', '[v]', '-map', '[a]',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-r', '30',
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+      '-movflags', '+faststart', next,
+    ])
+    if (i > 1) await rm(current, { force: true }).catch(() => {})
+    current = next
+  }
   return output
 }
 
