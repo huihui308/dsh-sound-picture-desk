@@ -20,7 +20,7 @@ import { cancelTask, isBusy, publicTask, startTask } from './jobs.js'
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_JSON = 8_000_000
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.json': 'application/json' }
-const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors'])
+const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers'])
 
 function json(res, status, body) {
   res.statusCode = status
@@ -154,6 +154,7 @@ function itemView(item) {
     references: item.references ?? [],
     model: item.model ?? null,
     anchors: item.anchors ?? [],
+    cover: item.cover ?? null,
     render: item.render ?? null,
     task: publicTask(item.id),
   }
@@ -341,6 +342,14 @@ function autoRenderWorkers() {
   const cores = cpus()?.length || 4
   return Math.max(1, Math.min(8, Math.floor(cores / 4) || 1))
 }
+
+/** ffmpeg filter 参数里的路径要转义，否则冒号和反斜杠会拆坏参数。 */
+function escapeFilterPath(path) {
+  return String(path).replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'")
+}
+
+/** 封面标题用的字体：和字幕同一套，保证中文不缺字。 */
+const COVER_FONT = process.env.STORY_DESK_FONT || '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'
 
 /** 片头标题卡时长，渲染和字幕时间轴共用同一个值。 */
 const INTRO_SECONDS = 3
@@ -783,6 +792,68 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   return { path: rel, secs }
 }
 
+/**
+ * 生成视频封面：底图（分镜图 / 参考图）+ 标题文字，输出平台竖版尺寸。
+ * 标题走 textfile 传，避免中文和特殊符号在 drawtext 里转义出错。
+ */
+async function makeCover(store, itemId, { ref, title, width = 1206, height = 2160 }) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const dirs = await store.ensureItemDirs(itemId)
+  const text = String(title ?? item.title ?? '').trim().slice(0, 40)
+  if (!text) throw Object.assign(new Error('封面标题不能为空'), { status: 400 })
+
+  // 解析底图：允许 segment:<id> / anchor:<id> / 直接给相对路径
+  let basePath = null
+  if (typeof ref === 'string' && ref.startsWith('segment:')) {
+    const seg = item.segments.find(row => row.id === ref.slice(8))
+    if (seg?.imagePath) basePath = join(dirs.base, seg.imagePath)
+  } else if (typeof ref === 'string' && ref.startsWith('anchor:')) {
+    const anchorId = ref.slice(7)
+    const row = (item.anchors ?? []).find(a => a.id === anchorId)
+    if (row) basePath = join(dirs.base, row.approved || row.candidates?.[0] || '')
+  } else if (typeof ref === 'string' && ref && !ref.includes('..')) {
+    basePath = join(dirs.base, ref)
+  }
+  if (!basePath) throw Object.assign(new Error('没有可用的底图，先出图或定一张参考图'), { status: 400 })
+
+  await mkdir(join(dirs.base, 'covers'), { recursive: true })
+  const stamp = Date.now()
+  const outName = `covers/cover-${stamp}.png`
+  const outPath = join(dirs.base, outName)
+  const textFile = join(dirs.work, `cover-title-${stamp}.txt`)
+  await writeFile(textFile, text, 'utf8')
+
+  // 编码器要求宽高为偶数
+  const w = Math.round(width / 2) * 2
+  const h = Math.round(height / 2) * 2
+  const fontSize = Math.round(w * 0.085)
+  const margin = Math.round(w * 0.08)
+  const vf = [
+    `scale=${w}:${h}:force_original_aspect_ratio=increase`,
+    `crop=${w}:${h}`,
+    // 底部压一层渐变压暗，保证白字在亮画面上也看得清
+    `drawbox=x=0:y=${h - Math.round(h * 0.42)}:w=${w}:h=${Math.round(h * 0.42)}:color=black@0.45:t=fill`,
+    `drawtext=fontfile=${escapeFilterPath(COVER_FONT)}:textfile=${escapeFilterPath(textFile)}:` +
+      `fontsize=${fontSize}:fontcolor=white:borderw=${Math.max(2, Math.round(fontSize * 0.06))}:` +
+      `bordercolor=black@0.85:x=(w-text_w)/2:y=h-${Math.round(h * 0.2)}-text_h/2`,
+  ].join(',')
+
+  await new Promise((resolve, reject) => {
+    execFile('ffmpeg', ['-y', '-v', 'error', '-i', basePath, '-vf', vf, '-frames:v', '1', outPath],
+      { timeout: 60_000 }, err => (err ? reject(new Error(`封面生成失败：${String(err.message).slice(0, 160)}`)) : resolve()))
+  })
+  await rm(textFile, { force: true }).catch(() => {})
+
+  await store.mutate(draft => {
+    const target = findItem(draft, itemId)
+    target.cover = { path: outName, title: text, source: String(ref || ''), width: w, height: h, at: new Date().toISOString() }
+    target.updatedAt = new Date().toISOString()
+    return null
+  })
+  return { cover: { path: outName, title: text, width: w, height: h } }
+}
+
 async function startRender(store, itemId) {
   const state = await store.read()
   const item = findItem(state, itemId)
@@ -1115,6 +1186,16 @@ async function route(ctx, store, req, res) {
         return null
       })
       return json(res, 200, { trashed: id })
+    }
+    case 'cover': {
+      const id = String(body.id ?? '')
+      const result = await makeCover(store, id, {
+        ref: body.ref,
+        title: body.title,
+        width: body.width,
+        height: body.height,
+      })
+      return json(res, 200, result)
     }
     case 'trash-list': {
       const state = await store.read()

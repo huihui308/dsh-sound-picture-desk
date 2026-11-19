@@ -62,6 +62,7 @@ window.__ModuleLoader__.load({
 .sd-tag[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
 .sd-empty{border:1px dashed var(--dsw-alias-border-l2);border-radius:10px;padding:28px 20px;text-align:center;color:var(--dsw-alias-label-tertiary);line-height:1.7}
 .sd-video{width:100%;max-width:290px;border-radius:10px;display:block;background:#000}
+.sd-cover-preview{width:150px;border-radius:8px;display:block;background:var(--dsw-alias-bg-layer-2)}
 .sd-render{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:13px;margin-bottom:14px}
 .sd-render-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
 .sd-kicker{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary)}
@@ -1403,6 +1404,14 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------ ⑤ 成片
 
     function RenderPage({ item, data, busy, onAction, onReload, onSettings }) {
+      const [coverRefValue, setCoverRef] = useState(null)
+      const [coverTitle, setCoverTitle] = useState(item.title ?? '')
+      const [makingCover, setMakingCover] = useState(false)
+      const [coverError, setCoverError] = useState(null)
+      // 没手动选过就用默认：优先定稿参考图，其次第一张分镜图
+      const coverRef = obj => coverRefValue ?? (obj.anchors?.length
+        ? `anchor:${(obj.anchors.find(a => a.approved) ?? obj.anchors[0]).id}`
+        : (obj.segments.find(seg => seg.imagePath) ? `segment:${obj.segments.find(seg => seg.imagePath).id}` : ''))
       const settings = { ...data.settings, ...(item.settings ?? {}) }
       const [dir, setDir] = useState('')
       const [exporting, setExporting] = useState(false)
@@ -1522,6 +1531,62 @@ window.__ModuleLoader__.load({
             }, item.task?.running && item.task.kind === 'finish'
               ? `${item.task.done}/${item.task.total}`
               : needDub ? `配音并合成（${missingAudio} 段）` : item.render ? '重新合成' : '合成成片'))),
+
+        h('div', { className: 'sd-card-block' },
+          h('div', { className: 'sd-block-title' }, '封面'),
+          h('div', { className: 'sd-row', style: { gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' } },
+            h('div', { className: 'sd-field', style: { flex: 2, minWidth: 200 } },
+              h('label', null, '底图'),
+              h('select', {
+                className: 'sd-select',
+                value: coverRef(item),
+                onChange: event => setCoverRef(event.target.value),
+              },
+                h('option', { value: '' }, item.anchors?.length ? '用定稿参考图' : '用第一张分镜图'),
+                (item.anchors ?? []).filter(a => a.approved || a.candidates?.length).map(a =>
+                  h('option', { key: a.id, value: `anchor:${a.id}` }, `参考图 · ${a.name}`)),
+                item.segments.filter(seg => seg.imagePath).map(seg =>
+                  h('option', { key: seg.id, value: `segment:${seg.id}` }, `分镜图 · 第 ${seg.idx + 1} 段`)))),
+            h('div', { className: 'sd-field', style: { flex: 3, minWidth: 220 } },
+              h('label', null, '标题文字'),
+              h('input', {
+                className: 'sd-input', value: coverTitle, maxLength: 40,
+                placeholder: item.title || '封面标题',
+                onChange: event => setCoverTitle(event.target.value),
+              })),
+            h('button', {
+              className: 'sd-btn', 'data-kind': item.cover ? undefined : 'primary', type: 'button',
+              disabled: busy || makingCover || !(item.segments.some(seg => seg.imagePath) || (item.anchors ?? []).some(a => a.approved || a.candidates?.length)),
+              onClick: async () => {
+                setMakingCover(true)
+                try {
+                  await post('cover', { id: item.id, ref: coverRef(item), title: coverTitle.trim() || item.title })
+                  await onReload()
+                } catch (err) {
+                  setCoverError(err.message)
+                } finally {
+                  setMakingCover(false)
+                }
+              },
+            }, makingCover ? '生成中…' : item.cover ? '重新生成封面' : '生成封面')),
+          coverError ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-error-primary)' } }, coverError) : null,
+          item.cover
+            ? h('div', { className: 'sd-row', style: { gap: 14, marginTop: 12, alignItems: 'flex-start' } },
+              h('img', {
+                className: 'sd-cover-preview',
+                src: mediaUrl(item.id, item.cover.path, item.cover.at ? Date.parse(item.cover.at) : undefined),
+                alt: '封面预览',
+              }),
+              h('div', { style: { flex: 1, minWidth: 0 } },
+                h('div', { className: 'sd-hint' }, `标题：${item.cover.title}`),
+                h('div', { className: 'sd-hint', style: { marginTop: 4 } }, `${item.cover.width}×${item.cover.height} · 平台竖版`),
+                h('div', { className: 'sd-row', style: { gap: 8, marginTop: 10 } },
+                  h('a', {
+                    className: 'sd-btn', 'data-kind': 'ghost',
+                    href: mediaUrl(item.id, item.cover.path), download: '', target: '_blank', rel: 'noreferrer',
+                  }, '下载封面'))))
+            : h('div', { className: 'sd-hint', style: { marginTop: 8 } },
+              '封面是单独上传给平台的图，不嵌进视频。选一张底图，标题会自动压在画面底部。')),
 
         item.render
           ? h('div', { className: 'sd-render' },
