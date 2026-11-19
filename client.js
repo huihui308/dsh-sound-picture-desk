@@ -1457,12 +1457,12 @@ window.__ModuleLoader__.load({
                 className: 'sd-select', value: settings.transition || 'none',
                 onChange: event => patch({ transition: event.target.value }),
               },
-                h('option', { value: 'none' }, '硬切（最快）'),
-                h('option', { value: 'fade' }, '淡入淡出'),
-                h('option', { value: 'fadeblack' }, '经过黑场'),
-                h('option', { value: 'dissolve' }, '溶解'),
-                h('option', { value: 'wipeleft' }, '向左擦除'),
-                h('option', { value: 'circleopen' }, '圆形展开'))),
+                h('option', { value: 'none' }, '硬切（秒级）'),
+                h('option', { value: 'fade' }, '淡入淡出（要重编码全片）'),
+                h('option', { value: 'fadeblack' }, '经过黑场（要重编码全片）'),
+                h('option', { value: 'dissolve' }, '溶解（要重编码全片）'),
+                h('option', { value: 'wipeleft' }, '向左擦除（要重编码全片）'),
+                h('option', { value: 'circleopen' }, '圆形展开（要重编码全片）'))),
             h('div', { className: 'sd-field', style: { flex: 1, minWidth: 150 } },
               h('label', null, '同时渲染'),
               h('select', {
@@ -1487,6 +1487,15 @@ window.__ModuleLoader__.load({
               '字幕压进画面')),
           h('div', { className: 'sd-hint', style: { marginTop: 6 } },
             `${settings.intro === 'title' ? '片头用 HyperFrames 渲染，首次约 25 秒；' : ''}${settings.transition && settings.transition !== 'none' ? '转场需要逐段重编码（有硬件编码时很快）。' : ''}`.trim() || '特效在合成时生效，改完重新合成即可。'),
+          settings.transition && settings.transition !== 'none'
+            ? h('div', {
+              className: 'sd-hint',
+              style: { marginTop: 6, color: 'var(--dsw-alias-state-warn-primary, #b7791f)' },
+            },
+              `转场要把整片重编码一遍，${item.segments.length} 段、约 ${formatSecs(item.segments.reduce((a, s2) => a + (Number(s2.audioSecs) || 0), 0))} 的片子，`
+              + `拼接大概要 ${Math.max(1, Math.round(item.segments.reduce((a, s2) => a + (Number(s2.audioSecs) || 0), 0) / 60))} 分钟；`
+              + '换成「硬切」是几秒。')
+            : null,
           h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
             `该怎么理解这个数：它指的是「同时渲染几个镜头」，不是用几个核。每个镜头的滤镜大约吃掉 2–4 个逻辑核，这台机器 ${data.cpuCores ?? '?'} 核，自动档给 ${data.autoWorkers ?? 2} 个镜头一起跑；同时跑着别的活（本地模型、生图）就往下调。`,
             data.maxWorkers && data.maxWorkers < 100
