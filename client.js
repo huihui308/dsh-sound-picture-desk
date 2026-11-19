@@ -1488,7 +1488,10 @@ window.__ModuleLoader__.load({
           h('div', { className: 'sd-hint', style: { marginTop: 6 } },
             `${settings.intro === 'title' ? '片头用 HyperFrames 渲染，首次约 25 秒；' : ''}${settings.transition && settings.transition !== 'none' ? '转场需要逐段重编码（有硬件编码时很快）。' : ''}`.trim() || '特效在合成时生效，改完重新合成即可。'),
           h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
-            `该怎么理解这个数：它指的是「同时渲染几个镜头」，不是用几个核。每个镜头的滤镜大约吃掉 2–4 个逻辑核，这台机器 ${data.cpuCores ?? '?'} 核，自动档给 ${data.autoWorkers ?? 2} 个镜头一起跑；同时跑着别的活（本地模型、生图）就往下调。`),
+            `该怎么理解这个数：它指的是「同时渲染几个镜头」，不是用几个核。每个镜头的滤镜大约吃掉 2–4 个逻辑核，这台机器 ${data.cpuCores ?? '?'} 核，自动档给 ${data.autoWorkers ?? 2} 个镜头一起跑；同时跑着别的活（本地模型、生图）就往下调。`,
+            data.maxWorkers && data.maxWorkers < 100
+              ? ` 当前是硬件编码，最多只能同时开 ${data.maxWorkers} 路（显卡的并发会话限制），填更大的值会自动收回到 ${data.maxWorkers}。`
+              : ''),
           h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .8 } },
             '渲染引擎：',
             data.encoder?.hardware

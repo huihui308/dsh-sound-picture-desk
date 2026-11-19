@@ -111,9 +111,53 @@ export async function encoderArgs() {
   return enc.args
 }
 
+/**
+ * 硬件编码器能同时开几路。
+ * 消费级 GeForce 对并发的 NVENC 会话数有硬限制（驱动层面），
+ * 开太多路会出现 OpenEncodeSessionEx failed / No capable devices found，
+ * 所以并行数要夹在这个值以内。
+ */
+export function maxParallelSessions() {
+  const enc = cached
+  if (!enc?.hardware) return Number.POSITIVE_INFINITY
+  if (enc.id === 'h264_nvenc') return 6
+  if (enc.id === 'h264_videotoolbox') return 4 // media engine 数量有限
+  if (enc.id === 'h264_qsv') return 4
+  return 6
+}
+
+/** 硬件编码中途翻车时把这一轮降级到 CPU，避免整条片子失败。 */
+let hardwareBroken = false
+
+export function markHardwareBroken(reason) {
+  if (hardwareBroken) return
+  hardwareBroken = true
+  console.warn(`[story-desk] 硬件编码不可用，本轮改用 CPU：${String(reason).slice(0, 160)}`)
+}
+
+export function isHardwareBroken() {
+  return hardwareBroken
+}
+
+/** 当前该用的编码参数：翻过车就固定走 CPU。 */
+export function activeEncoderArgs() {
+  if (hardwareBroken) return CPU.args
+  return (cached ?? CPU).args
+}
+
 /** 已经探测过的结果，同步取用（渲染循环里避免重复 await 探测）。 */
 export function encoderArgsSync() {
+  if (hardwareBroken) return CPU.args
   return (cached ?? CPU).args
+}
+
+/** CPU 兜底参数，硬件编码报错时重试用。 */
+export const CPU_ENCODER_ARGS = CPU.args
+
+/** 判断错误是不是「硬件编码这条路走不通」，值得换 CPU 重试。 */
+export function isHardwareEncoderFailure(message) {
+  const text = String(message || '')
+  return /OpenEncodeSessionEx|No capable devices|nvenc|videotoolbox|qsv|amf|Cannot load|device.*not found|incompatible client key/i.test(text)
 }
 
 export function encoderIdSync() {

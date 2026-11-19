@@ -10,7 +10,7 @@ import { cpus, homedir } from 'node:os'
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
 import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
 import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
-import { encoderInfo } from './encoders.js'
+import { encoderInfo, maxParallelSessions } from './encoders.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
@@ -665,7 +665,13 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   const wanted = Number(settings.renderWorkers) > 0
     ? Math.round(Number(settings.renderWorkers))
     : autoRenderWorkers()
-  const workers = Math.max(1, Math.min(wanted, item.segments.length))
+  // 硬件编码有并发会话上限，开更多路只会让多出来的那几路被驱动拒绝
+  const cap = maxParallelSessions()
+  const workers = Math.max(1, Math.min(wanted, item.segments.length, cap))
+  const capped = workers < wanted
+  if (capped) {
+    report(offset, `并行数从 ${wanted} 收到 ${workers}（硬件编码最多同时开 ${cap} 路）`)
+  }
   let done = 0
   let cursor = 0
   report(offset, `合成 ${item.segments.length} 个镜头（${workers} 路并行）`)
@@ -849,6 +855,7 @@ async function route(ctx, store, req, res) {
         trashDays: trashDays(state),
         cpuCores: cpus()?.length || 0,
         autoWorkers: autoRenderWorkers(),
+        maxWorkers: maxParallelSessions(),
         chat: (state.chat ?? []).slice(-60),
         model: model ? { provider: model.provider, model: model.model } : null,
         home: dshHome(),

@@ -2,7 +2,7 @@
 // 只用 ffmpeg/ffprobe，全部走 execFile（不经 shell），路径里的空格和引号不会出事。
 import { execFile } from 'node:child_process'
 
-import { encoderArgsSync, resolveEncoder } from './encoders.js'
+import { CPU_ENCODER_ARGS, encoderArgsSync, isHardwareBroken, isHardwareEncoderFailure, markHardwareBroken, resolveEncoder } from './encoders.js'
 import { mkdir, rm, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -167,7 +167,30 @@ export async function renderShot({ image, audio, output, seconds, width, height,
     '-movflags', '+faststart',
     output,
   )
-  await run(FFMPEG, args, { signal })
+  try {
+    await run(FFMPEG, args, { signal })
+  } catch (err) {
+    // 硬件编码会话开不出来（并发超限、驱动抽风）时，这一段改用 CPU 重跑，
+    // 后面的镜头也跟着走 CPU，别让整条片子因为显卡拒绝而失败。
+    if (!isHardwareBroken() && isHardwareEncoderFailure(err?.message)) {
+      markHardwareBroken(err?.message)
+      const cpuArgs = args.map(part => (typeof part === 'string' ? part : part))
+      // 用 CPU 参数替换掉原来的编码器参数段
+      const rebuilt = []
+      for (let i = 0; i < cpuArgs.length; i += 1) {
+        if (cpuArgs[i] === '-c:v') {
+          rebuilt.push(...CPU_ENCODER_ARGS)
+          i += 1
+          while (i + 1 < cpuArgs.length && ['-preset', '-cq', '-global_quality', '-q:v', '-b:v', '-maxrate', '-bufsize', '-quality', '-qp_i', '-qp_p'].includes(cpuArgs[i + 1])) i += 2
+          continue
+        }
+        rebuilt.push(cpuArgs[i])
+      }
+      await run(FFMPEG, rebuilt, { signal })
+    } else {
+      throw err
+    }
+  }
   return output
 }
 
