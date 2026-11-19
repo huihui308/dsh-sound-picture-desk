@@ -71,11 +71,24 @@ Restart `dsh web`, open **Plugins**, find **dsh-story-desk** and flip the switch
 
 Click the gear icon → tabs **Image** and **Voice** — fill in endpoint and key for each:
 
+Settings has three tabs: **Image** / **Voice** / **General**.
+
 - Pick a provider from the dropdown (Alibaba MaaS / MiniMax / OpenAI / Xiaomi MiMo…); endpoint and model auto-fill but stay editable.
+- **General** holds the trash retention period and defaults for new projects. Motion, grading, transitions and intro are chosen per project on the Final cut tab.
 - Voice requires a key, otherwise dubbing is unavailable.
 - For a local image service (no key), enter the endpoint up to `/v1`.
 
 ---
+
+## Managing projects
+
+The left list holds every project; hover a row and a small × appears on its right:
+
+- Click it → confirm → the project moves to **Trash** (not deleted outright; script, images and render are kept)
+- The Trash entry sits at the bottom of the list with a count badge; from there you can **restore**, **delete permanently**, or **empty it**
+- Retention defaults to **7 days**, configurable under Settings → General (1–365). Expired entries are removed together with their project folder
+
+Once a task is running, a **Stop** button appears next to the progress bar. It kills the ffmpeg child process directly, so it stops within a second instead of finishing the current step; you can start a new run immediately after.
 
 ## Quick start
 
