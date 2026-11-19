@@ -99,3 +99,18 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 - 画面比例可以在项目里改，但已有图片不会自动重出。
 - 字幕烧录需要系统中文字体；缺字体时只落 SRT，不压画面。
 - 没有逐字时间戳，字幕时间按字数比例估算，不是 TTS 返回的真实对齐。
+
+## 字幕时间轴
+
+字幕必须和成片的真实时间轴逐帧对齐，否则越到后面差得越多。三个偏移源都要算进去：
+
+| 源 | 影响 | 处理 |
+|---|---|---|
+| 每段视频 = 音频 + `SEGMENT_TAIL`(0.25s) | N 段累积 +0.25N 秒 | `layoutCues` 用同一个 `segmentSpan()` |
+| 转场 `xfade` 相邻两段重叠 | 每处缩短 `fadeSeconds` | 每段之后 `cursor -= overlap` |
+| 片头标题卡 | 整片后移 `INTRO_SECONDS` | 所有时间戳 `+ offset` |
+
+`renderShot` 和 `layoutCues` 共用 `segmentSpan()`，任何一处改口径必须同步改另一处。
+
+历史 bug：早期 `layoutCues` 只按 `audioSecs` 累加，没算 0.25 秒尾巴——
+23 段的项目字幕会提前 5.75 秒，表现为「后面字幕比旁白快」。

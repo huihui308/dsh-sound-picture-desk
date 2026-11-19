@@ -333,6 +333,9 @@ async function startVoice(store, secrets, itemId, onlyIds) {
     runVoiceBody(store, secrets, itemId, onlyIds, report, signal))
 }
 
+/** 片头标题卡时长，渲染和字幕时间轴共用同一个值。 */
+const INTRO_SECONDS = 3
+
 /** 回收站保留天数，取设置里的值，默认 7。 */
 function trashDays(state) {
   const n = Number(state.settings?.trashDays)
@@ -690,7 +693,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
         output: introFile,
         width: settings.width,
         height: settings.height,
-        seconds: 3,
+        seconds: INTRO_SECONDS,
       })
       const withIntro = join(dirs.renders, 'video-with-intro.mp4')
       await concatShots([introFile, plain], dirs.work, withIntro)
@@ -707,10 +710,18 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
     }
   }
 
+  // 字幕时间轴必须和成片对齐：转场会缩短全片、片头会让全片后移
+  const hasFade = settings.transition && settings.transition !== 'none'
+  const timelineOpts = {
+    overlap: hasFade ? 0.4 : 0,
+    offset: settings.intro === 'title' ? INTRO_SECONDS : 0,
+  }
   const srtFile = join(dirs.renders, 'video.srt')
   const assFile = join(dirs.renders, 'video.ass')
-  await writeFile(srtFile, buildSrt(item.segments), 'utf8')
-  await writeFile(assFile, buildAss(item.segments, { width: settings.width, height: settings.height }), 'utf8')
+  await writeFile(srtFile, buildSrt(item.segments, timelineOpts), 'utf8')
+  await writeFile(assFile, buildAss(item.segments, {
+    width: settings.width, height: settings.height, ...timelineOpts,
+  }), 'utf8')
 
   let finalPath = plain
   if (settings.burnSubtitles) {

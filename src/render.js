@@ -129,7 +129,7 @@ export async function renderShot({ image, audio, output, seconds, width, height,
   await resolveEncoder()
   const w = even(width)
   const h = even(height)
-  const duration = Math.max(0.8, Number(seconds) || 0) + 0.25
+  const duration = segmentSpan(seconds)
   const args = ['-y', '-hide_banner', '-loglevel', 'error', '-loop', '1', '-framerate', '30', '-i', image, '-i', audio]
   // 运镜方向：默认推近；zoom-out 从 1.10 退回 1.0；none 完全静止
   const mode = motion || (kenBurns === false ? 'none' : 'zoom-in')
@@ -246,12 +246,25 @@ function srtTime(seconds) {
  * 把每段文字拆成跟读的短句：一句话一条字幕，时间按字数占该段音频的比例分配。
  * 整段扔一条 cue 会让整屏字从头挂到尾，看起来像 PPT 而不是旁白字幕。
  */
-export function layoutCues(segments, maxChars = 17) {
+/** 每段片子在成片里占多长：音频时长 + 一点点尾巴，和 renderShot 保持一致。 */
+export const SEGMENT_TAIL = 0.25
+
+export function segmentSpan(audioSecs) {
+  return Math.max(0.8, Number(audioSecs) || 0) + SEGMENT_TAIL
+}
+
+/**
+ * 字幕时间轴。必须和成片的真实时间轴对齐，否则越到后面差得越多：
+ * - 每段按 segmentSpan 累加（含尾巴）
+ * - 转场会让相邻两段重叠，所以每段之后要减掉 overlap
+ * - 片头会让整片往后挪，所有时间加 offset
+ */
+export function layoutCues(segments, maxChars = 17, { overlap = 0, offset = 0 } = {}) {
   const cues = []
-  let cursor = 0
+  let cursor = offset
   for (const row of segments) {
     const text = String(row.text ?? '').trim()
-    const span = Math.max(0.6, Number(row.audioSecs) || 0)
+    const span = segmentSpan(row.audioSecs)
     if (text) {
       const parts = splitCues(text, maxChars)
       const totalChars = parts.reduce((sum, part) => sum + part.length, 0) || 1
@@ -262,7 +275,7 @@ export function layoutCues(segments, maxChars = 17) {
         at += slice
       }
     }
-    cursor += span
+    cursor += span - overlap
   }
   return cues
 }
@@ -296,8 +309,8 @@ function splitCues(text, maxChars) {
 }
 
 /** 按分段拼一条 SRT。 */
-export function buildSrt(segments) {
-  return layoutCues(segments)
+export function buildSrt(segments, options = {}) {
+  return layoutCues(segments, 17, options)
     .map((cue, index) => [
       String(index + 1),
       `${srtTime(cue.start)} --> ${srtTime(cue.end)}`,
@@ -347,7 +360,7 @@ function assTime(seconds) {
  * 烧录用 ASS：必须在文件头写 PlayResX/PlayResY，否则 libass 会按默认 384×288
  * 排版，字号被放大数倍、位置跑到画面外。
  */
-export function buildAss(segments, { width = 1080, height = 1920 } = {}) {
+export function buildAss(segments, { width = 1080, height = 1920, overlap = 0, offset = 0 } = {}) {
   const fontSize = Math.round(Math.min(width, height) * 0.052)
   const marginV = Math.round(height * 0.125)
   const marginH = Math.round(width * 0.075)
@@ -366,7 +379,7 @@ export function buildAss(segments, { width = 1080, height = 1920 } = {}) {
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ]
-  const events = layoutCues(segments).map(cue =>
+  const events = layoutCues(segments, 17, { overlap, offset }).map(cue =>
     `Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Default,,0,0,0,,${wrapCue(cue.text).split('\n').join('\\N')}`)
   return `${head.concat(events).join('\n')}\n`
 }
