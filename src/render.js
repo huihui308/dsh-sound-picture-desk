@@ -215,30 +215,52 @@ export const XFADE_PRESETS = new Set([
 
 export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds = 0.4, transition = 'fade', signal } = {}) {
   const kind = XFADE_PRESETS.has(transition) ? transition : 'fade'
+  if (!shotPaths.length) throw new Error('没有可拼接的镜头')
   if (shotPaths.length === 1) {
     await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', '-i', shotPaths[0], '-c', 'copy', output], { signal })
     return output
   }
-  let current = shotPaths[0]
+
+  // 早先的写法是「逐段两两合并」：第 i 次要重编码前 i 段，n 段就是 O(n²)，
+  // 23 段等于把整片重编码二十多遍。现在改成一次 filter_complex 把 n 段串起来，
+  // 只编码一遍。
+  const durations = []
+  for (const file of shotPaths) durations.push(await probeDuration(file))
+  const withAudio = await hasAudioStream(shotPaths[0])
+
+  const args = ['-y', '-hide_banner', '-loglevel', 'error']
+  for (const file of shotPaths) args.push('-i', file)
+
+  const chains = []
+  let last = '[0:v]'
+  let elapsed = durations[0] || 0
   for (let i = 1; i < shotPaths.length; i += 1) {
-    const next = i === shotPaths.length - 1 ? output : join(workDir, `fade-${String(i).padStart(3, '0')}.mp4`)
-    const merged = await probeDuration(current)
-    const offset = Math.max(0, (merged || 0) - fadeSeconds)
-    // 两段都有音轨才做音频交叉淡化；缺音轨时只转场画面，否则 ffmpeg 会报匹配不到流
-    const bothHaveAudio = (await hasAudioStream(current)) && (await hasAudioStream(shotPaths[i]))
-    const filter = bothHaveAudio
-      ? `[0:v][1:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v];[0:a][1:a]acrossfade=d=${fadeSeconds}:c1=tri:c2=tri[a]`
-      : `[0:v][1:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p[v]`
-    const args = ['-y', '-hide_banner', '-loglevel', 'error', '-i', current, '-i', shotPaths[i],
-      '-filter_complex', filter, '-map', '[v]']
-    if (bothHaveAudio) {
-      args.push('-map', '[a]', '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2')
-    }
-    args.push(...encoderArgsSync(), '-r', '30', '-movflags', '+faststart', next)
-    await run(FFMPEG, args, { signal })
-    if (i > 1) await rm(current, { force: true }).catch(() => {})
-    current = next
+    const out = `[v${i}]`
+    const offset = Math.max(0, elapsed - fadeSeconds)
+    chains.push(`${last}[${i}:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p${out}`)
+    last = out
+    // 下一段的起点要在重叠之后继续累加
+    elapsed = offset + (durations[i] || 0)
   }
+
+  if (withAudio) {
+    let audioLast = '[0:a]'
+    let audioElapsed = durations[0] || 0
+    for (let i = 1; i < shotPaths.length; i += 1) {
+      const out = `[a${i}]`
+      const offset = Math.max(0, audioElapsed - fadeSeconds)
+      chains.push(`${audioLast}[${i}:a]acrossfade=d=${fadeSeconds}:c1=tri:c2=tri${out}`)
+      audioLast = out
+      audioElapsed = offset + (durations[i] || 0)
+    }
+    args.push('-filter_complex', chains.join(';'), '-map', last, '-map', audioLast,
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2')
+  } else {
+    args.push('-filter_complex', chains.join(';'), '-map', last)
+  }
+
+  args.push(...encoderArgsSync(), '-r', '30', '-movflags', '+faststart', output)
+  await run(FFMPEG, args, { signal })
   return output
 }
 
