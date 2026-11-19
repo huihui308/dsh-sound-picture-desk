@@ -367,12 +367,7 @@ window.__ModuleLoader__.load({
                   onAction: run, onReload: load, onSettings: () => setSettingsOpen(true),
                 })
               : h(EmptyState, { onCreate: () => setCreating(true), model: data.model })),
-          h(ChatPanel, {
-            data, itemId: currentId, open: chatOpen,
-            onToggle: () => setChatOpen(value => !value),
-            input: chatInput, setInput: setChatInput, sending,
-            onSend: sendChat, onClear: clearChat,
-          }),
+          // 助手栏已按需求移除：chat 相关逻辑保留，界面不再渲染
           settingsOpen ? h(SettingsDialog, {
             data, onClose: () => setSettingsOpen(false),
             onSaved: async () => { await load(); setSettingsOpen(false) },
