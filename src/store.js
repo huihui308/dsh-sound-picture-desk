@@ -1,4 +1,4 @@
-// 持久化：$DSH_HOME/story-desk/state.json。桌面端与 Web 端读同一份数据，
+// 持久化：$DSH_HOME/picture-desk/state.json。桌面端与 Web 端读同一份数据，
 // 所以「读—改—写」全程持锁（state.json.lock），避免两个 Host 进程互相覆盖。
 import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -99,7 +99,7 @@ export function migrateState(raw) {
 }
 
 export class Store {
-  constructor(root = join(dshHome(), 'story-desk')) {
+  constructor(root = join(dshHome(), 'picture-desk')) {
     this.root = root
     this.file = join(root, 'state.json')
     this.secretsFile = join(root, 'secrets.json')
@@ -232,7 +232,7 @@ export class Store {
   }
 
   // ---------------------------------------------------------------- secrets
-  /** 密钥只落在 $DSH_HOME/story-desk/secrets.json（0600），不进 state.json。 */
+  /** 密钥只落在 $DSH_HOME/picture-desk/secrets.json（0600），不进 state.json。 */
   async readSecrets() {
     let parsed
     try {

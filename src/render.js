@@ -6,10 +6,10 @@ import { CPU_ENCODER_ARGS, encoderArgsSync, isHardwareBroken, isHardwareEncoderF
 import { mkdir, rm, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const FFMPEG = process.env.STORY_DESK_FFMPEG || 'ffmpeg'
-const FFPROBE = process.env.STORY_DESK_FFPROBE || 'ffprobe'
+const FFMPEG = process.env.PICTURE_DESK_FFMPEG || process.env.STORY_DESK_FFMPEG || 'ffmpeg'
+const FFPROBE = process.env.PICTURE_DESK_FFPROBE || process.env.STORY_DESK_FFPROBE || 'ffprobe'
 /** 片头渲染器固定版本，避免每次合成都去 npm 拉 latest（版本漂移 + 离线失败）。 */
-const HYPERFRAMES = process.env.STORY_DESK_HYPERFRAMES || 'hyperframes@0.9.70'
+const HYPERFRAMES = process.env.PICTURE_DESK_HYPERFRAMES || process.env.STORY_DESK_HYPERFRAMES || 'hyperframes@0.9.70'
 
 function run(bin, args, { timeout = 30 * 60 * 1000, signal } = {}) {
   return new Promise((resolve, reject) => {

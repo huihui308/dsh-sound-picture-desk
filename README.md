@@ -42,8 +42,8 @@ MiniMax 有两条通道，插件按模型名自动分流：`image-01` / `image-0
 ### 1. 拿到代码
 
 ```bash
-git clone git@github.com:huihui308/dsh-story-desk.git
-cd dsh-story-desk
+git clone git@github.com:huihui308/dsh-picture-desk.git
+cd dsh-picture-desk
 ```
 
 ### 2. 装进 profile
@@ -52,18 +52,18 @@ DSH 从 profile 的 `node_modules` 里加载插件。用 `dsh plugin` 安装本�
 
 ```bash
 # <profile> 是本机实际的 profile 名，默认 web
-dsh plugin --profile web add /绝对路径/dsh-story-desk
+dsh plugin --profile web add /绝对路径/dsh-picture-desk
 ```
 
 也可以手动软链接：
 
 ```bash
-ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-story-desk
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-picture-desk
 ```
 
 ### 3. 启用
 
-重启 `dsh web`，进「Plugins」页面找到 **dsh-story-desk** 打开开关。
+重启 `dsh web`，进「Plugins」页面找到 **dsh-picture-desk** 打开开关。
 
 侧栏出现「声画工作台」即为成功。没出现就刷新页面。
 
@@ -150,7 +150,7 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-story-desk
 
 实测同一段 10 秒素材：CPU 35.4 秒 → NVENC 3.97 秒；一条 2 分钟的片子从 640 秒降到约 100 秒。
 
-想强制用 CPU 就设环境变量 `STORY_DESK_ENCODER=cpu`。
+想强制用 CPU 就设环境变量 `PICTURE_DESK_ENCODER=cpu`（旧名 `STORY_DESK_ENCODER` 仍认）。
 
 **并行渲染**值得单独说一句：默认值是按本机核数算的（40 核 → 8 路），但只要镜头数够多，往上调还能再快。实测 3 段的项目，1 路 71 秒、3 路 40 秒；23 段的项目差距会更大。机器同时在跑别的活（比如本地模型）就往「1 路」调。
 
@@ -161,7 +161,7 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-story-desk
 ## 数据存在哪
 
 ```
-$DSH_HOME/story-desk/
+$DSH_HOME/picture-desk/
 ├── state.json              所有项目、稿件、设置
 ├── secrets.json            通道密钥（0600）
 └── projects/<id>/
@@ -209,7 +209,7 @@ src/llm.js         调模型、流式进度、空输出兜底
 docs/DETAIL.md     实现细节
 ```
 
-改完代码要重新加载插件：「Plugins」页面把 **dsh-story-desk** 关掉再打开，然后刷新页面。
+改完代码要重新加载插件：「Plugins」页面把 **dsh-picture-desk** 关掉再打开，然后刷新页面。
 
 没有构建步骤——源码即部署。命令行里 `dsh plugin --profile web <pnpm 参数>` 只用来装包，没有单独的启停子命令。
 

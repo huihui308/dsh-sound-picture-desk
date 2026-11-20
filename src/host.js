@@ -1,4 +1,4 @@
-// dsh-story-desk 的 Host 半片：/story-desk 接口、项目状态、生成编排。
+// dsh-picture-desk 的 Host 半片：/picture-desk 接口、项目状态、生成编排。
 // 文案走 DSH 当前模型，旁白走 MiMo TTS，画面走本机/平台生图，成片走 ffmpeg。
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
@@ -221,7 +221,7 @@ async function inspectReference(url) {
   if (!/^https?:\/\//i.test(clean)) return { url: clean, title: '', error: '不是 http 链接' }
   try {
     const response = await fetch(clean, {
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-story-desk/0.1)', accept: 'text/html' },
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-picture-desk/0.1)', accept: 'text/html' },
       signal: AbortSignal.timeout(8000),
       redirect: 'follow',
     })
@@ -382,7 +382,7 @@ function escapeFilterPath(path) {
 }
 
 /** 封面标题用的字体：和字幕同一套，保证中文不缺字。 */
-const COVER_FONT = process.env.STORY_DESK_FONT || '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'
+const COVER_FONT = process.env.PICTURE_DESK_FONT || process.env.STORY_DESK_FONT || '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'
 
 /** 片头标题卡时长，渲染和字幕时间轴共用同一个值。 */
 const INTRO_SECONDS = 3
@@ -1007,7 +1007,7 @@ async function startFinish(store, secrets, itemId) {
 
 async function route(ctx, store, req, res) {
   const url = new URL(req.url || '/', 'http://local')
-  const path = url.pathname.replace(/^\/story-desk\/?/, '')
+  const path = url.pathname.replace(/^\/picture-desk\/?/, '')
   const method = req.method || 'GET'
 
   // 媒体文件：/media/<itemId>/<images|audio|renders|work>/<name>
@@ -1513,7 +1513,7 @@ async function listEngines(ctx) {
 
 async function probeFfmpeg() {
   return new Promise(resolve => {
-    execFile(process.env.STORY_DESK_FFMPEG || 'ffmpeg', ['-version'], { timeout: 5000 }, (err, stdout) => {
+    execFile(process.env.PICTURE_DESK_FFMPEG || process.env.STORY_DESK_FFMPEG || 'ffmpeg', ['-version'], { timeout: 5000 }, (err, stdout) => {
       if (err) return resolve({ ok: false, detail: '找不到 ffmpeg' })
       const line = String(stdout).split('\n')[0] ?? ''
       resolve({ ok: true, detail: line.replace('ffmpeg version ', 'ffmpeg ') })
@@ -1531,7 +1531,7 @@ export function requestRejection(ctx, req) {
   return connection.requestRejection({ headers: req.headers })
 }
 
-export const name = 'dsh-story-desk'
+export const name = 'dsh-picture-desk'
 
 /**
  * 只观察不干预：万一进程真的崩了，至少留一份现场。
@@ -1543,7 +1543,7 @@ function hookCrashLog() {
   crashHooked = true
   const write = (kind, payload) => {
     try {
-      const dir = join(dshHome(), 'story-desk')
+      const dir = join(dshHome(), 'picture-desk')
       mkdir(dir, { recursive: true })
         .then(() => appendFile(join(dir, 'crash.log'), `${new Date().toISOString()} ${kind} ${payload}\n`))
         .catch(() => {})
@@ -1569,7 +1569,7 @@ export default {
     if (typeof trashTimer.unref === 'function') trashTimer.unref()
     ctx.effect(() => ctx.webServer.register({
       kind: 'prefix',
-      path: '/story-desk',
+      path: '/picture-desk',
       handler: async (req, res) => {
         try {
           const rejection = requestRejection(ctx, req)
@@ -1586,6 +1586,6 @@ export default {
           json(res, err.status || 500, { error: err.message })
         }
       },
-    }), 'dsh-story-desk: /story-desk routes')
+    }), 'dsh-picture-desk: /picture-desk routes')
   },
 }

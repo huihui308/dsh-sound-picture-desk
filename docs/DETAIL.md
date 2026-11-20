@@ -1,4 +1,4 @@
-# 声画工作台（dsh-story-desk）
+# 声画工作台（dsh-picture-desk）
 
 ## 它解决什么
 
@@ -92,7 +92,7 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 
 ## 密钥
 
-只存在 `$DSH_HOME/story-desk/secrets.json`，权限 0600，不进 `state.json`、不进日志、不回显。设置页的输入框是只写不读的：保存后只显示「已配置」。首次启动会从 `~/.story-video/secrets.env` 导入一次。
+只存在 `$DSH_HOME/picture-desk/secrets.json`，权限 0600，不进 `state.json`、不进日志、不回显。设置页的输入框是只写不读的：保存后只显示「已配置」。首次启动会从 `~/.story-video/secrets.env` 导入一次。
 
 ## 已知限制
 

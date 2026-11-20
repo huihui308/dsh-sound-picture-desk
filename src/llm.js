@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
  * 插件在会话之外调模型，自己带一个会话标识。有些网关按会话路由，
  * 缺了会话头会直接返回 400；DSH 会把 sessionId 映射成这类头。
  */
-export const PLUGIN_SESSION_ID = `dsh-story-desk-${randomUUID()}`
+export const PLUGIN_SESSION_ID = `dsh-picture-desk-${randomUUID()}`
 
 export function modelInfo(ctx) {
   if (!ctx.get('llm')) return null
@@ -48,7 +48,7 @@ export async function callModel(ctx, { system, user, maxTokens = 8000, signal, r
     for await (const chunk of call.stream({
       ...call.config,
       system,
-      messages: [{ role: 'user', content: [{ type: 'text', text: user }], source: { kind: 'dsh-story-desk' } }],
+      messages: [{ role: 'user', content: [{ type: 'text', text: user }], source: { kind: 'dsh-picture-desk' } }],
       sessionId: PLUGIN_SESSION_ID,
       signal,
     })) {

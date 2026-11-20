@@ -1,13 +1,13 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-story-desk',
+  id: 'dsh-picture-desk',
   factory(require) {
     const React = require('react')
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
-    const API = '/story-desk'
-    const MAIN_KEY = 'story-desk'
-    const PANEL_ID = 'story-desk'
+    const API = '/picture-desk'
+    const MAIN_KEY = 'picture-desk'
+    const PANEL_ID = 'picture-desk'
 
     const STYLE = `
 .sd-root{display:flex;height:100%;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:13px}

@@ -42,8 +42,8 @@ MiniMax ships two lanes, routed automatically by model name: `image-01` / `image
 ### 1. Get the code
 
 ```bash
-git clone git@github.com:huihui308/dsh-story-desk.git
-cd dsh-story-desk
+git clone git@github.com:huihui308/dsh-picture-desk.git
+cd dsh-picture-desk
 ```
 
 ### 2. Install into the profile
@@ -52,18 +52,18 @@ DSH loads plugins from the profile's `node_modules`. Use `dsh plugin` to install
 
 ```bash
 # <profile> is your actual profile name (default: web)
-dsh plugin --profile web add /absolute/path/to/dsh-story-desk
+dsh plugin --profile web add /absolute/path/to/dsh-picture-desk
 ```
 
 Or symlink it manually:
 
 ```bash
-ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-story-desk
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-picture-desk
 ```
 
 ### 3. Enable it
 
-Restart `dsh web`, open **Plugins**, find **dsh-story-desk** and flip the switch.
+Restart `dsh web`, open **Plugins**, find **dsh-picture-desk** and flip the switch.
 
 "Story Desk" appears in the sidebar when it's working. If not, refresh the page.
 
@@ -150,7 +150,7 @@ Click **Dub and render**: missing audio is filled in first, then shots are rende
 
 Measured on the same 10-second clip: CPU 35.4 s → NVENC 3.97 s; a 2-minute video went from 640 s to about 100 s.
 
-Force CPU with `STORY_DESK_ENCODER=cpu`.
+Force CPU with `PICTURE_DESK_ENCODER=cpu` (the legacy `STORY_DESK_ENCODER` still works).
 
 Preview the result in place, or **Export** to a chosen folder (defaults to `~/Downloads`), named after the project title.
 
@@ -159,7 +159,7 @@ Preview the result in place, or **Export** to a chosen folder (defaults to `~/Do
 ## Where data lives
 
 ```
-$DSH_HOME/story-desk/
+$DSH_HOME/picture-desk/
 ├── state.json              projects, scripts, settings
 ├── secrets.json            channel keys (0600)
 └── projects/<id>/
@@ -207,7 +207,7 @@ src/llm.js         model calls, streaming progress, empty-output fallback
 docs/DETAIL.md     implementation notes
 ```
 
-After editing, reload the plugin: in **Plugins**, toggle **dsh-story-desk** off and on, then refresh the page.
+After editing, reload the plugin: in **Plugins**, toggle **dsh-picture-desk** off and on, then refresh the page.
 
 No build step — source is deployment. Note that `dsh plugin --profile web <pnpm args>` only installs packages; there is no separate enable/disable subcommand.
 

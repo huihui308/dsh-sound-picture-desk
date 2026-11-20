@@ -1,5 +1,5 @@
 {
-  "name": "dsh-story-desk",
+  "name": "dsh-picture-desk",
   "version": "0.1.0",
   "private": true,
   "description": "声画工作台：一个主题或一本书，在面板里走完选题、写稿、定人物、配音、分镜、合成，产出 1080×1920 竖屏 mp4 与 SRT 字幕。写稿用 DSH 模型，旁白 MiMo 多音色，分镜接 OpenAI 兼容或本机生图；每段可改，改完只重做该段。",

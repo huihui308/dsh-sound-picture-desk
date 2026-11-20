@@ -3,7 +3,7 @@
 // 列得出来但驱动缺失/权限不足的情况很常见，跑一次才算数。
 import { execFile } from 'node:child_process'
 
-const FFMPEG = process.env.STORY_DESK_FFMPEG || 'ffmpeg'
+const FFMPEG = process.env.PICTURE_DESK_FFMPEG || process.env.STORY_DESK_FFMPEG || 'ffmpeg'
 
 /** 候选编码器，按优先级排。参数按各家自己的口径给，不能混用。 */
 const CANDIDATES = [
@@ -69,11 +69,11 @@ let cached = null
 
 /**
  * 返回本机首选的编码器。结果缓存在进程内存里，探测只做一次。
- * 想强制 CPU 就设 STORY_DESK_ENCODER=cpu。
+ * 想强制 CPU 就设 PICTURE_DESK_ENCODER=cpu（旧名 STORY_DESK_ENCODER 仍认）。
  */
 export async function resolveEncoder() {
   if (cached) return cached
-  const forced = String(process.env.STORY_DESK_ENCODER || '').toLowerCase()
+  const forced = String(process.env.PICTURE_DESK_ENCODER || process.env.STORY_DESK_ENCODER || '').toLowerCase()
   if (forced === 'cpu' || forced === 'libx264') {
     cached = { ...CPU, hardware: false, forced: true }
     return cached
@@ -132,7 +132,7 @@ let hardwareBroken = false
 export function markHardwareBroken(reason) {
   if (hardwareBroken) return
   hardwareBroken = true
-  console.warn(`[story-desk] 硬件编码不可用，本轮改用 CPU：${String(reason).slice(0, 160)}`)
+  console.warn(`[picture-desk] 硬件编码不可用，本轮改用 CPU：${String(reason).slice(0, 160)}`)
 }
 
 export function isHardwareBroken() {

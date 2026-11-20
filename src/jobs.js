@@ -50,7 +50,7 @@ export function startTask(itemId, kind, total, runner) {
   }
   tasks.set(itemId, task)
   // 兜底超时：模型卡住时别让任务永远 running，用户会被困住
-  const limit = Number(process.env.STORY_DESK_TASK_TIMEOUT_MS) || 20 * 60 * 1000
+  const limit = Number(process.env.PICTURE_DESK_TASK_TIMEOUT_MS || process.env.STORY_DESK_TASK_TIMEOUT_MS) || 20 * 60 * 1000
   const watchdog = setTimeout(() => {
     if (task.running) {
       task.message = '任务超时，已自动停止'
