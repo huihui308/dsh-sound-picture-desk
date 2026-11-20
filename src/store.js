@@ -27,6 +27,7 @@ export const STAGE_LABEL = {
 
 export const DEFAULT_SETTINGS = {
   voice: '白桦',
+  tone: 'storyteller',
   visualStyle: 'cinematic',
   segmentSeconds: 40,
   trashDays: 7,

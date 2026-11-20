@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { cpus, homedir } from 'node:os'
 
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
-import { VISUAL_STYLES, styleLabel, writeScript } from './script.js'
+import { TONES, VISUAL_STYLES, styleLabel, writeScript } from './script.js'
 import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
 import { encoderArgsSync, encoderInfo, maxParallelSessions, resolveEncoder } from './encoders.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
@@ -1037,6 +1037,7 @@ async function route(ctx, store, req, res) {
         secrets: { ttsKey: Boolean(secrets.ttsKey), imageKey: Boolean(secrets.imageKey) },
         voices: TTS_VOICES,
         styles: Object.entries(VISUAL_STYLES).map(([id, row]) => ({ id, label: row.label })),
+        tones: Object.entries(TONES).map(([id, row]) => ({ id, label: row.label })),
         stages: STAGES.map(id => ({ id, label: STAGE_LABEL[id] })),
         imagePresets: IMAGE_PRESETS,
         ttsPresets: TTS_PRESETS,
@@ -1221,7 +1222,7 @@ async function route(ctx, store, req, res) {
       // 只存创作相关的那几项，连接类配置仍走全局设置
       const id = String(body.id ?? '')
       const patch = body.settings && typeof body.settings === 'object' ? body.settings : {}
-      const allowed = ['visualStyle', 'voice', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro', 'renderWorkers', 'coverInVideo']
+      const allowed = ['visualStyle', 'voice', 'tone', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro', 'renderWorkers', 'coverInVideo']
       const clean = {}
       for (const key of allowed) {
         if (!(key in patch)) continue

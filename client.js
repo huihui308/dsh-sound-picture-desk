@@ -1084,6 +1084,17 @@ window.__ModuleLoader__.load({
                 value: modelKey, rows: modelRows, label: '写稿用哪个模型',
                 onChange: setModelKey,
               })),
+            h('div', { className: 'sd-field', style: { flex: '0 0 118px' } },
+              h('label', null, '稿子口吻'),
+              // 口吻是按项目存的设置，改完立刻生效于下一次写稿；老项目没存过就落回说书人
+              h('select', {
+                className: 'sd-select', value: settings.tone ?? 'storyteller',
+                onChange: async event => {
+                  await post('item-settings', { id: item.id, settings: { tone: event.target.value } })
+                  await onReload()
+                },
+              }, (data.tones ?? [{ id: 'storyteller', label: '说书人' }]).map(row =>
+                h('option', { key: row.id, value: row.id }, row.label)))),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '每一段多长（秒）'),
               h('input', {
