@@ -257,7 +257,7 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------ 图标
 
     function DeskIcon({ size = 18 }) {
-      // 卷轴 + 声波：说书
+      // 卷轴 + 声波：旁白
       return h('svg', {
         width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
         stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round',
@@ -377,7 +377,7 @@ window.__ModuleLoader__.load({
       if (error) {
         return h('div', { className: 'sd-root' },
           h('div', { className: 'sd-pane' },
-            h('div', { className: 'sd-head' }, h('div', { className: 'sd-h1' }, '说书工作台')),
+            h('div', { className: 'sd-head' }, h('div', { className: 'sd-h1' }, '声画工作台')),
             h('div', { className: 'sd-body' },
               h('div', { className: 'sd-empty' },
                 h('div', null, `工作台加载失败：${error}`),
@@ -522,8 +522,8 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'sd-rail' },
         h('div', { className: 'sd-rail-head' },
           h(DeskIcon, { size: 17 }),
-          h('span', { className: 'sd-rail-title' }, '说书工作台'),
-          h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onCreate, title: '新建一个说书项目' }, '＋')),
+          h('span', { className: 'sd-rail-title' }, '声画工作台'),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onCreate, title: '新建一个项目' }, '＋')),
         h('div', { className: 'sd-rail-list' },
           items.length
             ? items.map(item => h('div', {
@@ -559,13 +559,13 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-head' },
           h('div', { className: 'sd-head-row' },
             h('div', { className: 'sd-head-title' },
-              h('h1', { className: 'sd-h1' }, '说书工作台'),
-              h('div', { className: 'sd-sub' }, '一个题材或一本书 → 说书稿 → 旁白 → 分镜图 → 竖屏成片')),
+              h('h1', { className: 'sd-h1' }, '声画工作台'),
+              h('div', { className: 'sd-sub' }, '一个主题或一本书 → 稿子 → 旁白 → 分镜图 → 竖屏成片')),
             h('button', { className: 'sd-btn', 'data-kind': 'primary', onClick: onCreate }, '新建项目'))),
         h('div', { className: 'sd-body' },
           h('div', { className: 'sd-empty' },
             h('div', null, '还没有项目。'),
-            h('div', null, '给它一个题材（比如「九子夺嫡」「安史之乱怎么爆的」），或者贴一段原文，剩下的它自己往下做。'),
+            h('div', null, '给它一个主题（比如「九子夺嫡」「安史之乱怎么爆的」「一场暴雨是怎么形成的」），或者贴一段原文，剩下的它自己往下做。'),
             h('div', { className: 'sd-hint', style: { marginTop: 14 } },
               model ? `文案模型：${model.provider} · ${model.model}` : '还没有可用模型：先去设置里接一个，否则写不了稿'))))
     }
@@ -586,7 +586,7 @@ window.__ModuleLoader__.load({
       const raw = String(item?.title ?? '').trim()
       // / \ : * ? " < > | 在 Windows/macOS/Linux 上至少有一个不认，统一换掉
       const clean = raw.replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80)
-      return `${clean || '说书成片'}${suffix}`
+      return `${clean || '成片'}${suffix}`
     }
 
     /** 并行档位：1、2、4、8，以及不超过本机核数上限的值。 */
@@ -686,7 +686,7 @@ window.__ModuleLoader__.load({
             h('div', { className: 'sd-head-title' },
               h('h1', { className: 'sd-h1' }, item.title || '未命名'),
               h('div', { className: 'sd-sub' },
-                item.angle || `题材：${item.topic}`,
+                item.angle || `主题：${item.topic}`,
                 item.counts.segments ? ` · ${item.counts.segments} 段 · 约 ${formatSecs(item.totalSecs || 0)}` : '')),
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onSettings, title: '设置' }, h(GearIcon))),
 
@@ -1065,10 +1065,10 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-card-block' },
           h('div', { className: 'sd-block-title' }, '这一期讲什么'),
           h('div', { className: 'sd-field' },
-            h('label', null, '题材 / 书名'),
+            h('label', null, '主题 / 书名'),
             h('input', {
               className: 'sd-input', value: topic,
-              placeholder: '例：九子夺嫡 / 安史之乱 / 《万历十五年》',
+              placeholder: '例：九子夺嫡 / 安史之乱 / 一场暴雨是怎么形成的',
               onChange: event => setTopic(event.target.value),
             })),
           h('div', { className: 'sd-row', style: { gap: 12 } },
@@ -1147,7 +1147,7 @@ window.__ModuleLoader__.load({
             h('div', { className: 'sd-hint', style: { marginTop: 6 } },
               item.task?.total > 1 ? `${item.task.done}/${item.task.total} · ` : '',
               elapsedLabel(item.task?.startedAt),
-              ' · 完成后自动切到「说书稿」确认稿件'))
+              ' · 完成后自动切到「稿子」确认稿件'))
           : null)
     }
 
@@ -1163,7 +1163,7 @@ window.__ModuleLoader__.load({
       return Math.min(100, Math.round((task.done / task.total) * 100))
     }
 
-    // ------------------------------------------------------------------ ② 说书稿
+    // ------------------------------------------------------------------ ② 稿子
 
     function ScriptPage({ item, data, busy, onAction, onReload }) {
       const settings = { ...data.settings, ...(item.settings ?? {}) }
@@ -1173,7 +1173,7 @@ window.__ModuleLoader__.load({
 
       if (!item.counts.segments) {
         return h(NeedPrev, {
-          text: '还没有稿子。先去「① 选题」定题材并写稿。',
+          text: '还没有稿子。先去「① 选题」定主题并写稿。',
           label: '去选题',
           onGo: () => {
             const btn = document.querySelector('.sd-tabnav-btn')
@@ -1324,7 +1324,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-card-block' },
           h('div', { className: 'sd-block-title' }, '人物与场景参考'),
           h('div', { className: 'sd-hint' },
-            `关键形象先定一张标准像，之后每段分镜都会照着它画${item.counts.segments ? '' : '。建议先在「② 说书稿」确认稿件，再来抽角色'}。`),
+            `关键形象先定一张标准像，之后每段分镜都会照着它画${item.counts.segments ? '' : '。建议先在「② 稿子」确认稿件，再来抽角色'}。`),
           h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8 } },
             h('button', {
               className: 'sd-btn', 'data-kind': anchors.length ? undefined : 'primary', type: 'button',
@@ -1815,7 +1815,7 @@ window.__ModuleLoader__.load({
 
       const voiced = Boolean(seg.audioPath && seg.audioSecs > 0)
       return h('div', { className: 'sd-card', 'data-mode': mode },
-        // 说书稿页还没出图时别占一块「无图」空位，文字占满更好读
+        // 稿子页还没出图时别占一块「无图」空位，文字占满更好读
         mode === 'script' && !seg.imagePath
           ? null
           : seg.imagePath
@@ -1929,7 +1929,7 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState(null)
 
       const submit = async () => {
-        if (!topic.trim()) { setError('先写一个题材或书名'); return }
+        if (!topic.trim()) { setError('先写一个主题或书名'); return }
         setBusy(true)
         setError(null)
         try {
@@ -1940,14 +1940,14 @@ window.__ModuleLoader__.load({
       }
 
       return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onClose() } },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建说书项目' },
-          h('h3', null, '新建说书项目'),
-          h('div', { className: 'sd-hint' }, '给一个题材就行。有现成材料就展开贴上，稿子会照着材料写。'),
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建项目' },
+          h('h3', null, '新建项目'),
+          h('div', { className: 'sd-hint' }, '给一个主题就行。有现成材料就展开贴上，稿子会照着材料写。'),
           h('div', { className: 'sd-field' },
-            h('label', { htmlFor: 'sd-topic' }, '题材 / 书名'),
+            h('label', { htmlFor: 'sd-topic' }, '主题 / 书名'),
             h('input', {
               id: 'sd-topic', className: 'sd-input', value: topic, autoFocus: true,
-              placeholder: '例：九子夺嫡 / 安史之乱 / 《万历十五年》',
+              placeholder: '例：九子夺嫡 / 安史之乱 / 一场暴雨是怎么形成的',
               onChange: event => setTopic(event.target.value),
               onKeyDown: event => { if (event.key === 'Enter') submit() },
             })),
@@ -2154,7 +2154,7 @@ window.__ModuleLoader__.load({
       ]
 
       return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onClose() } },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '说书工作台设置' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '声画工作台设置' },
           h('h3', null, '设置'),
           h('div', { className: 'sd-hint' },
             data.model ? `文案模型跟随当前默认模型：${data.model.provider} · ${data.model.model}` : '当前没有默认模型，写稿会失败，先去接一个模型'),
@@ -2343,7 +2343,7 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: MAIN_KEY }, StoryDesk))
         ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
           name: 'sidebar.panellist', id: PANEL_ID, order: 6,
-          label: () => '说书工作台',
+          label: () => '声画工作台',
         }, () => h(DeskIcon, { size: 16 })))
       },
     }

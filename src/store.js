@@ -13,12 +13,12 @@ export function newId(prefix = 'id') {
   return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`
 }
 
-/** 说书流水线的阶段，顺序即推进顺序。 */
+/** 成片流水线的阶段，顺序即推进顺序。 */
 export const STAGES = ['idea', 'scripted', 'anchors', 'voiced', 'imaged', 'rendered']
 
 export const STAGE_LABEL = {
   idea: '选题',
-  scripted: '说书稿',
+  scripted: '稿子',
   anchors: '参考图',
   voiced: '旁白',
   imaged: '分镜图',

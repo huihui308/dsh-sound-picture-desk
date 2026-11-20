@@ -1,6 +1,6 @@
 // 旁白合成：小米 MiMo TTS。走 chat/completions，旁白放在 assistant 消息里，
 // 音频以 base64 从 message.audio.data 返回。
-// 顺序即推荐顺序：说书要的是沉稳、有叙述感的嗓子，男声排前面，女声留作可选项。
+// 顺序即推荐顺序：旁白要的是沉稳、有叙述感的嗓子，男声排前面，女声留作可选项。
 // 用户实际听过之后的偏好由项目设置记住，不会因为这里的顺序变化而被覆盖。
 const VOICES = [
   { id: '白桦', label: '白桦', note: '男声，沉稳，讲历史最稳' },
@@ -34,7 +34,7 @@ export const TTS_PRESETS = [
   },
 ]
 
-const INSTRUCTION = '请朗读下面这段说书旁白。语气平稳克制，像在给朋友讲一件旧事，句与句之间留一点停顿，不要播音腔。'
+const INSTRUCTION = '请朗读下面这段旁白。语气平稳克制，像在给朋友讲一件旧事，句与句之间留一点停顿，不要播音腔。'
 
 function describeFailure(status, body) {
   let message = ''

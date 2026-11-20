@@ -271,7 +271,7 @@ async function startScript(ctx, store, secrets, itemId) {
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
   return startTask(itemId, 'script', 1, async ({ report, signal }) => {
-    report(0, '正在写说书稿…', 1)
+    report(0, '正在写稿…', 1)
     const result = await writeScript(ctx, {
       topic: item.topic,
       rawText: item.rawText,
@@ -612,7 +612,7 @@ async function extractAnchors(ctx, store, itemId) {
       route: item.model ?? null,
       maxTokens: 3000,
       signal: AbortSignal.timeout(180_000),
-      system: `你在为一部说书短视频建立「人物与场景参考表」。读完全部旁白，列出其中需要保持同一形象的对象。
+      system: `你在为一部竖屏旁白成片建立「人物与场景参考表」。读完全部旁白，列出其中需要保持同一形象的对象。
 
 只列两类：
 - person：有名有姓、反复出现的角色（主角、关键对手）。路人、群众、无名士兵不要列。
