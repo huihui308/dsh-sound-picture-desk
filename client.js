@@ -143,7 +143,6 @@ window.__ModuleLoader__.load({
 .sd-ref-title{color:var(--dsw-alias-label-primary);flex:0 1 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sd-ref-url{color:var(--dsw-alias-label-tertiary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sd-ref-err{color:var(--dsw-alias-state-warn-primary);font-size:10.5px;white-space:nowrap}
-.sd-card[data-mode="script"] .sd-thumb,.sd-card[data-mode="script"] .sd-thumb-empty{width:132px;height:232px;flex:0 0 132px}
 .sd-readtext{font-size:12.5px;line-height:1.75;color:var(--dsw-alias-label-primary);white-space:pre-wrap}
 .sd-readprompt.sd-editable{width:100%;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);padding:7px 9px;font:inherit;font-size:11.5px;line-height:1.65;color:var(--dsw-alias-label-secondary);resize:vertical;margin-top:4px}
 .sd-readprompt.sd-editable:focus{outline:none;border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}
@@ -1178,7 +1177,6 @@ window.__ModuleLoader__.load({
 
     function ScriptPage({ item, data, busy, onAction, onReload }) {
       const settings = { ...data.settings, ...(item.settings ?? {}) }
-      const [viewed, setViewed] = useState(null)
       const words = item.segments.reduce((sum, row) => sum + String(row.text ?? '').length, 0)
       const estimate = Math.round(words / 4.2)
 
@@ -1205,11 +1203,10 @@ window.__ModuleLoader__.load({
               onClick: () => onAction('script', { id: item.id }, '正在生成稿件…'),
             }, '生成稿件'))),
 
+        // 不传 onZoom：稿子页不渲染图，点开放大没有对象
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'script', disabled: busy, onAction, onReload,
-          onZoom: seg.imagePath ? () => setViewed({ src: mediaUrl(item.id, seg.imagePath, seg.imageAt), caption: `第 ${seg.idx + 1} 段` }) : undefined,
         })),
-        viewed ? h(ImageViewer, { ...viewed, onClose: () => setViewed(null) }) : null,
         h('div', { className: 'sd-hint', style: { marginTop: 4 } },
           '直接改文字或画面描述，离开输入框就保存。改过文字的段落需要重新配音。'))
     }
@@ -1826,8 +1823,9 @@ window.__ModuleLoader__.load({
 
       const voiced = Boolean(seg.audioPath && seg.audioSecs > 0)
       return h('div', { className: 'sd-card', 'data-mode': mode },
-        // 稿子页还没出图时别占一块「无图」空位，文字占满更好读
-        mode === 'script' && !seg.imagePath
+        // 图只在分镜图页出现：稿子页、旁白页只管自己的事，不渲染缩略图也不占位。
+        // 分镜图页保留「无图」空位——那页就是管图的，没画出来得看得见。
+        mode !== 'image'
           ? null
           : seg.imagePath
             ? h('img', {
@@ -1842,7 +1840,8 @@ window.__ModuleLoader__.load({
           h('div', { className: 'sd-card-top' },
             h('span', { className: 'sd-idx' }, String(seg.idx + 1).padStart(2, '0')),
             voiced ? h('span', { className: 'sd-tag', 'data-tone': 'ok' }, formatSecs(seg.audioSecs)) : h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未配音'),
-            seg.imagePath ? null : h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未出图'),
+            // 「未出图」同样是分镜图页的事，别的页不挂这个状态
+            mode === 'image' && !seg.imagePath ? h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未出图') : null,
             dirty ? h('span', { className: 'sd-tag' }, '未保存') : null,
             seg.error ? h('span', { className: 'sd-tag', 'data-tone': 'warn', title: seg.error }, '出错了') : null),
 
