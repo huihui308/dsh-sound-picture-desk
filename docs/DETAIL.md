@@ -66,6 +66,8 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 
 写稿模型按项目存（`item.model`），可选 DSH 里已接的任何 provider/model；不选就跟随 `agentDefaultModel` 的当前选择。
 
+这个下拉是自绘的（`DropSelect`），不用原生 `<select>`：原生弹层由浏览器自己画，深色主题下常常是浅底，`option/optgroup` 只认一部分样式，模型提供商那行分组标题会亮得刺眼，各家浏览器还不一致。自绘版把弹层挂在面板自己的菜单底板上（`--dsw-specific-menu` + 背景模糊），分组标题压成三级文字色，选中项带勾，键盘 ↑↓/Home/End/Enter/Esc 全通。
+
 ## 写稿即配图
 
 `startScript` 在稿子落盘后紧接着逐段出图：清空旧 `images/`（并立刻重建目录，否则写图会 ENOENT），依次生成 `s001.png…`，单段失败只记 `segment.error` 不中断。任务总数在写稿完成后由 `report(done, msg, total)` 补成 `1 + 段数`，进度条才准。

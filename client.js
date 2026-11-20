@@ -75,6 +75,18 @@ window.__ModuleLoader__.load({
 .sd-input:focus,.sd-select:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
 /* 原生下拉的弹层不继承 select 的背景，只继承文字色：不显式给 option 上色就是白底白字 */
 .sd-select option{background-color:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:13px}
+/* 自绘下拉：原生弹层在深色主题下常是浅底，分组标题（模型提供商）亮得刺眼，各平台还不一致 */
+.sd-picker{position:relative}
+.sd-picker-trigger{display:flex;align-items:center;gap:8px;text-align:left;cursor:pointer}
+.sd-picker-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-picker-caret{flex:0 0 auto;font-size:10px;line-height:1;color:var(--dsw-alias-label-tertiary)}
+.sd-picker-menu{position:fixed;z-index:75;box-sizing:border-box;overflow:auto;padding:4px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-specific-menu,var(--dsw-alias-bg-layer-2));backdrop-filter:var(--dsw-menu-backdrop-filter,blur(24px) saturate(150%));box-shadow:0 12px 32px rgba(0,0,0,.38);color:var(--dsw-alias-label-primary)}
+.sd-picker-group{padding:8px 8px 3px;font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--dsw-alias-label-tertiary)}
+.sd-picker-opt{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;font-size:12.5px;line-height:1.45;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap}
+.sd-picker-opt-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sd-picker-opt[data-active="1"]{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.sd-picker-opt[data-selected="1"]{color:var(--dsw-alias-label-primary)}
+.sd-picker-check{flex:0 0 12px;font-size:11px;color:var(--dsw-alias-brand-primary)}
 
 .sd-textarea{min-height:96px;resize:vertical;line-height:1.6}
 .sd-row{display:flex;gap:10px;align-items:flex-start}
@@ -838,6 +850,133 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-lb-hint' }, '滚轮缩放 · 拖动平移 · 双击放大 · 0 复位 · Esc 关闭'))
     }
 
+    // ------------------------------------------------------------------ 自绘下拉
+
+    /**
+     * 原生 <select> 的弹层由浏览器自己画：深色主题下常常是浅色底，option/optgroup 只认一部分样式，
+     * 分组标题（模型提供商）会亮得刺眼，各平台还不一致。这里自绘一个：弹层用面板自己的底色，
+     * 分组标题压成三级文字色，键盘上下、回车、Esc 都能走。
+     * rows = [{ kind: 'group', key, label } | { kind: 'option', value, label }]，由上层拼好。
+     */
+    function DropSelect({ value, rows, label, onChange, disabled }) {
+      const [open, setOpen] = useState(false)
+      const [active, setActive] = useState(-1)
+      const [rect, setRect] = useState(null)
+      const triggerRef = useRef(null)
+      const menuRef = useRef(null)
+
+      const selectable = useMemo(() => rows.filter(row => row.kind === 'option'), [rows])
+      const current = selectable.find(row => row.value === value)
+      const currentLabel = current ? current.label : (value ? String(value).split('|').pop() : '未选择')
+
+      const close = useCallback(() => { setOpen(false) }, [])
+
+      const openMenu = useCallback(() => {
+        const node = triggerRef.current
+        if (!node) return
+        const box = node.getBoundingClientRect()
+        const below = window.innerHeight - box.bottom - 12
+        const above = box.top - 12
+        // 下面塞不下就翻到上面；都以 320 封顶
+        const flip = below < 180 && above > below
+        const limit = Math.min(320, Math.max(140, flip ? above : below))
+        setRect({
+          left: Math.round(box.left),
+          width: Math.round(Math.max(box.width, 240)),
+          top: flip ? Math.round(box.top - limit - 4) : Math.round(box.bottom + 4),
+          maxHeight: Math.round(limit),
+        })
+        const start = Math.max(0, selectable.indexOf(selectable.find(row => row.value === value) ?? selectable[0] ?? { value: null }))
+        setActive(selectable.length ? start : -1)
+        setOpen(true)
+      }, [selectable, value])
+
+      const commit = useCallback(row => {
+        setOpen(false)
+        triggerRef.current?.focus()
+        if (row && row.value !== value) onChange(row.value)
+      }, [onChange, value])
+
+      useEffect(() => {
+        if (!open) return undefined
+        const onDown = event => {
+          if (menuRef.current?.contains(event.target)) return
+          if (triggerRef.current?.contains(event.target)) return
+          close()
+        }
+        const onScroll = event => {
+          if (menuRef.current?.contains(event.target)) return
+          close()
+        }
+        const onResize = () => close()
+        document.addEventListener('mousedown', onDown, true)
+        window.addEventListener('scroll', onScroll, true)
+        window.addEventListener('resize', onResize)
+        return () => {
+          document.removeEventListener('mousedown', onDown, true)
+          window.removeEventListener('scroll', onScroll, true)
+          window.removeEventListener('resize', onResize)
+        }
+      }, [open, close])
+
+      useEffect(() => {
+        if (!open) return
+        menuRef.current?.querySelector('[data-active="1"]')?.scrollIntoView({ block: 'center' })
+      }, [open, active])
+
+      const onKeyDown = event => {
+        if (!open) {
+          if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            openMenu()
+          }
+          return
+        }
+        if (event.key === 'Escape') { event.preventDefault(); close(); return }
+        if (event.key === 'Tab') { close(); return }
+        if (event.key === 'ArrowDown') { event.preventDefault(); setActive(i => Math.min(selectable.length - 1, i + 1)); return }
+        if (event.key === 'ArrowUp') { event.preventDefault(); setActive(i => Math.max(0, i - 1)); return }
+        if (event.key === 'Home') { event.preventDefault(); setActive(0); return }
+        if (event.key === 'End') { event.preventDefault(); setActive(selectable.length - 1); return }
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          commit(selectable[active])
+        }
+      }
+
+      const menu = open && rect
+        ? h('div', {
+          ref: menuRef, className: 'sd-picker-menu', role: 'listbox', 'aria-label': label,
+          style: { left: rect.left, top: rect.top, width: rect.width, maxHeight: rect.maxHeight },
+        }, rows.map(row => {
+          if (row.kind === 'group') {
+            return h('div', { key: `g:${row.key}`, className: 'sd-picker-group', role: 'presentation' }, row.label)
+          }
+          return h('div', {
+            key: `o:${row.value}`, className: 'sd-picker-opt', role: 'option',
+            'aria-selected': row.value === value ? 'true' : 'false',
+            'data-selected': row.value === value ? '1' : undefined,
+            'data-active': selectable[active] === row ? '1' : undefined,
+            onMouseDown: event => event.preventDefault(),
+            onMouseEnter: () => setActive(selectable.indexOf(row)),
+            onClick: () => commit(row),
+          },
+            h('span', { className: 'sd-picker-check', 'aria-hidden': 'true' }, row.value === value ? '✓' : ''),
+            h('span', { className: 'sd-picker-opt-label' }, row.label))
+        }))
+        : null
+
+      return h('div', { className: 'sd-picker' },
+        h('button', {
+          type: 'button', ref: triggerRef, className: 'sd-select sd-picker-trigger',
+          'aria-haspopup': 'listbox', 'aria-expanded': open ? 'true' : 'false', 'aria-label': label,
+          disabled, onClick: () => (open ? close() : openMenu()), onKeyDown,
+        },
+          h('span', { className: 'sd-picker-label' }, currentLabel),
+          h('span', { className: 'sd-picker-caret', 'aria-hidden': 'true' }, '▾')),
+        menu)
+    }
+
     // ------------------------------------------------------------------ ① 选题
 
     function IdeaPage({ item, data, busy, onAction, onReload }) {
@@ -857,6 +996,18 @@ window.__ModuleLoader__.load({
       useEffect(() => { setRaw(item.rawText ?? '') }, [item.rawText])
       useEffect(() => { setRefs((item.references ?? []).map(row => row.url).join('\n')) }, [item.references])
       useEffect(() => { setModelKey(item.model ? `${item.model.provider}|${item.model.model}` : '') }, [item.model])
+
+      // 模型列表：第一项跟随默认，其余按提供商分组；分组标题只是标题，选不中
+      const modelRows = useMemo(() => {
+        const rows = [{ kind: 'option', value: '', label: '跟随 DSH 当前默认模型' }]
+        for (const provider of data.engines ?? []) {
+          const models = provider.models ?? []
+          if (!models.length) continue
+          rows.push({ kind: 'group', key: provider.provider, label: provider.name || provider.provider })
+          for (const row of models) rows.push({ kind: 'option', value: `${provider.provider}|${row.id}`, label: row.name })
+        }
+        return rows
+      }, [data.engines])
 
       const parseRefs = () => [...new Set(
         String(refs).split(/\n+/).map(line => line.trim()).filter(line => /^https?:\/\//i.test(line)),
@@ -929,16 +1080,10 @@ window.__ModuleLoader__.load({
               })),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '写稿用哪个模型'),
-              h('select', {
-                className: 'sd-select', value: modelKey,
-                onChange: event => setModelKey(event.target.value),
-              },
-                h('option', { value: '' }, '跟随 DSH 当前默认模型'),
-                (data.engines ?? []).map(provider => h('optgroup', { key: provider.provider, label: provider.name },
-                  provider.models.map(row => h('option', {
-                    key: `${provider.provider}|${row.id}`,
-                    value: `${provider.provider}|${row.id}`,
-                  }, row.name)))))),
+              h(DropSelect, {
+                value: modelKey, rows: modelRows, label: '写稿用哪个模型',
+                onChange: setModelKey,
+              })),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '每一段多长（秒）'),
               h('input', {
