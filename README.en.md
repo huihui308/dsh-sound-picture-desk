@@ -1,10 +1,12 @@
-# Story Desk · DSH Plugin
+# Sound & Picture Desk · DSH Plugin
 
 [中文](README.md) | **English**
 
-Turn a topic, a slice of history, or a book into a vertical storytelling video: script → character references → voice → images → final cut, all inside one panel.
+Turn a topic, a slice of history, or a book into a vertical narrated video: script → character references → voice → images → final cut, all inside one panel.
 
 It is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai) (DSH). No editing software involved — it outputs a 1080×1920 `.mp4` plus an `.srt` subtitle file.
+
+> Naming: the Chinese name 声画工作台 is "sound & picture", hence `dsh-sound-picture-desk`. Environment variables keep the shorter `PICTURE_DESK_*` prefix (the legacy `STORY_DESK_*` still works).
 
 ---
 
@@ -42,8 +44,8 @@ MiniMax ships two lanes, routed automatically by model name: `image-01` / `image
 ### 1. Get the code
 
 ```bash
-git clone git@github.com:huihui308/dsh-picture-desk.git
-cd dsh-picture-desk
+git clone git@github.com:huihui308/dsh-sound-picture-desk.git
+cd dsh-sound-picture-desk
 ```
 
 ### 2. Install into the profile
@@ -52,20 +54,20 @@ DSH loads plugins from the profile's `node_modules`. Use `dsh plugin` to install
 
 ```bash
 # <profile> is your actual profile name (default: web)
-dsh plugin --profile web add /absolute/path/to/dsh-picture-desk
+dsh plugin --profile web add /absolute/path/to/dsh-sound-picture-desk
 ```
 
 Or symlink it manually:
 
 ```bash
-ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-picture-desk
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-sound-picture-desk
 ```
 
 ### 3. Enable it
 
-Restart `dsh web`, open **Plugins**, find **dsh-picture-desk** and flip the switch.
+Restart `dsh web`, open **Plugins**, find **dsh-sound-picture-desk** and flip the switch.
 
-"Story Desk" appears in the sidebar when it's working. If not, refresh the page.
+"声画工作台" (Sound & Picture Desk) appears in the sidebar when it's working. If not, refresh the page.
 
 ### 4. Configure channels once
 
@@ -159,7 +161,7 @@ Preview the result in place, or **Export** to a chosen folder (defaults to `~/Do
 ## Where data lives
 
 ```
-$DSH_HOME/picture-desk/
+$DSH_HOME/sound-picture-desk/
 ├── state.json              projects, scripts, settings
 ├── secrets.json            channel keys (0600)
 └── projects/<id>/
@@ -207,7 +209,7 @@ src/llm.js         model calls, streaming progress, empty-output fallback
 docs/DETAIL.md     implementation notes
 ```
 
-After editing, reload the plugin: in **Plugins**, toggle **dsh-picture-desk** off and on, then refresh the page.
+After editing, reload the plugin: in **Plugins**, toggle **dsh-sound-picture-desk** off and on, then refresh the page.
 
 No build step — source is deployment. Note that `dsh plugin --profile web <pnpm args>` only installs packages; there is no separate enable/disable subcommand.
 

@@ -1,4 +1,4 @@
-// dsh-picture-desk 的 Host 半片：/picture-desk 接口、项目状态、生成编排。
+// dsh-sound-picture-desk 的 Host 半片：/sound-picture-desk 接口、项目状态、生成编排。
 // 文案走 DSH 当前模型，旁白走 MiMo TTS，画面走本机/平台生图，成片走 ffmpeg。
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
@@ -221,7 +221,7 @@ async function inspectReference(url) {
   if (!/^https?:\/\//i.test(clean)) return { url: clean, title: '', error: '不是 http 链接' }
   try {
     const response = await fetch(clean, {
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-picture-desk/0.1)', accept: 'text/html' },
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-sound-picture-desk/0.1)', accept: 'text/html' },
       signal: AbortSignal.timeout(8000),
       redirect: 'follow',
     })
@@ -1007,7 +1007,7 @@ async function startFinish(store, secrets, itemId) {
 
 async function route(ctx, store, req, res) {
   const url = new URL(req.url || '/', 'http://local')
-  const path = url.pathname.replace(/^\/picture-desk\/?/, '')
+  const path = url.pathname.replace(/^\/sound-picture-desk\/?/, '')
   const method = req.method || 'GET'
 
   // 媒体文件：/media/<itemId>/<images|audio|renders|work>/<name>
@@ -1531,7 +1531,7 @@ export function requestRejection(ctx, req) {
   return connection.requestRejection({ headers: req.headers })
 }
 
-export const name = 'dsh-picture-desk'
+export const name = 'dsh-sound-picture-desk'
 
 /**
  * 只观察不干预：万一进程真的崩了，至少留一份现场。
@@ -1543,7 +1543,7 @@ function hookCrashLog() {
   crashHooked = true
   const write = (kind, payload) => {
     try {
-      const dir = join(dshHome(), 'picture-desk')
+      const dir = join(dshHome(), 'sound-picture-desk')
       mkdir(dir, { recursive: true })
         .then(() => appendFile(join(dir, 'crash.log'), `${new Date().toISOString()} ${kind} ${payload}\n`))
         .catch(() => {})
@@ -1569,7 +1569,7 @@ export default {
     if (typeof trashTimer.unref === 'function') trashTimer.unref()
     ctx.effect(() => ctx.webServer.register({
       kind: 'prefix',
-      path: '/picture-desk',
+      path: '/sound-picture-desk',
       handler: async (req, res) => {
         try {
           const rejection = requestRejection(ctx, req)
@@ -1586,6 +1586,6 @@ export default {
           json(res, err.status || 500, { error: err.message })
         }
       },
-    }), 'dsh-picture-desk: /picture-desk routes')
+    }), 'dsh-sound-picture-desk: /sound-picture-desk routes')
   },
 }

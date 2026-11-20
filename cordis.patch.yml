@@ -1,5 +1,5 @@
-# dsh-picture-desk bundle patch：同一个包提供 host 半片（/picture-desk 接口与生成编排）
+# dsh-sound-picture-desk bundle patch：同一个包提供 host 半片（/sound-picture-desk 接口与生成编排）
 # 与浏览器半片（工作台页面）。
 - insert:
-    - id: picture-desk
-      name: 'dsh-picture-desk'
+    - id: sound-picture-desk
+      name: 'dsh-sound-picture-desk'

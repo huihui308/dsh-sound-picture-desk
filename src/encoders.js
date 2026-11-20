@@ -132,7 +132,7 @@ let hardwareBroken = false
 export function markHardwareBroken(reason) {
   if (hardwareBroken) return
   hardwareBroken = true
-  console.warn(`[picture-desk] 硬件编码不可用，本轮改用 CPU：${String(reason).slice(0, 160)}`)
+  console.warn(`[sound-picture-desk] 硬件编码不可用，本轮改用 CPU：${String(reason).slice(0, 160)}`)
 }
 
 export function isHardwareBroken() {

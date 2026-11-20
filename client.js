@@ -1,13 +1,13 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-picture-desk',
+  id: 'dsh-sound-picture-desk',
   factory(require) {
     const React = require('react')
     const h = React.createElement
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
-    const API = '/picture-desk'
-    const MAIN_KEY = 'picture-desk'
-    const PANEL_ID = 'picture-desk'
+    const API = '/sound-picture-desk'
+    const MAIN_KEY = 'sound-picture-desk'
+    const PANEL_ID = 'sound-picture-desk'
 
     const STYLE = `
 .sd-root{display:flex;height:100%;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:13px}

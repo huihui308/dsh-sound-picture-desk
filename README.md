@@ -6,6 +6,8 @@
 
 它是 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）的一个插件。不依赖剪辑软件，产出一条 1080×1920 的 mp4 和一版 SRT 字幕。
 
+> 名字：「声画」即声音与画面，包名 `dsh-sound-picture-desk` 对应英文 Sound & Picture Desk。环境变量前缀简写成 `PICTURE_DESK_*`，免得 `SOUND_PICTURE_DESK_ENCODER` 太长；旧的 `STORY_DESK_*` 仍认。
+
 ---
 
 ## 它是做什么的
@@ -42,8 +44,8 @@ MiniMax 有两条通道，插件按模型名自动分流：`image-01` / `image-0
 ### 1. 拿到代码
 
 ```bash
-git clone git@github.com:huihui308/dsh-picture-desk.git
-cd dsh-picture-desk
+git clone git@github.com:huihui308/dsh-sound-picture-desk.git
+cd dsh-sound-picture-desk
 ```
 
 ### 2. 装进 profile
@@ -52,18 +54,18 @@ DSH 从 profile 的 `node_modules` 里加载插件。用 `dsh plugin` 安装本�
 
 ```bash
 # <profile> 是本机实际的 profile 名，默认 web
-dsh plugin --profile web add /绝对路径/dsh-picture-desk
+dsh plugin --profile web add /绝对路径/dsh-sound-picture-desk
 ```
 
 也可以手动软链接：
 
 ```bash
-ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-picture-desk
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-sound-picture-desk
 ```
 
 ### 3. 启用
 
-重启 `dsh web`，进「Plugins」页面找到 **dsh-picture-desk** 打开开关。
+重启 `dsh web`，进「Plugins」页面找到 **dsh-sound-picture-desk** 打开开关。
 
 侧栏出现「声画工作台」即为成功。没出现就刷新页面。
 
@@ -161,7 +163,7 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-picture-desk
 ## 数据存在哪
 
 ```
-$DSH_HOME/picture-desk/
+$DSH_HOME/sound-picture-desk/
 ├── state.json              所有项目、稿件、设置
 ├── secrets.json            通道密钥（0600）
 └── projects/<id>/
@@ -209,7 +211,7 @@ src/llm.js         调模型、流式进度、空输出兜底
 docs/DETAIL.md     实现细节
 ```
 
-改完代码要重新加载插件：「Plugins」页面把 **dsh-picture-desk** 关掉再打开，然后刷新页面。
+改完代码要重新加载插件：「Plugins」页面把 **dsh-sound-picture-desk** 关掉再打开，然后刷新页面。
 
 没有构建步骤——源码即部署。命令行里 `dsh plugin --profile web <pnpm 参数>` 只用来装包，没有单独的启停子命令。
 
