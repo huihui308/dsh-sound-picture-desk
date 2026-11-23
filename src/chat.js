@@ -49,7 +49,10 @@ export async function chatTurn(ctx, store, body) {
 
   const state = await store.read()
   const item = body.itemId ? state.items.find(row => row.id === body.itemId) : null
-  const history = (state.chat ?? []).slice(-6)
+  // 历史按项目隔离：新记录带 itemId；没有 itemId 的旧记录按兼容处理（保留）
+  const history = (state.chat ?? [])
+    .filter(row => !row.itemId || row.itemId === body.itemId)
+    .slice(-6)
   const historyText = history.length
     ? history.map(row => `${row.role === 'user' ? '用户' : '你'}：${row.text}`).join('\n')
     : '（还没有对话）'
@@ -84,8 +87,10 @@ export async function chatTurn(ctx, store, body) {
   const reply = String(plan.reply ?? '').trim() || '改好了。'
   const proposed = Array.isArray(plan.segments) ? plan.segments : []
 
-  const chatRow = { id: newId('msg'), role: 'assistant', text: reply, at: new Date().toISOString() }
-  const userRow = { id: newId('msg'), role: 'user', text: message, at: new Date().toISOString() }
+  // 记录带上项目 id，读历史时才能按项目过滤（undefined 会被 JSON 丢掉，等同旧记录）
+  const chatItemId = typeof body.itemId === 'string' ? body.itemId : undefined
+  const chatRow = { id: newId('msg'), role: 'assistant', text: reply, at: new Date().toISOString(), itemId: chatItemId }
+  const userRow = { id: newId('msg'), role: 'user', text: message, at: new Date().toISOString(), itemId: chatItemId }
 
   if (!item || !proposed.length) {
     await store.mutate(draft => {

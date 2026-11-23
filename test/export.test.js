@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, writeFile, readFile, stat, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -51,6 +52,12 @@ test('发布包结构、文案与清单', async () => {
     assert.equal(manifest.targets.length, 2)
     assert.ok(manifest.files.length >= 7)
     assert.ok(manifest.files.every(file => typeof file.sha256 === 'string'))
+    // 清单里的 sha256 必须是导出后真实文件的哈希，不能只写个占位串
+    for (const file of manifest.files) {
+      const body = await readFile(join(out.absDir, file.path))
+      assert.equal(body.length, file.bytes, file.path + ' 字节数')
+      assert.equal(createHash('sha256').update(body).digest('hex'), file.sha256, file.path + ' sha256')
+    }
     const video = await readFile(join(out.absDir, 'x', 'video.mp4'))
     assert.equal(video.length, 1024)
   } finally {
@@ -86,7 +93,8 @@ test('没有封面也能导出，README 说明封面未包含', async () => {
       now: new Date('2026-11-23T11:00:00'),
     })
     const readme = await readFile(join(out.absDir, 'README.md'), 'utf8')
-    assert.match(readme, /封面/)
+    // 用缺封面时才会出现的那句话，避免「封面」二字在含封面的说明里也命中
+    assert.match(readme, /本包未包含/)
     assert.equal(out.files.some(file => file.name.includes('cover-')), false)
     const manifest = JSON.parse(await readFile(join(out.absDir, 'manifest.json'), 'utf8'))
     assert.equal(manifest.files.some(file => file.path.includes('cover-')), false)

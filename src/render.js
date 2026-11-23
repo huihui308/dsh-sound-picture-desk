@@ -41,6 +41,26 @@ export async function probeDuration(file) {
   }
 }
 
+/**
+ * 读视频流时长（秒）。xfade 的 offset 按它算：format duration 只到毫秒，
+ * 四舍五入后 offset + fade 会略微超出镜头末帧，xfade 就多吐一帧，音画从此差开。
+ */
+async function probeStreamDuration(file) {
+  try {
+    const { stdout } = await run(FFPROBE, [
+      '-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', 'stream=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      file,
+    ], { timeout: 30_000 })
+    const value = Number.parseFloat(String(stdout).trim())
+    if (Number.isFinite(value) && value > 0) return value
+  } catch {
+    // 读不到流时长就退回容器时长
+  }
+  return probeDuration(file)
+}
+
 function even(value) {
   const n = Math.round(value)
   return n % 2 === 0 ? n : n + 1
@@ -92,23 +112,28 @@ export async function renderIntroCard({ title, subtitle, workDir, output, width,
 </body></html>`
   await writeFile(join(compDir, 'intro.html'), html, 'utf8')
   const raw = join(workDir, 'intro-raw.mp4')
-  await new Promise((resolve, reject) => {
-    execFile('npx', ['--yes', '--prefer-offline', HYPERFRAMES, 'render',
-      // 尺寸由 composition 的 data-width/height 决定，--resolution 只吃预设名，不要传
-      '--composition', 'compositions/intro.html', '--output', raw],
-      { timeout: 240_000, cwd: projectDir, maxBuffer: 16 * 1024 * 1024 },
-      err => (err ? reject(new Error(`HyperFrames 渲染失败：${String(err.message).slice(0, 200)}`)) : resolve()))
-  })
-  // 统一编码参数，才能和主片直接拼接
-  // 片头本身没有音轨，补一条静音，才能和主片无缝拼接
-  await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error',
-    '-i', raw,
-    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-    '-vf', `scale=${w}:${h},format=yuv420p`, '-r', '30',
-    '-shortest', ...encoderArgsSync(),
-    '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
-    '-movflags', '+faststart', output], { signal })
-  await rm(raw, { force: true }).catch(() => {})
+  try {
+    await new Promise((resolve, reject) => {
+      execFile('npx', ['--yes', '--prefer-offline', HYPERFRAMES, 'render',
+        // 尺寸由 composition 的 data-width/height 决定，--resolution 只吃预设名，不要传
+        '--composition', 'compositions/intro.html', '--output', raw],
+        // signal 必须传给 npx：用户点停止时不能让它继续在后台渲染
+        { timeout: 240_000, cwd: projectDir, maxBuffer: 16 * 1024 * 1024, signal },
+        err => (err ? reject(new Error(`HyperFrames 渲染失败：${String(err.message).slice(0, 200)}`)) : resolve()))
+    })
+    // 统一编码参数，才能和主片直接拼接
+    // 片头本身没有音轨，补一条静音，才能和主片无缝拼接
+    await run(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error',
+      '-i', raw,
+      '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+      '-vf', `scale=${w}:${h},format=yuv420p`, '-r', '30',
+      '-shortest', ...encoderArgsSync(),
+      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
+      '-movflags', '+faststart', output], { signal })
+  } finally {
+    // 成功失败都清理中间文件，别把 intro-raw.mp4 留在 work 目录里
+    await rm(raw, { force: true }).catch(() => {})
+  }
   return output
 }
 
@@ -127,7 +152,7 @@ const GRADES = {
   film: 'eq=contrast=1.08:saturation=.9:gamma_r=1.03:gamma_b=1.02,vignette=PI/5',
 }
 
-export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade, signal }) {
+export async function renderShot({ image, audio, output, seconds, width, height, kenBurns, motion, grade, signal, onHardwareFallback }) {
   await resolveEncoder()
   const w = even(width)
   const h = even(height)
@@ -162,9 +187,17 @@ export async function renderShot({ image, audio, output, seconds, width, height,
     args.push('-vf', vf)
   }
 
+  // 镜头视频 = 音频 + SEGMENT_TAIL，音轨本身只有旁白那么长。不补齐的话：
+  // 硬切拼接走 -c copy，音轨首尾相接而画面切点在 +0.2667s，旁白会逐段提前 0.25s/段，
+  // 23 段累计 5 秒多。这里按镜头真实时长补齐/截断，和 concatWithFade 的 padAudio 同口径。
+  const padAudio = `apad=whole_dur=${duration.toFixed(6)},atrim=duration=${duration.toFixed(6)}`
+
   args.push(
     ...encoderArgsSync(),
-    '-r', '30', '-t', duration.toFixed(3),
+    // -t 用和 segmentSpan/layoutCues 同一个量化值；多留 6 位小数，别把整帧量化又舍成半帧
+    '-r', '30', '-t', duration.toFixed(6),
+    // -af 只作用于音频轨，视频轨不受影响
+    '-af', padAudio,
     '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2',
     '-movflags', '+faststart',
     output,
@@ -174,24 +207,30 @@ export async function renderShot({ image, audio, output, seconds, width, height,
   } catch (err) {
     // 硬件编码会话开不出来（并发超限、驱动抽风）时，这一段改用 CPU 重跑，
     // 后面的镜头也跟着走 CPU，别让整条片子因为显卡拒绝而失败。
-    if (!isHardwareBroken() && isHardwareEncoderFailure(err?.message)) {
-      markHardwareBroken(err?.message)
-      const cpuArgs = args.map(part => (typeof part === 'string' ? part : part))
-      // 用 CPU 参数替换掉原来的编码器参数段
-      const rebuilt = []
-      for (let i = 0; i < cpuArgs.length; i += 1) {
-        if (cpuArgs[i] === '-c:v') {
-          rebuilt.push(...CPU_ENCODER_ARGS)
-          i += 1
-          while (i + 1 < cpuArgs.length && ['-preset', '-cq', '-global_quality', '-q:v', '-b:v', '-maxrate', '-bufsize', '-quality', '-qp_i', '-qp_p'].includes(cpuArgs[i + 1])) i += 2
-          continue
-        }
-        rebuilt.push(cpuArgs[i])
-      }
-      await run(FFMPEG, rebuilt, { signal })
-    } else {
-      throw err
+    // 只看这条错误本身：并行渲染时几路可能同时撞上硬件失败，不能因为
+    // 别的镜头已经把全局标记置上，就让在途镜头直接失败。
+    if (!isHardwareEncoderFailure(err?.message)) throw err
+    markHardwareBroken(err?.message)
+    // 本次渲染内是否发生过硬件→CPU 降级，由调用方自己记账：不能只靠 30 分钟 TTL，
+    // 长渲染跑到 TTL 过期后全局标记会变回 false，片子却真的混了两种编码。
+    try {
+      onHardwareFallback?.()
+    } catch {
+      // 回调只用来置标志，它自己出错不能影响 CPU 重跑
     }
+    const cpuArgs = args.map(part => (typeof part === 'string' ? part : part))
+    // 用 CPU 参数替换掉原来的编码器参数段
+    const rebuilt = []
+    for (let i = 0; i < cpuArgs.length; i += 1) {
+      if (cpuArgs[i] === '-c:v') {
+        rebuilt.push(...CPU_ENCODER_ARGS)
+        i += 1
+        while (i + 1 < cpuArgs.length && ['-preset', '-cq', '-global_quality', '-q:v', '-b:v', '-maxrate', '-bufsize', '-quality', '-qp_i', '-qp_p'].includes(cpuArgs[i + 1])) i += 2
+        continue
+      }
+      rebuilt.push(cpuArgs[i])
+    }
+    await run(FFMPEG, rebuilt, { signal })
   }
   return output
 }
@@ -202,10 +241,16 @@ export async function renderShot({ image, audio, output, seconds, width, height,
  */
 /** 这段视频有没有音轨。转场拼接时决定要不要做音频交叉淡化。 */
 function hasAudioStream(file) {
-  return new Promise(resolve => {
-    execFile('ffprobe', ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index',
+  return new Promise((resolve, reject) => {
+    execFile(FFPROBE, ['-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index',
       '-of', 'csv=p=0', file], { timeout: 15_000 }, (err, stdout) => {
-      resolve(!err && String(stdout).trim().length > 0)
+      // 探测失败不能当成「没有音轨」：renderShot 出来的镜头一定带音轨，
+      // fail-open 会把整条旁白悄悄丢掉。交回调用方当失败处理。
+      if (err) {
+        reject(new Error(`ffprobe 探测音轨失败：${String(err.message).slice(0, 120)}`))
+        return
+      }
+      resolve(String(stdout).trim().length > 0)
     })
   })
 }
@@ -227,7 +272,8 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
   // 23 段等于把整片重编码二十多遍。现在改成一次 filter_complex 把 n 段串起来，
   // 只编码一遍。
   const durations = []
-  for (const file of shotPaths) durations.push(await probeDuration(file))
+  for (const file of shotPaths) durations.push(await probeStreamDuration(file))
+  if (durations.some(secs => !secs)) throw new Error('读不出镜头时长，没法排转场时间轴')
   const withAudio = await hasAudioStream(shotPaths[0])
 
   const args = ['-y', '-hide_banner', '-loglevel', 'error']
@@ -235,25 +281,33 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
 
   const chains = []
   let last = '[0:v]'
-  let elapsed = durations[0] || 0
+  let elapsed = durations[0]
   for (let i = 1; i < shotPaths.length; i += 1) {
     const out = `[v${i}]`
-    const offset = Math.max(0, elapsed - fadeSeconds)
-    chains.push(`${last}[${i}:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(3)},format=yuv420p${out}`)
+    // 向下取整到微秒：offset + fade 必须落在前一段的真实时长内，向上取整会让 xfade 多吐一帧
+    const offset = Math.floor(Math.max(0, elapsed - fadeSeconds) * 1e6) / 1e6
+    chains.push(`${last}[${i}:v]xfade=transition=${kind}:duration=${fadeSeconds}:offset=${offset.toFixed(6)},format=yuv420p${out}`)
     last = out
     // 下一段的起点要在重叠之后继续累加
-    elapsed = offset + (durations[i] || 0)
+    elapsed = offset + durations[i]
   }
 
   if (withAudio) {
-    let audioLast = '[0:a]'
-    let audioElapsed = durations[0] || 0
+    // 镜头里的音轨只有旁白本身那么长，视频却多了 SEGMENT_TAIL；不补齐的话
+    // acrossfade 按音轨长度串接，每段旁白会比画面提前 0.25 秒、越往后差越多。
+    // 先把每条音轨补静音/截断到该镜头的视频时长（和 xfade 用同一份 durations），
+    // 再串 acrossfade，音轨总长和每段起点就自动和视频一致了。
+    const padAudio = index => {
+      const dur = durations[index].toFixed(6)
+      return `apad=whole_dur=${dur},atrim=duration=${dur}`
+    }
+    chains.push(`[0:a]${padAudio(0)}[a0p]`)
+    let audioLast = '[a0p]'
     for (let i = 1; i < shotPaths.length; i += 1) {
       const out = `[a${i}]`
-      const offset = Math.max(0, audioElapsed - fadeSeconds)
-      chains.push(`${audioLast}[${i}:a]acrossfade=d=${fadeSeconds}:c1=tri:c2=tri${out}`)
+      chains.push(`[${i}:a]${padAudio(i)}[a${i}p]`)
+      chains.push(`${audioLast}[a${i}p]acrossfade=d=${fadeSeconds}:c1=tri:c2=tri${out}`)
       audioLast = out
-      audioElapsed = offset + (durations[i] || 0)
     }
     args.push('-filter_complex', chains.join(';'), '-map', last, '-map', audioLast,
       '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2')
@@ -261,21 +315,47 @@ export async function concatWithFade(shotPaths, workDir, output, { fadeSeconds =
     args.push('-filter_complex', chains.join(';'), '-map', last)
   }
 
-  args.push(...encoderArgsSync(), '-r', '30', '-movflags', '+faststart', output)
+  // 映射了音轨后，ffmpeg 可能因为音轨末尾多出几个采样而给视频补一帧；
+  // 用「各段时长和 - 转场重叠」的理论总长收口，保证音轨和视频严格等长。
+  const total = durations.reduce((sum, secs) => sum + secs, 0) - (shotPaths.length - 1) * fadeSeconds
+  if (total <= 0) throw new Error('转场时长比整片还长，没法拼接')
+  args.push(...encoderArgsSync(), '-r', '30', '-t', total.toFixed(6), '-movflags', '+faststart', output)
   await run(FFMPEG, args, { signal })
   return output
 }
 
-/** 按顺序硬接所有镜头。同编码参数，可以直接 copy，不重编码。 */
-export async function concatShots(shotPaths, workDir, output, { signal } = {}) {
+/**
+ * concat 的参数。正常情况同编码参数直接 -c copy；但本轮一旦发生过硬件→CPU 降级，
+ * 镜头里就混着两种编码器编出来的流，直接 copy 拼出来的片子部分播放器解不开，
+ * 这时改成用当前编码参数重编码一遍。导出成小函数是为了能直接断言参数构造。
+ */
+export function buildConcatArgs(listFile, output, { hardwareBroken = isHardwareBroken() } = {}) {
+  const args = ['-y', '-hide_banner', '-loglevel', 'error',
+    '-f', 'concat', '-safe', '0', '-i', listFile]
+  if (hardwareBroken) {
+    args.push(...encoderArgsSync(), '-c:a', 'aac', '-b:a', '128k', '-ar', '44100', '-ac', '2')
+  } else {
+    args.push('-c', 'copy')
+  }
+  args.push('-movflags', '+faststart', output)
+  return args
+}
+
+/**
+ * 拼接参数：本轮若发生过硬件→CPU 降级（forceReencode），就必须重编码，
+ * 不能等 isHardwareBroken() 的全局 TTL——长渲染跑过 30 分钟后 TTL 会过期，
+ * 全局标记变回 false，但这一版镜头确实混了两种编码器编出来的流。导出成小函数是为了能直接断言。
+ */
+export function shotConcatArgs(listFile, output, { forceReencode = false } = {}) {
+  return buildConcatArgs(listFile, output, { hardwareBroken: Boolean(forceReencode) || isHardwareBroken() })
+}
+
+/** 按顺序硬接所有镜头。同编码参数时直接 copy，不重编码；本轮降级过则统一重编码。 */
+export async function concatShots(shotPaths, workDir, output, { signal, forceReencode } = {}) {
   const listFile = join(workDir, 'concat.txt')
   const lines = shotPaths.map(path => `file '${path.replace(/'/g, "'\\''")}'`)
   await writeFile(listFile, `${lines.join('\n')}\n`, 'utf8')
-  await run(FFMPEG, [
-    '-y', '-hide_banner', '-loglevel', 'error',
-    '-f', 'concat', '-safe', '0', '-i', listFile,
-    '-c', 'copy', '-movflags', '+faststart', output,
-  ], { signal })
+  await run(FFMPEG, shotConcatArgs(listFile, output, { forceReencode }), { signal })
   return output
 }
 
@@ -296,9 +376,13 @@ function srtTime(seconds) {
  */
 /** 每段片子在成片里占多长：音频时长 + 一点点尾巴，和 renderShot 保持一致。 */
 export const SEGMENT_TAIL = 0.25
+/** 视频固定 30fps，段长必须落在整帧上，否则 -t 编出的帧数和字幕时间轴对不上。 */
+const FPS = 30
 
 export function segmentSpan(audioSecs) {
-  return Math.max(0.8, Number(audioSecs) || 0) + SEGMENT_TAIL
+  const raw = Math.max(0.8, Number(audioSecs) || 0) + SEGMENT_TAIL
+  // 量化到整帧：renderShot 的 -t 和 layoutCues 共用这个值，半帧误差不会逐段累积
+  return Math.max(2, Math.round(raw * FPS)) / FPS
 }
 
 /**

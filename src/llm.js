@@ -1,7 +1,7 @@
 // 调 DeepSeek Harness 当前默认模型，不单独配置密钥。
 // 模型不可用时抛错，由调用方决定降级——不静默返回半成品。
 import { randomUUID } from 'node:crypto'
-import { appendFile } from 'node:fs/promises'
+import { appendFile, mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -33,27 +33,56 @@ export function resolveModel(ctx, route) {
 function logModelFailure(info, err) {
   try {
     const dir = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'sound-picture-desk')
+    const failure = err?.failure && typeof err.failure === 'object' ? err.failure : {}
     const line = JSON.stringify({
       at: new Date().toISOString(),
       provider: info?.provider,
       model: info?.model,
       message: err?.message,
+      // DSH 把适配器异常归一成 finish 帧，真正的失败原因在 code/status 里
+      code: err?.code ?? failure.code ?? null,
+      status: err?.status ?? failure.status ?? null,
+      // 只留可诊断字段，不整包记 failure（里面可能带请求细节）
+      failure: failure.code || failure.message
+        ? {
+            code: failure.code ?? null,
+            status: failure.status ?? null,
+            message: String(failure.message ?? '').slice(0, 500),
+          }
+        : null,
       cause: err?.cause?.code || err?.cause?.message || null,
       stack: String(err?.stack || '').slice(0, 4000),
     }) + '\n'
-    appendFile(join(dir, 'model-errors.log'), line).catch(() => {})
+    // 目录第一次写入时还不存在：先建目录，否则日志会静默丢失
+    mkdir(dir, { recursive: true })
+      .then(() => appendFile(join(dir, 'model-errors.log'), line))
+      .catch(() => {})
   } catch {}
 }
 
+/**
+ * DSH 归一化后的失败码优先判：适配器异常会变成 finish 帧，
+ * code 是 provider 无关的稳定判据（deepseek: TIMEOUT/TRANSPORT，pi-ai 之类会给 STREAM_CLOSED）。
+ */
+const TRANSIENT_CODES = new Set([
+  'TRANSPORT', 'TIMEOUT', 'STREAM_CLOSED', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT',
+  'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'ENETDOWN', 'ENETUNREACH', 'EHOSTUNREACH',
+])
+
 /** 网络/连接类错误重试；模型自身返回 4xx、内容不合格不重试。 */
 function transientModelError(err) {
+  // finish 帧：失败码在 code（可能来自 failure），先按 code 判定
+  const code = String(err?.code ?? err?.failure?.code ?? '').trim().toUpperCase()
+  if (TRANSIENT_CODES.has(code) || code.startsWith('UND_ERR')) return true
+  // 老路径（fetch 直抛的错误）没有归一化 code，仍按文本兜底
   const text = [
     err?.message,
+    err?.failure?.message,
     err?.cause?.code,
     err?.cause?.message,
     err?.cause?.cause?.code,
   ].filter(Boolean).join(' ')
-  return /ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|UND_ERR|fetch failed|Request timed out|socket hang up|network/i.test(text)
+  return /ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|UND_ERR|fetch failed|Request timed out|stream idle timeout|socket hang up|network/i.test(text)
 }
 
 /**
@@ -91,10 +120,20 @@ export async function callModel(ctx, { system, user, maxTokens = 8000, signal, r
         reasoningChars += String(chunk.text ?? '').length
       }
       else if (chunk.type === 'finish') {
-        if (['error', 'aborted'].includes(chunk.reason?.kind)) {
-          throw new Error(chunk.reason.failure?.message || '模型调用失败')
+        const reason = chunk.reason ?? {}
+        if (['error', 'aborted'].includes(reason.kind)) {
+          // DSH 会把适配器异常归一成 finish 帧：failure 里的 code/status 不能丢，
+          // 重试判断、model-errors.log 和上层的中文提示都要靠它
+          const failure = reason.failure && typeof reason.failure === 'object' ? reason.failure : {}
+          const err = new Error(failure.message || '模型调用失败')
+          if (failure.code) err.code = failure.code
+          if (failure.status != null) err.status = failure.status
+          err.failure = failure
+          // 被调用方/适配器中止：上层按 AbortError 映射成「已停止 / 超时」提示
+          if (reason.kind === 'aborted') err.name = 'AbortError'
+          throw err
         }
-        stopped = chunk.reason?.kind ?? null
+        stopped = reason.kind ?? null
       }
       // 光想不写的模型会一直烧预算：思考量到了还没落笔，就提前叫停，别让用户干等十几分钟
       if (textChars === 0 && reasoningChars > 15000) {

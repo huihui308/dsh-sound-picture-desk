@@ -99,10 +99,16 @@ export async function resolveEncoder() {
   return cached
 }
 
-/** 给界面看的：本机用什么编码，探测过了没有。 */
+/** 给界面看的：本机用什么编码，探测过了没有，以及硬件是不是刚翻过车。 */
 export async function encoderInfo() {
   const enc = await resolveEncoder()
-  return { id: enc.id, label: enc.label, hardware: Boolean(enc.hardware), forced: Boolean(enc.forced) }
+  return {
+    id: enc.id,
+    label: enc.label,
+    hardware: Boolean(enc.hardware),
+    forced: Boolean(enc.forced),
+    ...hardwareBrokenInfo(),
+  }
 }
 
 /** 编码参数片段；硬件编码统一给它自己的参数，CPU 走 x264。 */
@@ -126,28 +132,53 @@ export function maxParallelSessions() {
   return 6
 }
 
-/** 硬件编码中途翻车时把这一轮降级到 CPU，避免整条片子失败。 */
-let hardwareBroken = false
+/**
+ * 硬件编码中途翻车时把这一轮降级到 CPU，避免整条片子失败。
+ * 记录带时间戳而不是永久布尔：驱动升级 / 设备恢复后不必重启进程，
+ * TTL 到期自动允许再试硬件（30 分钟足够覆盖一条片子的重试窗口）。
+ */
+const HARDWARE_BROKEN_TTL_MS = 30 * 60 * 1000
+let hardwareBrokenAt = 0
+let hardwareBrokenReason = null
+
+/** 故障还在有效期内才返回 true；过期视为可以重新尝试硬件。 */
+export function isHardwareBroken() {
+  return hardwareBrokenAt > 0 && Date.now() - hardwareBrokenAt < HARDWARE_BROKEN_TTL_MS
+}
+
+/** 硬件故障状态，供 encoderInfo 暴露给界面；没坏或已过期时字段为 null。 */
+function hardwareBrokenInfo() {
+  const broken = isHardwareBroken()
+  return {
+    broken,
+    brokenReason: broken ? hardwareBrokenReason : null,
+    brokenAt: broken ? new Date(hardwareBrokenAt).toISOString() : null,
+  }
+}
 
 export function markHardwareBroken(reason) {
-  if (hardwareBroken) return
-  hardwareBroken = true
-  console.warn(`[sound-picture-desk] 硬件编码不可用，本轮改用 CPU：${String(reason).slice(0, 160)}`)
+  // 有效期内只告警一次，避免每个镜头都刷一行日志；TTL 过期后再翻车会重新计时并告警
+  if (isHardwareBroken()) return
+  hardwareBrokenAt = Date.now()
+  hardwareBrokenReason = String(reason ?? '').slice(0, 160) || null
+  console.warn(`[sound-picture-desk] 硬件编码不可用，改用 CPU（${HARDWARE_BROKEN_TTL_MS / 60000} 分钟内不再尝试硬件）：${hardwareBrokenReason ?? '未知原因'}`)
 }
 
-export function isHardwareBroken() {
-  return hardwareBroken
+/** 手动清掉故障 latch：换了驱动/硬件后不必等 TTL，也方便测试。 */
+export function resetHardwareBroken() {
+  hardwareBrokenAt = 0
+  hardwareBrokenReason = null
 }
 
-/** 当前该用的编码参数：翻过车就固定走 CPU。 */
+/** 当前该用的编码参数：故障有效期内走 CPU。 */
 export function activeEncoderArgs() {
-  if (hardwareBroken) return CPU.args
+  if (isHardwareBroken()) return CPU.args
   return (cached ?? CPU).args
 }
 
 /** 已经探测过的结果，同步取用（渲染循环里避免重复 await 探测）。 */
 export function encoderArgsSync() {
-  if (hardwareBroken) return CPU.args
+  if (isHardwareBroken()) return CPU.args
   return (cached ?? CPU).args
 }
 

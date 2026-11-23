@@ -27,7 +27,11 @@ export const PLATFORMS = {
   },
 }
 
-const URL_RE = /https?:\/\/[^\s]+/g
+// URL 字符类要排除空白、CJK 与全角标点：否则「看这里https://example.com/abc很好」
+// 会把「很好」一起吞进 URL 按 23 计，而它们实际按 2/字计。
+const URL_RE = /https?:\/\/[^\s\u3000-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]+/g
+// 紧挨 URL 的英文标点不属于 URL，留在原文里按普通字符计重
+const URL_TAIL_RE = /[.,;:!?'")\]]+$/
 // 中日韩文字与全角标点：X 按 2 计重
 const CJK_RE = /[\u1100-\u11FF\u2E80-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]/
 
@@ -45,9 +49,10 @@ export function weightedLength(value) {
   let total = 0
   let last = 0
   for (const match of text.matchAll(URL_RE)) {
+    const url = match[0].replace(URL_TAIL_RE, '')
     total += plainWeight(text.slice(last, match.index))
     total += 23
-    last = match.index + match[0].length
+    last = match.index + url.length
   }
   total += plainWeight(text.slice(last))
   return total

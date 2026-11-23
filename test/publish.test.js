@@ -12,6 +12,15 @@ test('X 加权长度按官方口径', () => {
   assert.equal(weightedLength('😀'), 2)
 })
 
+test('X 加权长度：URL 不吃相邻中文/全角标点，尾部英文标点不计进 URL', () => {
+  // 中文紧贴 URL：后面两个字按 2/字计，不能被一起吞进 URL 按 23 计
+  assert.equal(weightedLength('看这里https://example.com/abc很好'), 33)
+  // 全角句号不能算 URL 的一部分
+  assert.equal(weightedLength('见 https://example.com/abc。下一句'), 34)
+  // URL 尾部的英文句点留在原文按 1 计
+  assert.equal(weightedLength('看 https://example.com/abc. 好'), 30)
+})
+
 test('小红书标题与正文限制', () => {
   const good = validateCopy('xiaohongshu', {
     title: '玄武门那一夜，李世民到底赌赢了什么',

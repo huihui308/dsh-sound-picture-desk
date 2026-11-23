@@ -379,10 +379,14 @@ window.__ModuleLoader__.load({
       const [chatInput, setChatInput] = useState('')
       const [sending, setSending] = useState(false)
       const timer = useRef(null)
+      // 轮询和手动刷新会同时存在：只让最后一次请求的响应落到页面上，旧响应晚回来不能盖新数据
+      const loadSeq = useRef(0)
 
       const load = useCallback(async () => {
+        const seq = ++loadSeq.current
         try {
           const next = await api('state')
+          if (seq !== loadSeq.current) return null
           setData(next)
           setError(null)
           setCurrentId(prev => {
@@ -391,6 +395,7 @@ window.__ModuleLoader__.load({
           })
           return next
         } catch (err) {
+          if (seq !== loadSeq.current) return null
           setError(err.message)
           return null
         }
@@ -482,16 +487,17 @@ window.__ModuleLoader__.load({
         h('style', null, STYLE),
         h('div', { className: 'sd-root' },
           h(Rail, {
-            items: data.items, currentId, onPick: setCurrentId,
-            onCreate: () => setCreating(true),
-            onDelete: item => setPendingDelete(item),
+            items: data.items, currentId, onPick: id => { setNotice(null); setCurrentId(id) },
+            onCreate: () => { setNotice(null); setCreating(true) },
+            onDelete: item => { setNotice(null); setPendingDelete(item) },
             trashCount: data.trashCount ?? 0,
             onOpenTrash: () => setTrashOpen(true),
           }),
           h('div', { className: 'sd-pane' },
             current
               ? h(Project, {
-                  item: current, data, busy, notice,
+                  // key 用项目 id：切项目时整棵子树重挂，各页本地状态（草稿/封面大字/大图）不残留
+                  key: current.id, item: current, data, busy, notice,
                   onAction: run, onReload: load, onSettings: () => setSettingsOpen(true),
                 })
               : h(EmptyState, { onCreate: () => setCreating(true), model: data.model })),
@@ -500,6 +506,8 @@ window.__ModuleLoader__.load({
             item: pendingDelete,
             days: data.trashDays ?? 7,
             busy: deletingBusy,
+            // 失败提示就地显示：Project 头部的 notice 会被遮罩盖住
+            error: notice?.tone === 'error' ? notice.text : null,
             onCancel: () => setPendingDelete(null),
             onConfirm: async () => {
               setDeletingBusy(true)
@@ -509,7 +517,7 @@ window.__ModuleLoader__.load({
                 // 删的正好是当前打开的项目，就回到空状态
                 if (pendingDelete.id === currentId) setCurrentId(null)
                 await load()
-                setNotice('已移入回收站，7 天内可还原')
+                setNotice(`已移入回收站，${data.trashDays ?? 7} 天内可还原`)
               } catch (err) {
                 setNotice({ tone: 'error', text: err.message })
               } finally {
@@ -526,6 +534,8 @@ window.__ModuleLoader__.load({
             onSaved: async () => { await load(); setSettingsOpen(false) },
           }) : null,
           creating ? h(NewDialog, {
+            // 创建失败时就地提示，不用去头部找被遮罩盖住的 notice
+            error: notice?.tone === 'error' ? notice.text : null,
             onClose: () => setCreating(false),
             onCreate: async payload => {
               try {
@@ -688,18 +698,19 @@ window.__ModuleLoader__.load({
     /** 按当前画面比例给一组常用出图尺寸。 */
     function resolutionPresets(settings) {
       const portrait = Number(settings.imageHeight) >= Number(settings.imageWidth)
+      // 服务端会把长边 clamp 到 2048：预设不能超，否则保存后被夹住、下拉也选不回来
       return portrait
         ? [
           { w: 720, h: 1280, note: '快' },
           { w: 1024, h: 1792, note: '标准' },
-          { w: 1152, h: 2048, note: '更清晰' },
-          { w: 1440, h: 2560, note: '高清，慢' },
+          { w: 1080, h: 1920, note: '高清' },
+          { w: 1152, h: 2048, note: '最高' },
         ]
         : [
           { w: 1280, h: 720, note: '快' },
           { w: 1792, h: 1024, note: '标准' },
-          { w: 2048, h: 1152, note: '更清晰' },
-          { w: 2560, h: 1440, note: '高清，慢' },
+          { w: 1920, h: 1080, note: '高清' },
+          { w: 2048, h: 1152, note: '最高' },
         ]
     }
 
@@ -1089,13 +1100,43 @@ window.__ModuleLoader__.load({
       const [refs, setRefs] = useState(() => (item.references ?? []).map(row => row.url).join('\n'))
       const [modelKey, setModelKey] = useState(item.model ? `${item.model.provider}|${item.model.model}` : '')
       const [saving, setSaving] = useState(false)
+      const [error, setError] = useState(null)
+      // 原始材料可能有 20 万字，不进 /state：打开页面时单独拉；没拉到之前不能拿空串去覆盖服务端
+      const [rawLoaded, setRawLoaded] = useState(false)
+      // 原始材料拉取失败时给个提示：本次保存不带 rawText，不会拿空串冲掉服务端材料
+      const [rawLoadError, setRawLoadError] = useState(null)
+      const [rawBase, setRawBase] = useState('')
+      const savePromiseRef = useRef(null)
       const running = Boolean(item.task?.running)
+
+      // 服务端每次轮询都返回新数组/新对象：依赖它们的身份会把用户正在输入的内容重置回旧值，改成稳定字符串
+      const serverRefsKey = (item.references ?? []).map(row => row.url).join('\n')
+      const serverModelKey = item.model ? `${item.model.provider}|${item.model.model}` : ''
 
       useEffect(() => { setTopic(item.topic ?? '') }, [item.topic])
       useEffect(() => { setMinutes(item.targetMinutes ?? 5) }, [item.targetMinutes])
-      useEffect(() => { setRaw(item.rawText ?? '') }, [item.rawText])
-      useEffect(() => { setRefs((item.references ?? []).map(row => row.url).join('\n')) }, [item.references])
-      useEffect(() => { setModelKey(item.model ? `${item.model.provider}|${item.model.model}` : '') }, [item.model])
+      useEffect(() => { setRefs(serverRefsKey) }, [serverRefsKey])
+      useEffect(() => { setModelKey(serverModelKey) }, [serverModelKey])
+
+      // 原始材料不在 /state 里（材料可能有 20 万字），按项目单独拉一次
+      useEffect(() => {
+        let alive = true
+        setRawLoadError(null)
+        post('item-raw', { id: item.id })
+          .then(body => {
+            if (!alive) return
+            setRaw(body?.rawText ?? '')
+            setRawBase(body?.rawText ?? '')
+            setRawLoaded(true)
+            setRawLoadError(null)
+          })
+          .catch(() => {
+            // 拉不到就保持未加载：保存时不提交 rawText，免得用空串把服务端材料冲掉
+            if (!alive) return
+            setRawLoadError('原始材料加载失败，本次保存不会改动服务端已存材料；刷新页面重试')
+          })
+        return () => { alive = false }
+      }, [item.id])
 
       // 模型列表：第一项跟随默认，其余按提供商分组；分组标题只是标题，选不中
       const modelRows = useMemo(() => {
@@ -1114,50 +1155,75 @@ window.__ModuleLoader__.load({
       )].slice(0, 12)
 
       const saveInfo = async () => {
-        setSaving(true)
-        try {
-          const [provider, model] = modelKey ? modelKey.split('|') : [null, null]
-          const base = (item.references ?? []).map(row => row.url)
-          const urls = parseRefs()
-          // 链接没变就沿用它抓到的标题，别每次保存都重新抓
-          const references = urls.map(url => {
-            const known = (item.references ?? []).find(row => row.url === url)
-            return known ?? { url, title: '', desc: '', error: null }
-          })
-          await post('item-info', {
-            id: item.id,
-            topic,
-            targetMinutes: Number(minutes) || 5,
-            rawText: raw,
-            references,
-            model: provider && model ? { provider, model } : null,
-          })
-          // 新加的链接抓一次标题，抓到就补上
-          const fresh = references.filter(row => !row.title && !row.error)
-          for (const row of fresh) {
-            try {
-              const info = await post('reference-inspect', { url: row.url })
-              if (info?.title || info?.desc) {
-                row.title = info.title || ''
-                row.desc = info.desc || ''
-                row.error = info.error || null
-              }
-            } catch {
-              // 抓不到不影响使用
-            }
+        // 同一时刻只留一个保存请求：输入框失焦和点「生成稿件」会连着触发，后者等前者回来再按最新输入存一次
+        if (savePromiseRef.current) {
+          try {
+            await savePromiseRef.current
+          } catch {
+            // 上一次失败也继续按最新输入重试
           }
-          if (fresh.length) await post('item-info', { id: item.id, references })
-          await onReload()
+          if (savePromiseRef.current) return false
+        }
+        const run = (async () => {
+          setSaving(true)
+          setError(null)
+          try {
+            const [provider, model] = modelKey ? modelKey.split('|') : [null, null]
+            const urls = parseRefs()
+            // 链接没变就沿用它抓到的标题，别每次保存都重新抓
+            const references = urls.map(url => {
+              const known = (item.references ?? []).find(row => row.url === url)
+              return known ?? { url, title: '', desc: '', error: null }
+            })
+            const payload = {
+              id: item.id,
+              topic,
+              targetMinutes: Number(minutes) || 5,
+              references,
+              model: provider && model ? { provider, model } : null,
+            }
+            // 没拉到原始材料时不要带 rawText：空串会把服务端的长材料冲掉
+            if (rawLoaded) payload.rawText = raw
+            await post('item-info', payload)
+            // 新链接抓一次标题；抓不到也要把 error 落下来，否则每次保存都会重抓失败链接
+            const fresh = references.filter(row => !row.title && !row.error)
+            for (const row of fresh) {
+              try {
+                const info = await post('reference-inspect', { url: row.url })
+                row.title = info?.title || ''
+                row.desc = info?.desc || ''
+                row.error = info?.error || null
+              } catch (err) {
+                row.error = err.message || '抓取失败'
+              }
+            }
+            if (fresh.length) await post('item-info', { id: item.id, references })
+            setRawBase(raw)
+            await onReload()
+            return true
+          } catch (err) {
+            setError(err.message)
+            return false
+          } finally {
+            setSaving(false)
+          }
+        })()
+        savePromiseRef.current = run
+        try {
+          return await run
         } finally {
-          setSaving(false)
+          savePromiseRef.current = null
         }
       }
 
       const dirty = topic !== (item.topic ?? '')
         || Number(minutes) !== (item.targetMinutes ?? 5)
-        || raw !== (item.rawText ?? '')
-        || refs !== (item.references ?? []).map(row => row.url).join('\n')
-        || modelKey !== (item.model ? `${item.model.provider}|${item.model.model}` : '')
+        || (rawLoaded && raw !== rawBase) // 材料没拉到时不计入，免得把空串当成改动
+        || refs !== serverRefsKey
+        || modelKey !== serverModelKey
+
+      // 离开输入框就自动保存：切页/切项目时不会把这一页的改动静默丢掉
+      const autoSave = () => { if (dirty && !running) saveInfo() }
       const done = tabDone(item, 'idea')
       const refRows = item.references ?? []
 
@@ -1170,6 +1236,7 @@ window.__ModuleLoader__.load({
               className: 'sd-input', value: topic,
               placeholder: '例：九子夺嫡 / 安史之乱 / 一场暴雨是怎么形成的',
               onChange: event => setTopic(event.target.value),
+              onBlur: autoSave,
             })),
           h('div', { className: 'sd-row', style: { gap: 12 } },
             h('div', { className: 'sd-field', style: { flex: 1 } },
@@ -1177,12 +1244,24 @@ window.__ModuleLoader__.load({
               h('input', {
                 className: 'sd-input', type: 'number', min: 1, max: 30, value: minutes,
                 onChange: event => setMinutes(event.target.value),
+                onBlur: autoSave,
               })),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '写稿用哪个模型'),
               h(DropSelect, {
                 value: modelKey, rows: modelRows, label: '写稿用哪个模型',
-                onChange: setModelKey,
+                onChange: async value => {
+                  setModelKey(value)
+                  const [provider, model] = value ? value.split('|') : [null, null]
+                  setError(null)
+                  try {
+                    // 只提交 model 一个字段：item-info 是增量更新，不会碰主题/材料等其他字段
+                    await post('item-info', { id: item.id, model: provider && model ? { provider, model } : null })
+                    await onReload()
+                  } catch (err) {
+                    setError(err.message)
+                  }
+                },
               })),
             h('div', { className: 'sd-field', style: { flex: '0 0 118px' } },
               h('label', null, '稿子口吻'),
@@ -1190,8 +1269,12 @@ window.__ModuleLoader__.load({
               h('select', {
                 className: 'sd-select', value: settings.tone ?? 'storyteller',
                 onChange: async event => {
-                  await post('item-settings', { id: item.id, settings: { tone: event.target.value } })
-                  await onReload()
+                  try {
+                    await post('item-settings', { id: item.id, settings: { tone: event.target.value } })
+                    await onReload()
+                  } catch (err) {
+                    setError(err.message)
+                  }
                 },
               }, (data.tones ?? [{ id: 'storyteller', label: '说书人' }]).map(row =>
                 h('option', { key: row.id, value: row.id }, row.label)))),
@@ -1204,8 +1287,12 @@ window.__ModuleLoader__.load({
                 onBlur: async event => {
                   const value = Math.max(12, Math.min(90, Number(event.target.value) || 40))
                   if (value === segSeconds) return
-                  await post('item-settings', { id: item.id, settings: { segmentSeconds: value } })
-                  await onReload()
+                  try {
+                    await post('item-settings', { id: item.id, settings: { segmentSeconds: value } })
+                    await onReload()
+                  } catch (err) {
+                    setError('保存设置失败：' + err.message)
+                  }
                 },
               }),
               h('div', { className: 'sd-hint', style: { paddingTop: 5 } },
@@ -1217,6 +1304,7 @@ window.__ModuleLoader__.load({
               className: 'sd-input sd-textarea', value: refs, rows: 4,
               placeholder: '一行一个链接。写稿时会照着它们的选题角度、开场节奏学，不会照搬内容。\n例：https://www.douyin.com/video/xxxx',
               onChange: event => setRefs(event.target.value),
+              onBlur: autoSave,
             }),
             refRows.length
               ? h('div', { className: 'sd-refs' },
@@ -1232,7 +1320,13 @@ window.__ModuleLoader__.load({
               className: 'sd-input sd-textarea', value: raw, rows: 5,
               placeholder: '有现成的稿子、笔记或资料就贴进来，它会照着这份材料写，不照抄原句。',
               onChange: event => setRaw(event.target.value),
-            })),
+              onBlur: autoSave,
+            }),
+            rawLoadError
+              ? h('div', { className: 'sd-hint', style: { paddingTop: 5, color: 'var(--dsw-alias-state-warn-primary)' } }, rawLoadError)
+              : null),
+
+          error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, error.startsWith('保存') ? error : '保存失败：' + error) : null,
 
           h('div', { className: 'sd-row', style: { marginTop: 12, gap: 8 } },
             h('button', {
@@ -1244,7 +1338,8 @@ window.__ModuleLoader__.load({
               disabled: busy || running,
               title: running ? '这个项目正在跑任务，等它结束' : undefined,
               onClick: async () => {
-                if (dirty) await saveInfo()
+                // 保存失败就别往下跑，否则会拿服务端的旧材料写稿
+                if (dirty && !(await saveInfo())) return
                 onAction('script', { id: item.id }, null)
               },
             }, '生成稿件'))),
@@ -1329,7 +1424,15 @@ window.__ModuleLoader__.load({
         return h(NeedPrev, { text: '还没有稿子，先写稿再来配音。', label: '去写稿', onGo: () => goTab('scripted') })
       }
 
-      const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
+      const patch = async next => {
+        setError(null)
+        try {
+          await post('item-settings', { id: item.id, settings: next })
+          await onReload()
+        } catch (err) {
+          setError(err.message)
+        }
+      }
 
       // 点一个音色：没试听档就现场合成这一个，然后直接放；有就只选中
       const audition = async voice => {
@@ -1415,15 +1518,19 @@ window.__ModuleLoader__.load({
       const anchors = item.anchors ?? []
       const [busyId, setBusyId] = useState(null)
       const [viewed, setViewed] = useState(null)
+      const [error, setError] = useState(null)
       const task = item.task
       const drawing = task?.running && task.kind === 'anchor'
       const approvedCount = anchors.filter(row => row.approved).length
 
       const call = async (path, payload, id) => {
         setBusyId(id ?? 'extract')
+        setError(null)
         try {
           await post(path, payload)
           await onReload()
+        } catch (err) {
+          setError(err.message)
         } finally {
           setBusyId(null)
         }
@@ -1444,6 +1551,7 @@ window.__ModuleLoader__.load({
               ? h('span', { className: 'sd-hint' }, `已定稿 ${approvedCount}/${anchors.length}`)
               : null,
             drawing ? h('span', { className: 'sd-hint' }, `正在画 ${task.done}/${task.total}`) : null)),
+          error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, '操作失败：' + error) : null,
 
         !anchors.length
           ? h('div', { className: 'sd-empty' },
@@ -1458,15 +1566,17 @@ window.__ModuleLoader__.load({
     function AnchorCard({ item, row, busy, busyId, call, drawing, onZoom }) {
       const [desc, setDesc] = useState(row.desc)
       const [note, setNote] = useState('')
-      const [picked, setPicked] = useState(row.approved || (row.candidates ?? []).slice(-1)[0] || null)
+      const candidates = row.candidates ?? []
+      const [picked, setPicked] = useState(row.approved || candidates.slice(-1)[0] || null)
       const pending = busyId === row.id
+
+      // 候选数组每轮轮询都是新身份：用字符串键，只在内容真变时才重置选择
+      const candidatesKey = candidates.join('|')
 
       useEffect(() => { setDesc(row.desc) }, [row.desc])
       useEffect(() => {
-        setPicked(row.approved || (row.candidates ?? []).slice(-1)[0] || null)
-      }, [row.approved, row.candidates])
-
-      const candidates = row.candidates ?? []
+        setPicked(row.approved || candidates.slice(-1)[0] || null)
+      }, [row.approved, candidatesKey])
 
       return h('div', { className: 'sd-anchor', 'data-approved': row.approved ? '1' : '0' },
         h('div', { className: 'sd-anchor-head' },
@@ -1548,7 +1658,9 @@ window.__ModuleLoader__.load({
       const settings = { ...data.settings, ...(item.settings ?? {}) }
       const samples = item.samples?.style ?? {}
       const styleKeys = Object.keys(samples)
+      const presetKey = resolutionKey(settings)
       const [viewed, setViewed] = useState(null)
+      const [error, setError] = useState(null)
       const task = item.task
       const drawing = task?.running && task.kind === 'style-samples'
       const missing = item.counts.segments - item.counts.imaged
@@ -1557,7 +1669,15 @@ window.__ModuleLoader__.load({
         return h(NeedPrev, { text: '还没有稿子，先写稿再来出图。', label: '去写稿', onGo: () => goTab('scripted') })
       }
 
-      const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
+      const patch = async next => {
+        setError(null)
+        try {
+          await post('item-settings', { id: item.id, settings: next })
+          await onReload()
+        } catch (err) {
+          setError('保存设置失败：' + err.message)
+        }
+      }
 
       return h(React.Fragment, null,
         h('div', { className: 'sd-card-block' },
@@ -1591,7 +1711,7 @@ window.__ModuleLoader__.load({
               h('label', null, '出图分辨率'),
               h('select', {
                 className: 'sd-select',
-                value: resolutionKey(settings),
+                value: presetKey,
                 onChange: event => {
                   const [w, hh] = event.target.value.split('x').map(Number)
                   if (!w || !hh) return
@@ -1601,36 +1721,49 @@ window.__ModuleLoader__.load({
                 resolutionPresets(settings).map(row => h('option', {
                   key: `${row.w}x${row.h}`, value: `${row.w}x${row.h}`,
                 }, `${row.w}×${row.h}${row.note ? `（${row.note}）` : ''}`)),
-                h('option', { value: `custom`, disabled: true }, '—— 自定义 ——'))),
+                // 当前尺寸不命中预设时给一条对应项，否则下拉是空白
+                presetKey ? null : h('option', { key: 'custom', value: '' }, `自定义 ${settings.imageWidth}×${settings.imageHeight}`),
+                h('option', { key: 'custom-hint', value: 'custom', disabled: true }, '—— 自定义 ——'))),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '宽 × 高'),
               h('div', { className: 'sd-row', style: { gap: 6 } },
                 h('input', {
                   key: `iw-${item.id}-${settings.imageWidth}`,
-                  className: 'sd-input', type: 'number', min: 256, max: 4096, step: 8,
+                  className: 'sd-input', type: 'number', min: 256, max: 2048, step: 8,
                   defaultValue: settings.imageWidth,
                   onBlur: async event => {
-                    const w = Math.max(256, Math.min(4096, Number(event.target.value) || 1024))
+                    const w = Math.max(256, Math.min(2048, Number(event.target.value) || 1024))
                     if (w === settings.imageWidth) return
-                    await post('item-settings', { id: item.id, settings: { imageWidth: w } })
-                    await onReload()
+                    setError(null)
+                    try {
+                      await post('item-settings', { id: item.id, settings: { imageWidth: w } })
+                      await onReload()
+                    } catch (err) {
+                      setError('保存设置失败：' + err.message)
+                    }
                   },
                 }),
                 h('span', { className: 'sd-hint', style: { alignSelf: 'center' } }, '×'),
                 h('input', {
                   key: `ih-${item.id}-${settings.imageHeight}`,
-                  className: 'sd-input', type: 'number', min: 256, max: 4096, step: 8,
+                  className: 'sd-input', type: 'number', min: 256, max: 2048, step: 8,
                   defaultValue: settings.imageHeight,
                   onBlur: async event => {
-                    const hh = Math.max(256, Math.min(4096, Number(event.target.value) || 1792))
+                    const hh = Math.max(256, Math.min(2048, Number(event.target.value) || 1792))
                     if (hh === settings.imageHeight) return
-                    await post('item-settings', { id: item.id, settings: { imageHeight: hh } })
-                    await onReload()
+                    setError(null)
+                    try {
+                      await post('item-settings', { id: item.id, settings: { imageHeight: hh } })
+                      await onReload()
+                    } catch (err) {
+                      setError('保存设置失败：' + err.message)
+                    }
                   },
                 }))),
             h('div', { style: { flex: 2, paddingBottom: 6 } },
               h('div', { className: 'sd-hint' },
                 `改分辨率只影响之后出的图，已出的 ${item.counts.imaged} 张不会自动重画。`))),
+          error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, error) : null,
 
           h('div', { className: 'sd-hint', style: { marginTop: 8 } },
             '出图通道：', providerLabel(settings), ' · ',
@@ -1678,8 +1811,9 @@ window.__ModuleLoader__.load({
       const [coverTitle, setCoverTitle] = useState(item.title ?? '')
       const [makingCover, setMakingCover] = useState(false)
       const [coverError, setCoverError] = useState(null)
-      // 没手动选过就用默认：优先定稿参考图，其次第一张分镜图
-      const coverRef = obj => coverRefValue ?? (obj.anchors?.length
+      const [settingsError, setSettingsError] = useState(null)
+      // 没手动选过（或选回默认项的空串）就用默认：优先定稿参考图，其次第一张分镜图
+      const coverRef = obj => coverRefValue || (obj.anchors?.length
         ? `anchor:${(obj.anchors.find(a => a.approved) ?? obj.anchors[0]).id}`
         : (obj.segments.find(seg => seg.imagePath) ? `segment:${obj.segments.find(seg => seg.imagePath).id}` : ''))
       const settings = { ...data.settings, ...(item.settings ?? {}) }
@@ -1693,7 +1827,15 @@ window.__ModuleLoader__.load({
       const ready = item.counts.segments > 0 && missingImage === 0
       const needDub = missingAudio > 0
 
-      const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
+      const patch = async next => {
+        setSettingsError(null)
+        try {
+          await post('item-settings', { id: item.id, settings: next })
+          await onReload()
+        } catch (err) {
+          setSettingsError('保存设置失败：' + err.message)
+        }
+      }
 
       const doExport = async () => {
         setExporting(true)
@@ -1711,6 +1853,7 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('div', { className: 'sd-card-block' },
           h('div', { className: 'sd-block-title' }, '特效'),
+          settingsError ? h('div', { className: 'sd-hint', style: { marginTop: 4, color: 'var(--dsw-alias-state-error-primary)' } }, settingsError) : null,
           h('div', { className: 'sd-row', style: { gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' } },
             h('div', { className: 'sd-field', style: { flex: 1, minWidth: 150 } },
               h('label', null, '运镜'),
@@ -1904,7 +2047,8 @@ window.__ModuleLoader__.load({
     /** 与 src/publish/rules.js 同一口径；改规则时两边一起改。 */
     function xWeightedLength(value) {
       const text = String(value ?? '')
-      const urlPattern = /https?:\/\/[^\s]+/g
+      // URL 遇到空白与中日韩/全角字符就截断，否则紧跟中文的链接会把后面的字吞进 23 里
+      const urlPattern = /https?:\/\/[^\s\u3000-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]+/g
       // 中日韩文字与全角标点按 2 计重
       const cjkPattern = /[\u1100-\u11FF\u2E80-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]/
       const weight = chunk => {
@@ -1917,8 +2061,10 @@ window.__ModuleLoader__.load({
       let total = 0
       let last = 0
       for (const match of text.matchAll(urlPattern)) {
+        // 链接尾部紧贴的 ASCII 标点不属于 URL：URL 仍按 23 计，标点留给普通字符计权
+        const url = match[0].replace(/[.,;:!?'")\]]+$/, '')
         total += weight(text.slice(last, match.index)) + 23
-        last = match.index + match[0].length
+        last = match.index + url.length
       }
       return total + weight(text.slice(last))
     }
@@ -1993,15 +2139,17 @@ window.__ModuleLoader__.load({
       const coverTouchedRef = useRef(false)
       const dirtyRef = useRef(false)
       const draftsRef = useRef(null)
+      // 这批草稿属于哪个项目：卸载兜底保存只能写回它，不能写进切换后的项目
+      const draftsOwnerRef = useRef(item.id)
       const prevVariantsRef = useRef(null)
       const generatingRef = useRef(false)
-      const itemIdRef = useRef(item.id)
-      itemIdRef.current = item.id
       const task = item.task
       const generating = Boolean(task?.running && task.kind === 'publish-copy')
       const revising = Boolean(task?.running && task.kind === 'publish-revise')
       generatingRef.current = generating
       const taskRunning = Boolean(task?.running)
+      // 生成/修订期间输入会被服务端结果覆盖，先锁住，完成后再让用户确认改
+      const inputsLocked = generating || revising || taskRunning
 
       const refresh = useCallback(async () => {
         try {
@@ -2035,16 +2183,36 @@ window.__ModuleLoader__.load({
         const next = view.variants ?? {}
         const prev = prevVariantsRef.current
         prevVariantsRef.current = JSON.parse(JSON.stringify(next))
-        setDrafts(current => {
-          if (!current) return JSON.parse(JSON.stringify(next))
-          const merged = JSON.parse(JSON.stringify(current))
-          for (const platformId of Object.keys(next)) {
-            if (!prev || JSON.stringify(prev[platformId] ?? {}) !== JSON.stringify(next[platformId] ?? {})) {
-              merged[platformId] = JSON.parse(JSON.stringify(next[platformId]))
-            }
+        const current = draftsRef.current
+        if (!current || draftsOwnerRef.current !== item.id) {
+          // 还没草稿（或换了项目）：直接以这个项目的服务端数据为准，并记下草稿归属
+          draftsOwnerRef.current = item.id
+          setDrafts(JSON.parse(JSON.stringify(next)))
+          return
+        }
+        const merged = JSON.parse(JSON.stringify(current))
+        const keptLabels = []
+        for (const platformId of Object.keys(next)) {
+          const nextKey = JSON.stringify(next[platformId] ?? {})
+          const localKey = JSON.stringify(current[platformId] ?? {})
+          if (localKey === nextKey) continue // 本地和服务端一致，不用动
+          const changed = !prev || JSON.stringify(prev[platformId] ?? {}) !== nextKey
+          if (!changed) continue // 服务端没变，本地草稿保留
+          if (prev && JSON.stringify(prev[platformId] ?? {}) !== localKey) {
+            // 服务端这个平台变了、本地也还有未保存修改：保留本地并提示，不能一覆盖了之
+            const label = (view.platforms ?? []).find(row => row.id === platformId)?.label ?? platformId
+            keptLabels.push(label)
+            continue
           }
-          return merged
-        })
+          merged[platformId] = JSON.parse(JSON.stringify(next[platformId]))
+        }
+        setDrafts(merged)
+        if (keptLabels.length) {
+          setNote({
+            tone: 'warn',
+            text: `生成结果已更新；本次保留你对「${keptLabels.join('、')}」的未保存修改，确认后可点「保存」覆盖服务端。`,
+          })
+        }
       }, [variantsKey])
 
       const draftsSafe = drafts ?? {}
@@ -2068,6 +2236,15 @@ window.__ModuleLoader__.load({
           next[platformId] = { ...(next[platformId] ?? {}), ...patch }
           return next
         })
+      }
+
+      // 服务端已经采用/回滚了提案：本地草稿与「上一次服务端值」都对齐到新版本。
+      // 不这样做的话，合并 effect 会把旧草稿当成「本地未保存修改」保留，
+      // 切页时的卸载兜底保存又会把旧草稿写回服务端，覆盖刚采用的修订。
+      const syncDraftsFromServer = publish => {
+        const synced = JSON.parse(JSON.stringify(publish?.variants ?? {}))
+        prevVariantsRef.current = synced
+        setDrafts(synced)
       }
 
       const save = async () => {
@@ -2097,13 +2274,18 @@ window.__ModuleLoader__.load({
         if (dirty && !saving && !generating && !taskRunning) save()
       }
 
-      // 切走页签/关闭页面时兜底保存，兜住「打了字直接切页」的常见路径
+      // 切走页签/切项目时兜底保存，兜住「打了字直接切页」的常见路径。
+      // 草稿只写回它所属的项目：切项目时项目树整棵重挂，A 的草稿绝不能写进 B 的 publish.json
       useEffect(() => () => {
+        if (draftsOwnerRef.current !== item.id) return
         if (!dirtyRef.current || generatingRef.current) return
         const payload = draftsRef.current
         if (!payload) return
-        post('publish/save', { id: itemIdRef.current, targets: ['xiaohongshu', 'x'], variants: payload }).catch(() => {})
-      }, [])
+        post('publish/save', { id: item.id, targets: ['xiaohongshu', 'x'], variants: payload }).catch(() => {})
+      }, [item.id])
+
+      // 换项目后旧的 dirty 标记作废，避免新项目首帧被误判成有未保存改动
+      useEffect(() => { dirtyRef.current = false }, [item.id])
 
       const addTag = () => {
         const tag = tagInput.trim().replace(/^#+/, '').trim()
@@ -2290,6 +2472,7 @@ window.__ModuleLoader__.load({
         if (dirtyScopes.length && !window.confirm('你在提案生成后又改过' + dirtyScopes.join('、') + '，采用会覆盖这些未保存的修改，继续？')) return
         setRevisionBusy(true)
         setNote(null)
+        let coverWarn = null
         try {
           const payload = { id: item.id, revisionId: proposed.id }
           if (proposed.scope.includes('coverText')) payload.coverTextIndex = coverChoice
@@ -2299,6 +2482,7 @@ window.__ModuleLoader__.load({
           } catch (err) {
             if (/已经改过/.test(err.message)) {
               if (!window.confirm(err.message + '，仍要采用吗？')) return
+              // 409 后强制重试：成功同样走下面的「对齐草稿」
               body = await post('publish/revise/apply', { ...payload, force: true })
             } else {
               throw err
@@ -2306,10 +2490,16 @@ window.__ModuleLoader__.load({
           }
           let next = body.publish
           const nextTitle = next?.variants?.xiaohongshu?.title
+          // 到这一步提案已经写回服务端了。封面同步失败不能把整个「采用」算失败：
+          // 否则弹窗还挂着旧提案，再点「采用」只会收到「已经处理过了」（死锁）
           if (proposed.scope.includes('title') && nextTitle && next?.cover?.path && next?.cover?.textSource !== 'manual') {
             if (window.confirm('标题已改，要把封面大字同步成新标题吗？')) {
-              const coverBody = await post('publish/cover', { id: item.id, title: nextTitle, textSource: 'auto' })
-              next = coverBody.publish
+              try {
+                const coverBody = await post('publish/cover', { id: item.id, title: nextTitle, textSource: 'auto' })
+                next = coverBody.publish
+              } catch (err) {
+                coverWarn = '提案已采用，但封面同步失败：' + err.message
+              }
             }
           }
           if (proposed.scope.includes('coverText')) {
@@ -2319,8 +2509,11 @@ window.__ModuleLoader__.load({
             setCoverTitle(next.cover.title)
           }
           setView(next)
+          // 本地草稿与合并基线一起对齐到采用后的服务端版本：
+          // 否则合并 effect 会把旧草稿当「本地未保存」保留，卸载兜底保存再写回服务端覆盖修订
+          syncDraftsFromServer(next)
           setCoverChoice(0)
-          setNote({ tone: 'ok', text: '已采用修改提案' })
+          setNote(coverWarn ? { tone: 'warn', text: coverWarn } : { tone: 'ok', text: '已采用修改提案' })
         } catch (err) {
           setNote({ tone: 'error', text: err.message })
         } finally {
@@ -2334,6 +2527,7 @@ window.__ModuleLoader__.load({
         try {
           const body = await post('publish/revise/discard', { id: item.id, revisionId: proposed.id })
           setView(body.publish)
+          syncDraftsFromServer(body.publish)
           setNote({ tone: 'ok', text: '已保留原样' })
         } catch (err) {
           setNote({ tone: 'error', text: err.message })
@@ -2356,6 +2550,7 @@ window.__ModuleLoader__.load({
         try {
           const body = await post('publish/revise/revert', { id: item.id, revisionId })
           setView(body.publish)
+          syncDraftsFromServer(body.publish)
           setHistoryOpen(false)
           setNote({ tone: 'ok', text: '已回滚' })
         } catch (err) {
@@ -2370,10 +2565,12 @@ window.__ModuleLoader__.load({
         setCoverBusy(true)
         setNote(null)
         try {
+          // 换底图/排版时带上正在编辑的封面大字，别用旧的 view.cover.title 把刚改的字顶回去
+          const edited = coverTitle.trim()
           const body = await post('publish/cover', {
             id: item.id,
-            title: view.cover?.title || coverTitle,
-            textSource: view.cover?.textSource || 'auto',
+            title: coverTouchedRef.current ? edited : (view.cover?.title || edited),
+            textSource: coverTouchedRef.current ? 'manual' : (view.cover?.textSource || 'auto'),
             ...patch,
           })
           setView(body.publish)
@@ -2431,6 +2628,8 @@ window.__ModuleLoader__.load({
           h('input', {
             className: 'sd-input', value: xhs.title ?? '', maxLength: 120,
             placeholder: '20 字以内，带钩子',
+            disabled: inputsLocked,
+            style: inputsLocked ? { opacity: .6 } : undefined,
             onChange: event => patchDraft('xiaohongshu', { title: event.target.value }),
             onBlur: autoSave,
           })),
@@ -2443,8 +2642,10 @@ window.__ModuleLoader__.load({
               onClick: () => openFeedback('body'),
             }, '提意见')),
           h('textarea', {
-            className: 'sd-text', value: xhs.body ?? '', rows: 6, style: { minHeight: 132 },
+            className: 'sd-text', value: xhs.body ?? '', rows: 6,
+            style: { minHeight: 132, ...(inputsLocked ? { opacity: .6 } : null) },
             placeholder: '300–600 字，分段写',
+            disabled: inputsLocked,
             onChange: event => patchDraft('xiaohongshu', { body: event.target.value }),
             onBlur: autoSave,
           })),
@@ -2465,6 +2666,8 @@ window.__ModuleLoader__.load({
             h('input', {
               value: tagInput,
               placeholder: '输入话题，回车添加',
+              disabled: inputsLocked,
+              style: inputsLocked ? { opacity: .6 } : undefined,
               onChange: event => setTagInput(event.target.value),
               onBlur: autoSave,
               onKeyDown: event => {
@@ -2496,8 +2699,10 @@ window.__ModuleLoader__.load({
           dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
           h('textarea', {
-            className: 'sd-text', value: xDraft.text ?? '', rows: 5, style: { minHeight: 112 },
+            className: 'sd-text', value: xDraft.text ?? '', rows: 5,
+            style: { minHeight: 112, ...(inputsLocked ? { opacity: .6 } : null) },
             placeholder: '一条 280 加权字符以内的帖子，话题内联',
+            disabled: inputsLocked,
             onChange: event => patchDraft('x', { text: event.target.value }),
             onBlur: autoSave,
           })),
@@ -2560,7 +2765,11 @@ window.__ModuleLoader__.load({
                 h('input', {
                   className: 'sd-input', value: coverTitle, maxLength: 40,
                   onChange: event => { coverTouchedRef.current = true; setCoverTitle(event.target.value) },
-                })),
+                }),
+                coverTouchedRef.current && coverTitle.trim() !== (view.cover?.title ?? '')
+                  ? h('div', { className: 'sd-hint', style: { color: 'var(--dsw-alias-state-warn-primary)' } },
+                    '封面大字还没生成：改完要点上面的「重新生成」才会生效，预览里仍是旧大字。')
+                  : null),
               h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
                 h('button', {
                   className: 'sd-btn', 'data-kind': view.cover?.path ? undefined : 'primary', type: 'button',
@@ -2783,11 +2992,19 @@ window.__ModuleLoader__.load({
         head,
         platformTabs,
         note ? h('div', {
-          className: note.tone === 'error' ? 'sd-pub-error' : 'sd-pub-ok',
-          style: { marginTop: 8 },
+          className: note.tone === 'error' ? 'sd-pub-error' : note.tone === 'warn' ? 'sd-pub-note' : 'sd-pub-ok',
+          style: { marginTop: 8, ...(note.tone === 'warn' ? { color: 'var(--dsw-alias-state-warn-primary)' } : null) },
         }, note.text) : null,
         (generating || revising) && task ? h('div', { className: 'sd-pub-note', style: { marginTop: 6 } },
           (task.message || '正在处理…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
+        generating ? h('div', { className: 'sd-pub-note', style: { marginTop: 4, color: 'var(--dsw-alias-state-warn-primary)' } },
+          '生成中：完成后会覆盖「' + platformLabel(activePlatform) + '」当前文案，先别改输入框。') : null,
+        revising ? h('div', { className: 'sd-pub-note', style: { marginTop: 4, color: 'var(--dsw-alias-state-warn-primary)' } },
+          '修订提案生成中：结果先预览，采用后才会写回文案。') : null,
+        taskRunning && !generating && !revising
+          ? h('div', { className: 'sd-pub-note', style: { marginTop: 4, color: 'var(--dsw-alias-state-warn-primary)' } },
+            '项目正在跑任务，发布页文案暂时只能看不能改，等任务结束再编辑。')
+          : null,
         !task?.running && task?.error && (task.kind === 'publish-copy' || task.kind === 'publish-revise')
           ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, '处理失败：' + task.error)
           : null,
@@ -2818,7 +3035,10 @@ window.__ModuleLoader__.load({
       const [text, setText] = useState(seg.text)
       const [prompt, setPrompt] = useState(seg.imagePrompt)
       const [note, setNote] = useState('')
+      const [saveError, setSaveError] = useState(null)
       const dirty = mode === 'script' && (text !== seg.text || prompt !== seg.imagePrompt)
+      // 图页没有保存按钮：输入框里的提示词和上次保存的不同，就还算未保存
+      const imageDirty = mode === 'image' && prompt !== seg.imagePrompt
 
       useEffect(() => { setText(seg.text) }, [seg.text])
       useEffect(() => { setPrompt(seg.imagePrompt) }, [seg.imagePrompt])
@@ -2828,9 +3048,11 @@ window.__ModuleLoader__.load({
         try {
           // 只提交本段，避免两段连着保存时用旧快照盖掉前一段的改动
           await post('segments', { id: item.id, segment: { id: seg.id, text, imagePrompt: prompt } })
+          setSaveError(null)
           await onReload()
-        } catch {
-          // 保存失败时保留输入，不闪回旧稿
+        } catch (err) {
+          // 保存失败时保留输入，不闪回旧稿；但错误得让用户看见
+          setSaveError('保存失败：' + err.message + '，请重试')
         }
       }, [dirty, item, seg.id, text, prompt, onReload])
 
@@ -2855,7 +3077,7 @@ window.__ModuleLoader__.load({
             voiced ? h('span', { className: 'sd-tag', 'data-tone': 'ok' }, formatSecs(seg.audioSecs)) : h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未配音'),
             // 「未出图」同样是分镜图页的事，别的页不挂这个状态
             mode === 'image' && !seg.imagePath ? h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未出图') : null,
-            dirty ? h('span', { className: 'sd-tag' }, '未保存') : null,
+            dirty || imageDirty ? h('span', { className: 'sd-tag' }, '未保存') : null,
             seg.error ? h('span', { className: 'sd-tag', 'data-tone': 'warn', title: seg.error }, '出错了') : null),
 
           mode === 'script'
@@ -2882,8 +3104,14 @@ window.__ModuleLoader__.load({
               onChange: event => setPrompt(event.target.value),
               onBlur: async () => {
                 if (prompt === seg.imagePrompt) return
-                await post('segments', { id: item.id, segment: { id: seg.id, imagePrompt: prompt } })
-                await onReload()
+                try {
+                  await post('segments', { id: item.id, segment: { id: seg.id, imagePrompt: prompt } })
+                  setSaveError(null)
+                  await onReload()
+                } catch (err) {
+                  // 失败也保留「未保存」提示，别让用户以为已经存上了
+                  setSaveError('保存失败：' + err.message + '，请重试')
+                }
               },
             })
             : null,
@@ -2923,6 +3151,10 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-warn-primary)', wordBreak: 'break-word' } }, seg.error)
             : null,
 
+          saveError
+            ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-error-primary)', wordBreak: 'break-word' } }, saveError)
+            : null,
+
           mode === 'image' && seg.imageSize
             ? h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .7 } }, `实际尺寸 ${seg.imageSize}`)
             : null,
@@ -2943,27 +3175,31 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ 新建
 
-    function NewDialog({ onClose, onCreate }) {
+    function NewDialog({ error, onClose, onCreate }) {
       const [topic, setTopic] = useState('')
       const [minutes, setMinutes] = useState(5)
       const [rawText, setRawText] = useState('')
       const [showRaw, setShowRaw] = useState(false)
       const [busy, setBusy] = useState(false)
-      const [error, setError] = useState(null)
+      const [formError, setFormError] = useState(null)
+      const boxRef = useRef(null)
+      useDialog(onClose, boxRef)
 
       const submit = async () => {
-        if (!topic.trim()) { setError('先写一个主题或书名'); return }
+        if (!topic.trim()) { setFormError('先写一个主题或书名'); return }
         setBusy(true)
-        setError(null)
+        setFormError(null)
         try {
           await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText })
+        } catch (err) {
+          setFormError(err.message)
         } finally {
           setBusy(false)
         }
       }
 
       return h('div', { className: 'sd-mask', ...maskHandlers(onClose) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建项目' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建项目', 'aria-modal': 'true', ref: boxRef },
           h('h3', null, '新建项目'),
           h('div', { className: 'sd-hint' }, '给一个主题就行。有现成材料就展开贴上，稿子会照着材料写。'),
           h('div', { className: 'sd-field' },
@@ -2988,7 +3224,7 @@ window.__ModuleLoader__.load({
               placeholder: '贴一段原文、笔记或资料。它会照着这份材料写，不照抄原句。',
               onChange: event => setRawText(event.target.value),
             }) : null),
-          error ? h('div', { className: 'sd-error' }, error) : null,
+          (error || formError) ? h('div', { className: 'sd-error' }, error || formError) : null,
           h('div', { className: 'sd-dialog-foot' },
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onClose, disabled: busy }, '取消'),
             h('button', { className: 'sd-btn', 'data-kind': 'primary', onClick: submit, disabled: busy },
@@ -3029,15 +3265,56 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * 弹窗通用交互：打开时把焦点放进第一个可操作控件，Esc 关闭，Tab 焦点圈在弹窗里。
+     * onClose 用 ref 存：父组件每轮轮询都会重渲染，不能因此把焦点重置一遍。
+     */
+    function useDialog(onClose, boxRef) {
+      const closeRef = useRef(onClose)
+      closeRef.current = onClose
+      useEffect(() => {
+        const node = boxRef.current
+        if (!node) return undefined
+        const selector = 'button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href]'
+        const first = node.querySelector(selector)
+        if (first) first.focus()
+        const onKey = event => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            closeRef.current?.()
+            return
+          }
+          if (event.key !== 'Tab') return
+          const rows = [...node.querySelectorAll(selector)].filter(row => row.offsetParent !== null)
+          if (!rows.length) return
+          const head = rows[0]
+          const tail = rows[rows.length - 1]
+          const active = document.activeElement
+          if (event.shiftKey && (active === head || !node.contains(active))) {
+            event.preventDefault()
+            tail.focus()
+          } else if (!event.shiftKey && (active === tail || !node.contains(active))) {
+            event.preventDefault()
+            head.focus()
+          }
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [boxRef])
+    }
+
     /** 删除前的确认。文案说清「进回收站还能找回」，免得用户以为是彻底删除。 */
-    function ConfirmDelete({ item, days, onCancel, onConfirm, busy }) {
+    function ConfirmDelete({ item, days, error, onCancel, onConfirm, busy }) {
+      const boxRef = useRef(null)
+      useDialog(onCancel, boxRef)
       return h('div', { className: 'sd-mask', ...maskHandlers(onCancel) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '删除项目', style: { width: 'min(420px,92vw)' } },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '删除项目', 'aria-modal': 'true', ref: boxRef, style: { width: 'min(420px,92vw)' } },
           h('h3', null, '删除这个项目？'),
           h('div', { className: 'sd-hint', style: { marginTop: 6, lineHeight: 1.8 } },
             '「', item.title || '未命名', '」会移进回收站，',
             h('b', null, `${days} 天内可以还原`),
             '，到期自动彻底删除。'),
+          error ? h('div', { className: 'sd-error' }, error) : null,
           h('div', { className: 'sd-dialog-foot' },
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: onCancel, disabled: busy }, '取消'),
             h('button', {
@@ -3052,6 +3329,8 @@ window.__ModuleLoader__.load({
       const [data, setData] = useState(null)
       const [busy, setBusy] = useState(null)
       const [error, setError] = useState(null)
+      const boxRef = useRef(null)
+      useDialog(onClose, boxRef)
 
       const load = useCallback(async () => {
         try {
@@ -3088,7 +3367,7 @@ window.__ModuleLoader__.load({
       const items = data?.items ?? []
 
       return h('div', { className: 'sd-mask', ...maskHandlers(onClose) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '回收站', style: { width: 'min(520px,94vw)' } },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '回收站', 'aria-modal': 'true', ref: boxRef, style: { width: 'min(520px,94vw)' } },
           h('h3', null, '回收站'),
           h('div', { className: 'sd-hint', style: { marginTop: 4 } },
             `保留 ${data?.days ?? 7} 天，到期自动彻底删除。天数可在设置里改。`),
@@ -3106,14 +3385,21 @@ window.__ModuleLoader__.load({
                 h('button', {
                   className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
                   style: { color: 'var(--dsw-alias-state-error-primary, #c0392b)' },
-                  onClick: () => act('trash-purge', { id: row.id }),
+                  onClick: () => {
+                    // 彻底删除不可恢复，必须先确认
+                    if (!window.confirm(`彻底删除「${row.title || '未命名'}」？文件会从磁盘删掉，不可恢复。`)) return
+                    act('trash-purge', { id: row.id })
+                  },
                 }, '彻底删除')))
               : h('div', { className: 'sd-hint', style: { padding: '14px 0' } }, '回收站是空的。')),
           h('div', { className: 'sd-dialog-foot' },
             items.length
               ? h('button', {
                 className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
-                onClick: () => act('trash-purge', { all: true }),
+                onClick: () => {
+                  if (!window.confirm(`清空回收站？里面的 ${items.length} 个项目会被连文件一起删掉，不可恢复。`)) return
+                  act('trash-purge', { all: true })
+                },
               }, '清空回收站')
               : null,
             h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: onClose }, '关闭'))))
@@ -3142,6 +3428,8 @@ window.__ModuleLoader__.load({
       const requestClose = useCallback(() => {
         if (!dirty || window.confirm('设置有改动还没保存，确定关闭？')) onClose()
       }, [dirty, onClose])
+      const boxRef = useRef(null)
+      useDialog(requestClose, boxRef)
 
       const imageModels = test.image?.models ?? []
       // 候选 = 服务端返回 + 当前值（图像模型常常不在 /models 里，当前值必须保住）
@@ -3185,7 +3473,9 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         try {
-          await post('settings', { settings: form })
+          // 每段时长统一按 12–90 秒这一档走，和选题页、服务端口径一致
+          const segmentSeconds = Math.max(12, Math.min(90, Number(form.segmentSeconds) || 40))
+          await post('settings', { settings: { ...form, segmentSeconds } })
           if (ttsKey.trim()) await post('secrets', { ttsKey: ttsKey.trim() })
           if (imageKey.trim()) await post('secrets', { imageKey: imageKey.trim() })
           await onSaved()
@@ -3203,7 +3493,7 @@ window.__ModuleLoader__.load({
       ]
 
       return h('div', { className: 'sd-mask', ...maskHandlers(requestClose) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '声画工作台设置' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '声画工作台设置', 'aria-modal': 'true', ref: boxRef },
           h('h3', null, '设置'),
           h('div', { className: 'sd-hint' },
             data.model ? `文案模型跟随当前默认模型：${data.model.provider} · ${data.model.model}` : '当前没有默认模型，写稿会失败，先去接一个模型'),
@@ -3364,7 +3654,7 @@ window.__ModuleLoader__.load({
                 h('label', null, '每段时长（秒）'),
                 h('input', {
                   className: 'sd-input', type: 'number', min: 12, max: 90, value: form.segmentSeconds,
-                  onChange: event => set('segmentSeconds', Number(event.target.value) || 40),
+                  onChange: event => set('segmentSeconds', Math.max(12, Math.min(90, Number(event.target.value) || 40))),
                 }))),
             h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8 } },
               h('button', {

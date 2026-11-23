@@ -151,9 +151,14 @@ export async function generateCopyVariants(ctx, { item, targets, route, signal, 
           model = second.model ?? model
         }
       }
-    } catch {
+    } catch (err) {
+      // 用户点停止时中止错误必须往上冒泡：吞掉它会把「重试被打断」当成
+      // 「重试失败」，接着按第一版继续往 publish.json 写。
+      if (signal?.aborted) throw err
       // 重试请求失败/不可解析时保留第一版（超限项仍会标红让用户手改）
     }
   }
+  // 写回由 host 负责；返回前再挡一次中止，避免把半成品文案当成成功结果交出去
+  if (signal?.aborted) throw Object.assign(new Error('已停止'), { name: 'AbortError' })
   return { variants, model, issues }
 }

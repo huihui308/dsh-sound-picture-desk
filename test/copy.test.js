@@ -6,9 +6,11 @@ function fakeModel(responses) {
   const calls = []
   const call = async (ctx, options) => {
     calls.push(options)
-    const text = responses[calls.length - 1]
-    if (text === undefined) throw new Error('unexpected extra call')
-    return { text, model: 'test-model' }
+    const response = responses[calls.length - 1]
+    if (response === undefined) throw new Error('unexpected extra call')
+    // 允许塞 Error 实例：模拟模型调用在重试阶段被信号中止
+    if (response instanceof Error) throw response
+    return { text: response, model: 'test-model' }
   }
   return { call, calls }
 }
@@ -47,6 +49,22 @@ test('超限后重试又不可解析时保留第一版', async () => {
   const result = await generateCopyVariants({}, { item: { title: 't', segments: [{ text: '旁白' }] }, targets: ['xiaohongshu'], call })
   assert.equal([...result.variants.xiaohongshu.title].length, 21)
   assert.equal(result.issues.length, 1)
+})
+
+test('重试阶段被信号中止时 AbortError 要冒泡，不能当成“保留第一版”', async () => {
+  const abort = Object.assign(new Error('已停止'), { name: 'AbortError' })
+  const { call, calls } = fakeModel([overLimit, abort])
+  await assert.rejects(
+    generateCopyVariants({}, {
+      item: { title: 't', segments: [{ text: '旁白' }] },
+      targets: ['xiaohongshu'],
+      call,
+      signal: { aborted: true },
+    }),
+    err => err.name === 'AbortError' && /已停止/.test(err.message),
+  )
+  // 第一次正常返回、第二次（反馈重试）才中止，确认不是首轮直接失败
+  assert.equal(calls.length, 2)
 })
 
 test('两轮都不是 JSON 才报错', async () => {
