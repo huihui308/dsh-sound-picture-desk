@@ -220,6 +220,57 @@ export function emptyPublish() {
     cover: null,
     exports: [],
     records: [],
+    revisions: [],
+  }
+}
+
+const REVISION_SCOPES = new Set(['title', 'body', 'coverText'])
+const REVISION_STATUS = new Set(['proposed', 'accepted', 'rejected', 'reverted'])
+
+function textSlice(value, max) {
+  return String(value ?? '').slice(0, max)
+}
+
+function revisionBefore(value, scope) {
+  const src = value && typeof value === 'object' ? value : {}
+  const out = {}
+  if (scope.includes('title')) out.title = textSlice(src.title, 5000)
+  if (scope.includes('body')) out.body = textSlice(src.body, 20000)
+  if (scope.includes('coverText')) out.coverText = textSlice(src.coverText, 100)
+  return out
+}
+
+function revisionAfter(value, scope) {
+  const src = value && typeof value === 'object' ? value : {}
+  const out = {}
+  if (scope.includes('title')) out.title = textSlice(src.title, 5000)
+  if (scope.includes('body')) out.body = textSlice(src.body, 20000)
+  if (scope.includes('coverText')) {
+    out.coverTexts = (Array.isArray(src.coverTexts) ? src.coverTexts : [])
+      .map(text => textSlice(text, 100).trim())
+      .filter(Boolean)
+      .slice(0, 5)
+  }
+  return out
+}
+
+function normalizeRevision(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {}
+  const scope = (Array.isArray(src.scope) ? src.scope : []).filter(id => REVISION_SCOPES.has(id))
+  const uniqScope = [...new Set(scope)]
+  if (!uniqScope.length) return null
+  const status = REVISION_STATUS.has(src.status) ? src.status : 'proposed'
+  return {
+    id: textSlice(src.id, 80),
+    at: typeof src.at === 'string' ? src.at : null,
+    scope: uniqScope,
+    feedback: textSlice(src.feedback, 500),
+    status,
+    before: revisionBefore(src.before, uniqScope),
+    after: revisionAfter(src.after, uniqScope),
+    model: textSlice(src.model, 100),
+    note: textSlice(src.note, 300),
+    appliedAt: typeof src.appliedAt === 'string' ? src.appliedAt : null,
   }
 }
 
@@ -242,6 +293,10 @@ export function normalizePublish(raw) {
       width: Number(src.cover.width) || PLATFORMS.xiaohongshu.cover.width,
       height: Number(src.cover.height) || PLATFORMS.xiaohongshu.cover.height,
       at: typeof src.cover.at === 'string' ? src.cover.at : null,
+      sourceRef: typeof src.cover.sourceRef === 'string' ? src.cover.sourceRef.slice(0, 300) : '',
+      layout: src.cover.layout === 'top' ? 'top' : 'bottom',
+      fontScale: Math.min(1.6, Math.max(0.6, Number(src.cover.fontScale) || 1)),
+      textSource: src.cover.textSource === 'manual' ? 'manual' : 'auto',
     }
   }
   next.exports = Array.isArray(src.exports)
@@ -261,6 +316,9 @@ export function normalizePublish(raw) {
       at: typeof item.at === 'string' ? item.at : null,
       metrics: item.metrics && typeof item.metrics === 'object' ? item.metrics : {},
     }))
+    : []
+  next.revisions = Array.isArray(src.revisions)
+    ? src.revisions.map(normalizeRevision).filter(Boolean).slice(-30)
     : []
   return next
 }

@@ -18,6 +18,7 @@ import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, publicTask, startTask } from './jobs.js'
 import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, composeCopy, countVariant, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
 import { generateCopyVariants } from './publish/copy.js'
+import { reviseCopy } from './publish/revise.js'
 import { buildExport } from './publish/export.js'
 
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -311,8 +312,10 @@ async function publishView(store, state, itemId) {
       x: composeCopy('x', publish.variants.x),
     },
     cover: publish.cover,
+    coverSources: coverSourceList(item),
     exports: publish.exports,
     records: publish.records,
+    revisions: publish.revisions ?? [],
     checks,
     blocking,
     video,
@@ -988,7 +991,7 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
  * 生成视频封面：底图（分镜图 / 参考图）+ 标题文字，输出平台竖版尺寸。
  * 标题走 textfile 传，避免中文和特殊符号在 drawtext 里转义出错。
  */
-async function renderCoverImage(store, itemId, { ref, title, width = 1206, height = 2160, maxText = 40 } = {}) {
+async function renderCoverImage(store, itemId, { ref, title, width = 1206, height = 2160, maxText = 40, layout = 'bottom', fontScale = 1 } = {}) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const dirs = await store.ensureItemDirs(itemId)
@@ -1021,16 +1024,19 @@ async function renderCoverImage(store, itemId, { ref, title, width = 1206, heigh
   const h = Math.round(height / 2) * 2
   // 标题越长字号越小：20 字标题也要能压在 1080 宽的封面上
   const textLength = [...text].length
-  const fontSize = Math.max(24, Math.min(Math.round(w * 0.085), Math.floor((w * 0.86) / Math.max(4, textLength))))
-  const margin = Math.round(w * 0.08)
+  const scale = Math.min(1.6, Math.max(0.6, Number(fontScale) || 1))
+  const fontSize = Math.max(24, Math.min(Math.round(w * 0.085 * scale), Math.floor((w * 0.78) / Math.max(4, textLength))))
+  const band = Math.round(h * 0.42)
+  const boxY = layout === 'top' ? 0 : h - band
+  const textY = layout === 'top' ? String(Math.round(h * 0.14)) : `h-${Math.round(h * 0.2)}-text_h/2`
   const vf = [
     `scale=${w}:${h}:force_original_aspect_ratio=increase`,
     `crop=${w}:${h}`,
-    // 底部压一层渐变压暗，保证白字在亮画面上也看得清
-    `drawbox=x=0:y=${h - Math.round(h * 0.42)}:w=${w}:h=${Math.round(h * 0.42)}:color=black@0.45:t=fill`,
+    // 文字区压一层暗带，保证白字在亮画面上也看得清
+    `drawbox=x=0:y=${boxY}:w=${w}:h=${band}:color=black@0.45:t=fill`,
     `drawtext=fontfile=${escapeFilterPath(COVER_FONT)}:textfile=${escapeFilterPath(textFile)}:` +
       `fontsize=${fontSize}:fontcolor=white:borderw=${Math.max(2, Math.round(fontSize * 0.06))}:` +
-      `bordercolor=black@0.85:x=(w-text_w)/2:y=h-${Math.round(h * 0.2)}-text_h/2`,
+      `bordercolor=black@0.85:x=(w-text_w)/2:y=${textY}`,
   ].join(',')
 
   await new Promise((resolve, reject) => {
@@ -1039,7 +1045,7 @@ async function renderCoverImage(store, itemId, { ref, title, width = 1206, heigh
   })
   await rm(textFile, { force: true }).catch(() => {})
 
-  return { path: outName, title: text, width: w, height: h }
+  return { path: outName, title: text, width: w, height: h, layout: layout === 'top' ? 'top' : 'bottom', fontScale: scale, sourceRef: String(ref ?? '') }
 }
 
 /** 成片首帧用的封面：沿用原来的 9:16 竖版封面，存到 item.cover。 */
@@ -1055,23 +1061,78 @@ async function makeCover(store, itemId, { ref, title, width = 1206, height = 216
 }
 
 /** 小红书发布封面：3:4，单独存 publish.cover，不覆盖成片首帧那张。 */
-async function makePublishCover(store, itemId, { title, ref } = {}) {
+async function makePublishCover(store, itemId, { title, ref, layout, fontScale, textSource } = {}) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const publish = await store.readPublish(itemId)
+  const existing = publish.cover ?? null
   const fallbackTitle = String(publish.variants?.xiaohongshu?.title ?? item.title ?? '').trim()
+  const typedTitle = typeof title === 'string' ? title.trim() : ''
+  const useTitle = typedTitle || String(existing?.title ?? '').trim() || fallbackTitle || item.title
   const cover = await renderCoverImage(store, itemId, {
-    ref: ref || defaultPublishCoverRef(item),
-    title: title || fallbackTitle || item.title,
+    ref: ref || existing?.sourceRef || defaultPublishCoverRef(item),
+    title: useTitle,
     width: PLATFORMS.xiaohongshu.cover.width,
     height: PLATFORMS.xiaohongshu.cover.height,
     maxText: 20,
+    layout: layout || existing?.layout || 'bottom',
+    fontScale: fontScale || existing?.fontScale || 1,
   })
+  const source = textSource || (typedTitle ? 'manual' : (existing?.textSource || 'auto'))
   await store.mutatePublish(itemId, draft => {
-    draft.cover = { path: cover.path, title: cover.title, width: cover.width, height: cover.height, at: new Date().toISOString() }
+    draft.cover = {
+      path: cover.path,
+      title: cover.title,
+      width: cover.width,
+      height: cover.height,
+      at: new Date().toISOString(),
+      sourceRef: cover.sourceRef,
+      layout: cover.layout,
+      fontScale: cover.fontScale,
+      textSource: source,
+    }
     return null
   })
   return cover
+}
+
+/** 封面底图候选：分镜图、已定稿参考图、已有成片封面。 */
+function coverSourceList(item) {
+  const list = []
+  let index = 0
+  for (const seg of item?.segments ?? []) {
+    if (!seg?.imagePath) continue
+    index += 1
+    list.push({ ref: 'segment:' + seg.id, label: '分镜 ' + index, path: seg.imagePath })
+  }
+  for (const row of item?.anchors ?? []) {
+    const imagePath = row?.approved || row?.candidates?.[0]
+    if (!imagePath) continue
+    list.push({ ref: 'anchor:' + row.id, label: '参考 ' + String(row.name || '场景'), path: imagePath })
+  }
+  if (item?.cover?.path) list.push({ ref: item.cover.path, label: '成片封面', path: item.cover.path })
+  return list.slice(0, 24)
+}
+
+/** 生成提案时的旧值快照，只取本次 scope 的字段。 */
+function revisionBefore(publish, scope) {
+  const variant = publish.variants?.xiaohongshu ?? {}
+  const out = {}
+  if (scope.includes('title')) out.title = String(variant.title ?? '')
+  if (scope.includes('body')) out.body = String(variant.body ?? '')
+  if (scope.includes('coverText')) out.coverText = String(publish.cover?.title ?? '')
+  return out
+}
+
+/** 采用前检查用户有没有在提案生成后又改过这些字段。 */
+function revisionMismatch(publish, revision) {
+  const variant = publish.variants?.xiaohongshu ?? {}
+  const before = revision.before ?? {}
+  const hit = []
+  if (revision.scope.includes('title') && String(variant.title ?? '') !== String(before.title ?? '')) hit.push('标题')
+  if (revision.scope.includes('body') && String(variant.body ?? '') !== String(before.body ?? '')) hit.push('正文')
+  if (revision.scope.includes('coverText') && String(publish.cover?.title ?? '') !== String(before.coverText ?? '')) hit.push('封面大字')
+  return hit
 }
 
 /** 发布封面默认用第一张分镜图，其次定稿参考图，最后才退回已有封面。 */
@@ -1537,12 +1598,141 @@ async function route(ctx, store, req, res) {
       })
       return json(res, 200, { publish: await publishView(store, state, id) })
     }
+    case 'publish/revise': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      const publish = await store.readPublish(id)
+      const allowed = ['title', 'body', 'coverText']
+      const scope = [...new Set((Array.isArray(body.scope) ? body.scope : []).map(String).filter(id => allowed.includes(id)))]
+      if (!scope.length) throw Object.assign(new Error('至少选择一个要修改的字段'), { status: 400 })
+      const feedback = String(body.feedback ?? '').trim().slice(0, 500)
+      if (feedback.length < 2) throw Object.assign(new Error('修改意见太短，至少写两个字'), { status: 400 })
+      if (isBusy(id)) throw Object.assign(new Error('正在跑任务，等结束再改'), { status: 409 })
+      // 新意见一提交就作废旧提案，避免旧提案弹窗和新任务同时存在
+      await store.mutatePublish(id, draft => {
+        draft.revisions = (draft.revisions ?? []).map(row => (row.status === 'proposed' ? { ...row, status: 'rejected' } : row))
+        return null
+      })
+      const task = startTask(id, 'publish-revise', 1, async ({ report, signal }) => {
+        report(0, '正在按意见修改' + scope.map(id => ({ title: '标题', body: '正文', coverText: '封面大字' }[id])).join(' / ') + '…')
+        const result = await reviseCopy(ctx, {
+          item,
+          publish,
+          scope,
+          feedback,
+          route: item.model ?? null,
+          signal,
+        })
+        const revision = {
+          id: newId('rev'),
+          at: new Date().toISOString(),
+          scope,
+          feedback,
+          status: 'proposed',
+          before: revisionBefore(publish, scope),
+          after: result.after,
+          model: result.model,
+          note: result.note,
+          appliedAt: null,
+        }
+        await store.mutatePublish(id, draft => {
+          draft.revisions.push(revision)
+          draft.revisions = draft.revisions.slice(-30)
+          return null
+        })
+        report(1, '改好了，等你采用')
+        return { revisionId: revision.id }
+      })
+      return json(res, 200, { task: publicTask(id) })
+    }
+    case 'publish/revise/apply': {
+      const id = String(body.id ?? '')
+      const revisionId = String(body.revisionId ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      if (isBusy(id)) throw Object.assign(new Error('正在跑任务，等结束再采用'), { status: 409 })
+      const publish = await store.readPublish(id)
+      const revision = (publish.revisions ?? []).find(row => row.id === revisionId)
+      if (!revision) throw Object.assign(new Error('找不到这份修改提案'), { status: 404 })
+      if (revision.status !== 'proposed') throw Object.assign(new Error('这份提案已经处理过了'), { status: 409 })
+      const changed = revisionMismatch(publish, revision)
+      if (changed.length && !body.force) {
+        throw Object.assign(new Error('当前' + changed.join('、') + '已经改过，先确认是否仍采用这份提案'), { status: 409, code: 'changed' })
+      }
+      let renderedCover = null
+      if (revision.scope.includes('coverText')) {
+        const candidates = revision.after.coverTexts ?? []
+        const index = Math.max(0, Math.min(candidates.length - 1, Number(body.coverTextIndex) || 0))
+        const text = String(candidates[index] ?? '').trim()
+        if (!text) throw Object.assign(new Error('没有可用的封面大字候选'), { status: 400 })
+        renderedCover = await makePublishCover(store, id, { title: text, textSource: 'manual' })
+      }
+      await store.mutatePublish(id, draft => {
+        if (revision.scope.includes('title') || revision.scope.includes('body')) {
+          const next = { ...draft.variants.xiaohongshu }
+          if (revision.scope.includes('title')) next.title = revision.after.title ?? ''
+          if (revision.scope.includes('body')) next.body = revision.after.body ?? ''
+          draft.variants.xiaohongshu = sanitizeVariant('xiaohongshu', next)
+        }
+        const target = (draft.revisions ?? []).find(row => row.id === revisionId)
+        if (target) {
+          target.status = 'accepted'
+          target.appliedAt = new Date().toISOString()
+          if (renderedCover) target.appliedCoverText = renderedCover.title
+        }
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/revise/discard': {
+      const id = String(body.id ?? '')
+      const revisionId = String(body.revisionId ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      await store.mutatePublish(id, draft => {
+        const target = (draft.revisions ?? []).find(row => row.id === revisionId)
+        if (target && target.status === 'proposed') target.status = 'rejected'
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/revise/revert': {
+      const id = String(body.id ?? '')
+      const revisionId = String(body.revisionId ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      if (isBusy(id)) throw Object.assign(new Error('正在跑任务，等结束再回滚'), { status: 409 })
+      const publish = await store.readPublish(id)
+      const revision = (publish.revisions ?? []).find(row => row.id === revisionId)
+      if (!revision) throw Object.assign(new Error('找不到这份历史提案'), { status: 404 })
+      if (revision.status !== 'accepted') throw Object.assign(new Error('只有已采用的提案可以回滚'), { status: 409 })
+      if (revision.scope.includes('coverText') && revision.before.coverText) {
+        await makePublishCover(store, id, { title: revision.before.coverText, textSource: 'manual' })
+      }
+      await store.mutatePublish(id, draft => {
+        const next = { ...draft.variants.xiaohongshu }
+        if (revision.scope.includes('title')) next.title = revision.before.title ?? ''
+        if (revision.scope.includes('body')) next.body = revision.before.body ?? ''
+        draft.variants.xiaohongshu = sanitizeVariant('xiaohongshu', next)
+        const target = (draft.revisions ?? []).find(row => row.id === revisionId)
+        if (target) target.status = 'reverted'
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
     case 'publish/cover': {
       const id = String(body.id ?? '')
       const state = await store.read()
       findItem(state, id)
       if (isBusy(id)) throw Object.assign(new Error('正在跑任务，等结束再生成封面'), { status: 409 })
-      await makePublishCover(store, id, { title: body.title, ref: body.ref })
+      await makePublishCover(store, id, {
+        title: body.title,
+        ref: body.ref,
+        layout: body.layout,
+        fontScale: body.fontScale,
+        textSource: body.textSource,
+      })
       return json(res, 200, { publish: await publishView(store, state, id) })
     }
     case 'publish/export': {

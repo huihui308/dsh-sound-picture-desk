@@ -53,6 +53,23 @@ test('老 publish.json 的窄 targets 读出来会修正为双平台', () => {
   assert.equal(publish.variants.x.text, 'hi')
 })
 
+test('revisions 与封面排版字段可归一化', () => {
+  const publish = normalizePublish({
+    cover: { path: 'covers/a.png', title: '大字', layout: 'top', fontScale: 1.2, textSource: 'manual', sourceRef: 'segment:s1' },
+    revisions: [
+      { id: 'r1', at: '2026-11-23T06:00:00.000Z', scope: ['title'], feedback: '改短', status: 'accepted', before: { title: '旧' }, after: { title: '新' } },
+      { id: 'r2', scope: ['nope'], feedback: 'x', status: 'proposed' },
+    ],
+  })
+  assert.equal(publish.cover.layout, 'top')
+  assert.equal(publish.cover.fontScale, 1.2)
+  assert.equal(publish.cover.textSource, 'manual')
+  assert.equal(publish.cover.sourceRef, 'segment:s1')
+  assert.equal(publish.revisions.length, 1)
+  assert.equal(publish.revisions[0].status, 'accepted')
+  assert.equal(publish.revisions[0].after.title, '新')
+})
+
 test('variantIsEmpty 覆盖两平台', () => {
   assert.equal(variantIsEmpty('x', { text: '  ' }), true)
   assert.equal(variantIsEmpty('x', { text: 'hi' }), false)

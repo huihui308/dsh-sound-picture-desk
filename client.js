@@ -261,6 +261,41 @@ window.__ModuleLoader__.load({
 .sd-pub-error{color:var(--dsw-alias-state-error-primary);font-size:11.5px;line-height:1.6}
 .sd-pub-ok{color:var(--dsw-alias-state-success-primary);font-size:11.5px;line-height:1.6;word-break:break-all}
 .sd-pub-note{font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
+.sd-pub-head-actions{margin-left:auto;padding-bottom:2px}
+.sd-pub-labelrow{display:flex;align-items:center;gap:8px}
+.sd-pub-ask{margin-left:auto;border:none;background:transparent;color:var(--dsw-alias-brand-primary);font:inherit;font-size:10.5px;cursor:pointer;padding:0;line-height:1.6}
+.sd-pub-ask:hover{text-decoration:underline}
+.sd-pub-ask:disabled{opacity:.45;cursor:not-allowed;text-decoration:none}
+.sd-rev-scopes{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 2px}
+.sd-rev-scope{font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
+.sd-rev-scope[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent)}
+.sd-rev-quick{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.sd-rev-quick button{font-size:10.5px;padding:3px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer}
+.sd-rev-quick button:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.sd-rev-quick button[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent)}
+.sd-rev-old{font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-tertiary);text-decoration:line-through;white-space:pre-wrap;max-height:120px;overflow:auto}
+.sd-rev-new{font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-primary);white-space:pre-wrap;max-height:180px;overflow:auto;border-left:2px solid var(--dsw-alias-state-success-primary);padding-left:8px;margin-top:4px}
+.sd-rev-proposal{display:flex;flex-direction:column;gap:10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px 12px;background:var(--dsw-alias-bg-base)}
+.sd-rev-proposal-head{display:flex;align-items:center;gap:8px;font-size:11.5px}
+.sd-rev-proposal-head span{margin-left:auto;font-size:10px;color:var(--dsw-alias-state-warn-primary)}
+.sd-rev-row{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.7;color:var(--dsw-alias-label-secondary)}
+.sd-rev-row b{flex:0 0 38px;font-weight:400;color:var(--dsw-alias-label-tertiary)}
+.sd-rev-choice{display:flex;gap:7px;align-items:center;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;padding:6px 8px;margin-top:5px;cursor:pointer;font-size:11.5px}
+.sd-rev-choice[data-on="1"]{border-color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,transparent)}
+.sd-rev-choice input{margin:0}
+.sd-rev-actions{display:flex;gap:7px;margin-top:4px}
+.sd-rev-actions .sd-btn{flex:1}
+.sd-rev-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.sd-rev-source{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);border-radius:7px;padding:3px;cursor:pointer;display:flex;flex-direction:column;gap:3px;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:9.5px;text-align:left}
+.sd-rev-source[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.sd-rev-source img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:4px;display:block;background:var(--dsw-alias-bg-layer-2)}
+.sd-rev-history{border-top:1px solid var(--dsw-alias-border-l1);padding-top:8px;margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.sd-rev-history-row{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
+.sd-rev-history-row b{font-weight:400;color:var(--dsw-alias-label-secondary);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-rev-history-row .sd-btn{margin-left:auto;padding:2px 7px;font-size:10px}
+.sd-rev-tabs{display:flex;gap:4px;border-bottom:1px solid var(--dsw-alias-border-l1);margin:2px 0 1px}
+.sd-rev-tab{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;padding:4px 9px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.sd-rev-tab[data-on="1"]{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
 
 `
 
@@ -1946,6 +1981,15 @@ window.__ModuleLoader__.load({
       const [exportResult, setExportResult] = useState(null)
       const [copyNote, setCopyNote] = useState('')
       const [activePlatform, setActivePlatform] = useState('xiaohongshu')
+      const [feedbackOpen, setFeedbackOpen] = useState(false)
+      const [feedbackText, setFeedbackText] = useState('')
+      const [feedbackScopes, setFeedbackScopes] = useState([])
+      const [revisionBusy, setRevisionBusy] = useState(false)
+      const [revisionPending, setRevisionPending] = useState(false)
+      const [coverTab, setCoverTab] = useState('text')
+      const [coverBusy, setCoverBusy] = useState(false)
+      const [coverChoice, setCoverChoice] = useState(0)
+      const [historyOpen, setHistoryOpen] = useState(false)
       const coverTouchedRef = useRef(false)
       const dirtyRef = useRef(false)
       const draftsRef = useRef(null)
@@ -1955,6 +1999,7 @@ window.__ModuleLoader__.load({
       itemIdRef.current = item.id
       const task = item.task
       const generating = Boolean(task?.running && task.kind === 'publish-copy')
+      const revising = Boolean(task?.running && task.kind === 'publish-revise')
       generatingRef.current = generating
       const taskRunning = Boolean(task?.running)
 
@@ -1979,6 +2024,7 @@ window.__ModuleLoader__.load({
         const running = Boolean(item.task?.running)
         const had = wasRunning.current
         wasRunning.current = running
+        if (!running) setRevisionPending(false)
         if (had && !running) refresh()
       }, [item.task?.running, item.task?.finishedAt, refresh])
 
@@ -2085,7 +2131,11 @@ window.__ModuleLoader__.load({
         try {
           const saved = await save({})
           if (!saved) return
-          const body = await post('publish/cover', { id: item.id, title: coverTouchedRef.current ? coverTitle.trim() : '' })
+          const body = await post('publish/cover', {
+            id: item.id,
+            title: coverTouchedRef.current ? coverTitle.trim() : '',
+            textSource: coverTouchedRef.current ? 'manual' : (view.cover?.textSource || 'auto'),
+          })
           coverTouchedRef.current = false
           setView(body.publish)
           setNote({ tone: 'ok', text: '封面已生成' })
@@ -2150,7 +2200,11 @@ window.__ModuleLoader__.load({
         h('div', null,
           h('div', { className: 'sd-pub-kicker' }, '发布准备'),
           h('div', { className: 'sd-pub-title' }, '小红书 / X · 生成文案和发布包，自己上传'),
-          h('div', { className: 'sd-pub-sub' }, '不登录平台、不代发；文案可改，检查通过后导出。')))
+          h('div', { className: 'sd-pub-sub' }, '不登录平台、不代发；文案可改，检查通过后导出。')),
+        view && (view.revisions ?? []).length
+          ? h('div', { className: 'sd-pub-head-actions' },
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: () => setHistoryOpen(true) }, '修改历史'))
+          : null)
 
       if (!item.render) {
         return h(React.Fragment, null,
@@ -2172,6 +2226,163 @@ window.__ModuleLoader__.load({
 
       if (!view) {
         return h(React.Fragment, null, head, h('div', { className: 'sd-hint', style: { paddingTop: 24 } }, '正在读取发布数据…'))
+      }
+
+      const revisions = view.revisions ?? []
+      let proposed = null
+      for (let index = revisions.length - 1; index >= 0; index -= 1) {
+        if (revisions[index].status === 'proposed') { proposed = revisions[index]; break }
+      }
+      const scopeLabel = id => ({ title: '标题', body: '正文', coverText: '封面大字' }[id] ?? id)
+      const quickChips = {
+        title: ['更短', '更有冲突', '别用问句', '更口语', '突出数字'],
+        body: ['开头更抓人', '少一点史料', '多讲人物', '结尾加互动', '压缩到 400 字内'],
+        coverText: ['字再少一点', '更口语', '换一个角度', '别用问句', '更有画面感'],
+      }
+
+      const openFeedback = scope => {
+        setFeedbackScopes([scope])
+        setFeedbackText('')
+        setFeedbackOpen(true)
+      }
+      const toggleScope = scopeId => {
+        setFeedbackScopes(prev => (prev.includes(scopeId)
+          ? (prev.length > 1 ? prev.filter(row => row !== scopeId) : prev)
+          : [...prev, scopeId]))
+      }
+      const submitFeedback = async () => {
+        if (revisionBusy || taskRunning) return
+        const text = feedbackText.trim()
+        if (!feedbackScopes.length) { setNote({ tone: 'error', text: '至少选择一个要修改的字段' }); return }
+        if (text.length < 2) { setNote({ tone: 'error', text: '修改意见太短，至少写两个字' }); return }
+        setRevisionBusy(true)
+        setRevisionPending(true)
+        setNote(null)
+        try {
+          const saved = await save()
+          if (!saved) { setRevisionPending(false); return }
+          await post('publish/revise', { id: item.id, scope: feedbackScopes, feedback: text })
+          // 本地先隐藏旧提案，等新任务完成后 refresh 再显示新提案
+          setView(prev => (prev ? {
+            ...prev,
+            revisions: (prev.revisions ?? []).map(row => (row.status === 'proposed' ? { ...row, status: 'rejected' } : row)),
+          } : prev))
+          await onReload()
+          setFeedbackOpen(false)
+          setCoverChoice(0)
+          setNote({ tone: 'ok', text: '已提交意见，正在生成修改提案…' })
+        } catch (err) {
+          setRevisionPending(false)
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const applyRevision = async () => {
+        if (!proposed || revisionBusy || taskRunning) return
+        const localVariant = draftsSafe.xiaohongshu ?? {}
+        const serverVariant = view.variants?.xiaohongshu ?? {}
+        const dirtyScopes = []
+        if (proposed.scope.includes('title') && String(localVariant.title ?? '') !== String(serverVariant.title ?? '')) dirtyScopes.push('标题')
+        if (proposed.scope.includes('body') && String(localVariant.body ?? '') !== String(serverVariant.body ?? '')) dirtyScopes.push('正文')
+        if (proposed.scope.includes('coverText') && coverTouchedRef.current && coverTitle.trim() !== String(view.cover?.title ?? '')) dirtyScopes.push('封面大字')
+        if (dirtyScopes.length && !window.confirm('你在提案生成后又改过' + dirtyScopes.join('、') + '，采用会覆盖这些未保存的修改，继续？')) return
+        setRevisionBusy(true)
+        setNote(null)
+        try {
+          const payload = { id: item.id, revisionId: proposed.id }
+          if (proposed.scope.includes('coverText')) payload.coverTextIndex = coverChoice
+          let body
+          try {
+            body = await post('publish/revise/apply', payload)
+          } catch (err) {
+            if (/已经改过/.test(err.message)) {
+              if (!window.confirm(err.message + '，仍要采用吗？')) return
+              body = await post('publish/revise/apply', { ...payload, force: true })
+            } else {
+              throw err
+            }
+          }
+          let next = body.publish
+          const nextTitle = next?.variants?.xiaohongshu?.title
+          if (proposed.scope.includes('title') && nextTitle && next?.cover?.path && next?.cover?.textSource !== 'manual') {
+            if (window.confirm('标题已改，要把封面大字同步成新标题吗？')) {
+              const coverBody = await post('publish/cover', { id: item.id, title: nextTitle, textSource: 'auto' })
+              next = coverBody.publish
+            }
+          }
+          if (proposed.scope.includes('coverText')) {
+            coverTouchedRef.current = false
+            if (next?.cover?.title) setCoverTitle(next.cover.title)
+          } else if (next?.cover?.title && !coverTouchedRef.current) {
+            setCoverTitle(next.cover.title)
+          }
+          setView(next)
+          setCoverChoice(0)
+          setNote({ tone: 'ok', text: '已采用修改提案' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const discardRevision = async () => {
+        if (!proposed || revisionBusy) return
+        setRevisionBusy(true)
+        try {
+          const body = await post('publish/revise/discard', { id: item.id, revisionId: proposed.id })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '已保留原样' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const reviseAgain = () => {
+        if (!proposed) return
+        setFeedbackScopes(proposed.scope)
+        setFeedbackText(proposed.feedback)
+        setCoverChoice(0)
+        setFeedbackOpen(true)
+      }
+
+      const revertRevision = async revisionId => {
+        if (revisionBusy || !window.confirm('回滚到这次修改前的版本？')) return
+        setRevisionBusy(true)
+        try {
+          const body = await post('publish/revise/revert', { id: item.id, revisionId })
+          setView(body.publish)
+          setHistoryOpen(false)
+          setNote({ tone: 'ok', text: '已回滚' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const applyCover = async patch => {
+        if (coverBusy || taskRunning || makingCover) return
+        setCoverBusy(true)
+        setNote(null)
+        try {
+          const body = await post('publish/cover', {
+            id: item.id,
+            title: view.cover?.title || coverTitle,
+            textSource: view.cover?.textSource || 'auto',
+            ...patch,
+          })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '封面已更新' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setCoverBusy(false)
+        }
       }
 
       const platformTabs = h('div', { className: 'sd-pub-tabs', role: 'tablist', 'aria-label': '发布平台' },
@@ -2210,7 +2421,13 @@ window.__ModuleLoader__.load({
             + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10)),
           dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
-          h('label', null, '标题'),
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, '标题'),
+            h('button', {
+              className: 'sd-pub-ask', type: 'button',
+              disabled: taskRunning || saving || revising || generating,
+              onClick: () => openFeedback('title'),
+            }, '提意见')),
           h('input', {
             className: 'sd-input', value: xhs.title ?? '', maxLength: 120,
             placeholder: '20 字以内，带钩子',
@@ -2218,7 +2435,13 @@ window.__ModuleLoader__.load({
             onBlur: autoSave,
           })),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
-          h('label', null, '正文'),
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, '正文'),
+            h('button', {
+              className: 'sd-pub-ask', type: 'button',
+              disabled: taskRunning || saving || revising || generating,
+              onClick: () => openFeedback('body'),
+            }, '提意见')),
           h('textarea', {
             className: 'sd-text', value: xhs.body ?? '', rows: 6, style: { minHeight: 132 },
             placeholder: '300–600 字，分段写',
@@ -2300,39 +2523,85 @@ window.__ModuleLoader__.load({
             onClick: () => window.open(platformById(activePlatform).composeUrl, '_blank', 'noopener,noreferrer'),
           }, '打开' + platformLabel(activePlatform))))
 
+      const coverTabs = h('div', { className: 'sd-rev-tabs', role: 'tablist', 'aria-label': '封面设置' },
+        [['text', '文字'], ['source', '底图'], ['layout', '排版']].map(([id, label]) => h('button', {
+          key: id, type: 'button', role: 'tab', className: 'sd-rev-tab',
+          'aria-selected': coverTab === id ? 'true' : 'false',
+          'data-on': coverTab === id ? '1' : '0',
+          onClick: () => setCoverTab(id),
+        }, label)))
+
+      const coverBusyNow = coverBusy || makingCover || taskRunning || revising || saving
       const coverCard = h('div', { className: 'sd-pub-card' },
         h('div', { className: 'sd-pub-card-head' },
           h('span', { className: 'sd-pub-card-title' }, '小红书封面'),
           h('span', { className: 'sd-pub-counter' }, view.cover
             ? view.cover.width + '×' + view.cover.height + ' · 3:4'
-            : '1080×1440 · 3:4')),
-        h('div', { className: 'sd-pub-coverrow' },
-          h('div', { className: 'sd-pub-coverbox' },
-            view.cover?.path
-              ? h('img', {
-                src: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
-                alt: '封面预览',
-              })
-              : h('div', { className: 'sd-pub-cover-empty' }, '还没有封面')),
-          h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 } },
-            h('div', { className: 'sd-hint' }, '大字压在画面底部，导出时按 3:4 单独出图。'),
-            h('div', { className: 'sd-field', style: { marginTop: 0 } },
-              h('label', null, '封面大字'),
-              h('input', {
-                className: 'sd-input', value: coverTitle, maxLength: 40,
-                onChange: event => { coverTouchedRef.current = true; setCoverTitle(event.target.value) },
-              })),
-            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
-              h('button', {
-                className: 'sd-btn', 'data-kind': view.cover?.path ? undefined : 'primary', type: 'button',
-                disabled: makingCover || saving || generating || taskRunning || busy,
-                onClick: makeCover,
-              }, makingCover ? '生成中…' : view.cover?.path ? '重新生成' : '生成封面'),
-              view.cover?.path ? h('a', {
-                className: 'sd-btn', 'data-kind': 'ghost',
-                href: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
-                download: 'cover-3x4.png', target: '_blank', rel: 'noreferrer',
-              }, '下载封面') : null))))
+            : '1080×1440 · 3:4'),
+          h('button', {
+            className: 'sd-pub-ask', type: 'button',
+            disabled: taskRunning || revising || makingCover,
+            onClick: () => openFeedback('coverText'),
+          }, '提意见')),
+        coverTabs,
+        coverTab === 'text'
+          ? h('div', { className: 'sd-pub-coverrow' },
+            h('div', { className: 'sd-pub-coverbox' },
+              view.cover?.path
+                ? h('img', {
+                  src: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
+                  alt: '封面预览',
+                })
+                : h('div', { className: 'sd-pub-cover-empty' }, '还没有封面')),
+            h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 } },
+              h('div', { className: 'sd-hint' }, '封面大字单独出图，导出时按 3:4 带上。'),
+              h('div', { className: 'sd-field', style: { marginTop: 0 } },
+                h('label', null, '封面大字'),
+                h('input', {
+                  className: 'sd-input', value: coverTitle, maxLength: 40,
+                  onChange: event => { coverTouchedRef.current = true; setCoverTitle(event.target.value) },
+                })),
+              h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                h('button', {
+                  className: 'sd-btn', 'data-kind': view.cover?.path ? undefined : 'primary', type: 'button',
+                  disabled: coverBusyNow,
+                  onClick: makeCover,
+                }, makingCover ? '生成中…' : view.cover?.path ? '重新生成' : '生成封面'),
+                view.cover?.path ? h('a', {
+                  className: 'sd-btn', 'data-kind': 'ghost',
+                  href: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
+                  download: 'cover-3x4.png', target: '_blank', rel: 'noreferrer',
+                }, '下载封面') : null)))
+          : coverTab === 'source'
+            ? h('div', null,
+              h('div', { className: 'sd-hint' }, '从已有分镜图或参考图里换一张底图，文字位置不变。'),
+              (view.coverSources ?? []).length
+                ? h('div', { className: 'sd-rev-sources' }, view.coverSources.map(src => h('button', {
+                  key: src.ref, type: 'button', className: 'sd-rev-source',
+                  'data-on': view.cover?.sourceRef === src.ref ? '1' : '0',
+                  disabled: coverBusyNow,
+                  onClick: () => applyCover({ ref: src.ref }),
+                },
+                  h('img', { src: mediaUrl(item.id, src.path), alt: src.label }),
+                  h('span', null, src.label))))
+                : h('div', { className: 'sd-empty', style: { marginTop: 8 } }, '还没有可用底图，先去分镜图页出几张图。'))
+            : h('div', null,
+              h('div', { className: 'sd-hint' }, '文字位置'),
+              h('div', { className: 'sd-rev-quick' },
+                [['bottom', '底部'], ['top', '顶部']].map(([value, label]) => h('button', {
+                  key: value, type: 'button',
+                  'data-on': (view.cover?.layout || 'bottom') === value ? '1' : '0',
+                  disabled: coverBusyNow,
+                  onClick: () => applyCover({ layout: value }),
+                }, label))),
+              h('div', { className: 'sd-hint', style: { marginTop: 8 } }, '字号'),
+              h('div', { className: 'sd-rev-quick' },
+                [[0.85, '小'], [1, '中'], [1.15, '大']].map(([value, label]) => h('button', {
+                  key: String(value), type: 'button',
+                  'data-on': Math.abs((view.cover?.fontScale ?? 1) - value) < 0.01 ? '1' : '0',
+                  disabled: coverBusyNow,
+                  onClick: () => applyCover({ fontScale: value }),
+                }, label)))))
 
       const stateColor = state => state === 'error'
         ? 'var(--dsw-alias-state-error-primary)'
@@ -2413,6 +2682,103 @@ window.__ModuleLoader__.load({
               }, published ? '取消标记' : '标记已发布'))
           })))
 
+      const revisionStatusLabel = status => ({
+        proposed: '待采用', accepted: '已采用', rejected: '已放弃', reverted: '已回滚',
+      }[status] ?? status)
+      const quickForScope = () => {
+        const rows = []
+        for (const scopeId of feedbackScopes) {
+          for (const chip of quickChips[scopeId] ?? []) {
+            if (!rows.includes(chip)) rows.push(chip)
+          }
+        }
+        return rows
+      }
+
+      const feedbackModal = feedbackOpen ? h('div', { className: 'sd-mask' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '按意见修改', style: { maxWidth: 580 } },
+          h('h3', null, '按意见修改'),
+          h('div', { className: 'sd-hint' }, '只改勾选的字段；生成提案后先预览，采用后才写回。'),
+          note && note.tone === 'error' ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, note.text) : null,
+          h('div', { className: 'sd-rev-scopes' },
+            ['title', 'body', 'coverText'].map(scopeId => h('button', {
+              key: scopeId, type: 'button', className: 'sd-rev-scope',
+              'data-on': feedbackScopes.includes(scopeId) ? '1' : '0',
+              onClick: () => toggleScope(scopeId),
+            }, scopeLabel(scopeId)))),
+          quickForScope().length
+            ? h('div', { className: 'sd-field', style: { marginTop: 8 } },
+              h('label', null, '快捷意见'),
+              h('div', { className: 'sd-rev-quick' },
+                quickForScope().map(chip => h('button', {
+                  key: chip, type: 'button',
+                  onClick: () => setFeedbackText(chip),
+                }, chip))))
+            : null,
+          h('div', { className: 'sd-field' },
+            h('label', null, '直接说想怎么改'),
+            h('textarea', {
+              className: 'sd-text', value: feedbackText, rows: 4,
+              placeholder: '例：标题不要用问句，改成陈述式，控制在 16 字内，突出「一杯酒」。',
+              onChange: event => setFeedbackText(event.target.value),
+            })),
+          h('div', { className: 'sd-card-foot' },
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: () => setFeedbackOpen(false) }, '取消'),
+            h('span', { style: { flex: 1 } }),
+            h('button', {
+              className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+              disabled: revisionBusy || feedbackText.trim().length < 2 || !feedbackScopes.length,
+              onClick: submitFeedback,
+            }, revisionBusy ? '提交中…' : '生成修改提案')))) : null
+
+      const proposalModal = proposed && !feedbackOpen && !revisionPending && !revising ? h('div', { className: 'sd-mask' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '修改提案', style: { maxWidth: 620 } },
+          h('h3', null, '修改提案'),
+          h('div', { className: 'sd-hint' }, '意见：' + (proposed.feedback || '（无）')),
+          note && note.tone === 'error' ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, note.text) : null,
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 } },
+            proposed.scope.includes('title') ? h('div', { className: 'sd-rev-proposal' },
+              h('div', { className: 'sd-rev-proposal-head' }, '标题', h('span', null, '提案 · 未采用')),
+              h('div', { className: 'sd-rev-old' }, proposed.before?.title || '（空）'),
+              h('div', { className: 'sd-rev-new' }, proposed.after?.title || '（空）')) : null,
+            proposed.scope.includes('body') ? h('div', { className: 'sd-rev-proposal' },
+              h('div', { className: 'sd-rev-proposal-head' }, '正文', h('span', null, '提案 · 未采用')),
+              h('div', { className: 'sd-rev-old' }, proposed.before?.body || '（空）'),
+              h('div', { className: 'sd-rev-new' }, proposed.after?.body || '（空）')) : null,
+            proposed.scope.includes('coverText') ? h('div', { className: 'sd-rev-proposal' },
+              h('div', { className: 'sd-rev-proposal-head' }, '封面大字', h('span', null, '提案 · 未采用')),
+              h('div', { className: 'sd-rev-old' }, proposed.before?.coverText || '（还没有封面大字）'),
+              (proposed.after?.coverTexts ?? []).map((text, index) => h('label', {
+                key: String(index), className: 'sd-rev-choice',
+                'data-on': coverChoice === index ? '1' : '0',
+              },
+                h('input', {
+                  type: 'radio', name: 'sd-cover-choice', checked: coverChoice === index,
+                  onChange: () => setCoverChoice(index),
+                }),
+                h('span', null, text)))) : null),
+          proposed.note ? h('div', { className: 'sd-hint', style: { marginTop: 8 } }, '模型说明：' + proposed.note) : null,
+          h('div', { className: 'sd-rev-actions' },
+            h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', disabled: revisionBusy, onClick: applyRevision }, revisionBusy ? '处理中…' : '采用'),
+            h('button', { className: 'sd-btn', type: 'button', disabled: revisionBusy, onClick: reviseAgain }, '再改一版'),
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: revisionBusy, onClick: discardRevision }, '保留原样')))) : null
+
+      const historyModal = historyOpen ? h('div', { className: 'sd-mask' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '修改历史', style: { maxWidth: 620 } },
+          h('h3', null, '修改历史'),
+          h('div', { className: 'sd-hint' }, '采用过的提案可以回滚；生成中的提案会显示在上一个弹窗。'),
+          revisions.length
+            ? h('div', { className: 'sd-rev-history' }, revisions.slice().reverse().map(row => h('div', { key: row.id, className: 'sd-rev-history-row' },
+              h('span', null, (row.scope ?? []).map(scopeLabel).join(' / ') + ' · ' + revisionStatusLabel(row.status)),
+              h('b', { title: row.feedback }, row.feedback || '（无意见）'),
+              row.status === 'accepted'
+                ? h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: revisionBusy, onClick: () => revertRevision(row.id) }, '回滚')
+                : null)))
+            : h('div', { className: 'sd-hint', style: { marginTop: 8 } }, '还没有修改记录。'),
+          h('div', { className: 'sd-card-foot', style: { marginTop: 12 } },
+            h('span', { style: { flex: 1 } }),
+            h('button', { className: 'sd-btn', type: 'button', onClick: () => setHistoryOpen(false) }, '关闭')))) : null
+
       return h(React.Fragment, null,
         head,
         platformTabs,
@@ -2420,8 +2786,11 @@ window.__ModuleLoader__.load({
           className: note.tone === 'error' ? 'sd-pub-error' : 'sd-pub-ok',
           style: { marginTop: 8 },
         }, note.text) : null,
-        generating && task ? h('div', { className: 'sd-pub-note', style: { marginTop: 6 } },
-          (task.message || '正在生成…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
+        (generating || revising) && task ? h('div', { className: 'sd-pub-note', style: { marginTop: 6 } },
+          (task.message || '正在处理…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
+        !task?.running && task?.error && (task.kind === 'publish-copy' || task.kind === 'publish-revise')
+          ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, '处理失败：' + task.error)
+          : null,
         copyNote ? h('div', { className: 'sd-pub-ok', style: { marginTop: 6 } }, copyNote) : null,
         h('div', {
           className: 'sd-pub-grid', role: 'tabpanel', id: 'sd-pub-panel',
@@ -2434,6 +2803,9 @@ window.__ModuleLoader__.load({
             activePlatform === 'xiaohongshu' ? coverCard : null,
             checksCard,
             exportCard)),
+        proposalModal,
+        feedbackModal,
+        historyModal,
         h('div', { className: 'sd-pub-foot' },
           h('span', null, '发布包写到项目 exports/ 目录，可随时删除'),
           h('span', null, '数据只在本机 · 不上传云端')))

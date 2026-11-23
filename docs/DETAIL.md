@@ -91,6 +91,8 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 成片之后有独立的「发布」入口，只做发布包，不登录平台：小红书 / X 两个平台。
 
 - 文案：顶部两个平台页签切换，每页「一键生成」只生成当前平台版本；小红书标题 ≤20 字、正文 ≤1000、话题 ≤10，X 单条 ≤280 加权字符（CJK 2、URL 23）。超限自动带反馈重试一次，仍超限在页面标红并挡住导出；模型漏掉某平台时保留该平台旧文案。
+- 按意见修改：标题 / 正文 / 封面大字可单独提意见，模型只改勾选字段并返回提案，界面对比后采用才写回；已采用的版本可回滚。封面另支持换底图和底部/顶部、字号。
+- 修订记录：`publish.json` 的 `revisions` 保存 before/after、意见、状态（proposed / accepted / rejected / reverted），最多 30 条。
 - 封面：复用 `renderCoverImage()` 出 1080×1440，单独存 `publish.cover`，不覆盖成片首帧的 `item.cover`。
 - 发布包：`projects/<id>/exports/<stamp>/`，每平台一个子目录（video / copy.md，封面有则带），外加 README / checklist / manifest（含 sha256）。先写临时目录再 rename，导出文件用 copy 而不是硬链接，旧包不会随后续重渲染变化。
 - 数据：`projects/<id>/publish.json`（独立原子写锁），不写 `state.json`。

@@ -168,6 +168,7 @@ After the final cut, open the separate **Publish** entry. It never logs into a p
 - Xiaohongshu gets a 1080×1440 cover; X uses the video's first frame. Copy is editable and copyable.
 - **Pre-flight checks** cover copy length, X weighted length, video duration / size and cover. Copy errors block export; video over-limit is a warning only.
 - **Export package** writes `exports/<timestamp>/` with `xiaohongshu/`, `x/` subfolders (video, copy.md, optional cover) plus `README.md`, `checklist.md`, `manifest.json`. The package is an immutable snapshot: re-rendering the source video later does not rewrite an old package.
+- **Revise by feedback**: click Ask on the title, body or cover; pick a quick chip or write your own note. The plugin proposes a change first (only the checked fields), shows old vs new, and writes back only after you choose Adopt; every accepted revision can be reverted. Cover has separate Text / Base image / Layout tabs.
 - Upload, paste and publish yourself, then mark each platform as published in the page.
 
 ---

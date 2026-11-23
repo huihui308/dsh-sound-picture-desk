@@ -100,7 +100,10 @@ exports/<YYYYMMDD-HHmmss>/
     "xiaohongshu": { "title": "", "body": "", "tags": [] },
     "x": { "text": "" }
   },
-  "cover": { "path": "covers/xhs-1712.png", "title": "", "width": 1080, "height": 1440, "at": null },
+  "cover": {
+    "path": "covers/xhs-1712.png", "title": "", "width": 1080, "height": 1440, "at": null,
+    "sourceRef": "segment:s001", "layout": "bottom", "fontScale": 1, "textSource": "auto"
+  },
   "exports": [{ "at": "", "stamp": "", "dir": "", "targets": [] }],
   "records": [{
     "platform": "xiaohongshu",
@@ -109,6 +112,14 @@ exports/<YYYYMMDD-HHmmss>/
     "note": "",
     "at": "",
     "metrics": {}
+  }],
+  "revisions": [{
+    "id": "rev_...", "at": "2026-11-23T06:20:00.000Z",
+    "scope": ["title"], "status": "proposed",
+    "feedback": "标题不要用问句，控制在 16 字内",
+    "before": { "title": "旧标题" },
+    "after": { "title": "改后的标题" },
+    "model": "…", "note": "改短了", "appliedAt": null
   }]
 }
 ```
@@ -178,7 +189,7 @@ exports/<YYYYMMDD-HHmmss>/
 ## 15. 实现落点（2026-11-23）
 
 - 规则 / 计数 / 校验：`src/publish/rules.js`；文案生成：`src/publish/copy.js`；发布包：`src/publish/export.js`。
-- Host：`publish/read`、`publish/generate`、`publish/save`、`publish/cover`、`publish/export`、`publish/record` 六个 action；`MEDIA_DIRS` 加 `exports`，`.md` / `.txt` 可下载。
+- Host：`publish/read`、`publish/generate`、`publish/save`、`publish/cover`、`publish/export`、`publish/record` 六个 action；`MEDIA_DIRS` 加 `exports`，`.md` / `.txt` 可下载。按意见修改新增 `publish/revise`、`publish/revise/apply`、`publish/revise/discard`、`publish/revise/revert`。
 - 2026-11-23 复审修复：发布范围固定双平台并修正老窄 `targets`；单平台生成不再用空串覆盖另一平台；导出改为 copy 快照 + 临时目录原子 rename + 同秒后缀；锁陈旧接管原子化、超时 15 秒；文案 JSON 解析失败纠偏重试、重试更差保留首版；导出/封面在任务运行时返回 409；视频时长缺失补 `probeDuration` 并给 warn；小红书计数统一按码点（emoji 算 1）。
 - 导出目录选择增加保护：不允许把发布包复制到自己里面；复制失败只回传错误，不影响项目内导出。
 - 客户端：「发布」是六个阶段页签之外的独立入口（不进 `STAGES` / `TAB_KEYS`），项目有 `render` 才可点；发布页内用平台页签切换，每平台独立一键生成，页签角标显示该平台超限数。
@@ -188,6 +199,42 @@ exports/<YYYYMMDD-HHmmss>/
   - 视频超平台时长 / 大小只 warn 不挡导出；文案超限才挡。
   - V1 不做 zip；远程访问逐个文件下载。
   - 封面标题按字数自动缩字号，20 字也不会溢出 1080 宽。
-- 测试：`npm test`（规则 / 计数 / 导出包 / publish.json 读写，共 10 项）。
+- 测试：`npm test`（规则 / 计数 / 导出包 / publish.json 读写 / 按意见修改，共 36 项）。
 - 验证前需重启 `dsh-web.service`：Host 半片改了，不重启看不到新接口。
 
+## 16. 按意见修改（V1，2026-11-23）
+
+### 交互
+
+- 标题、正文、封面右上角各有「提意见」；弹层里勾选要改的字段（可多选），选快捷标签或直接写意见。
+- 提交前先保存当前草稿作为基线；后台任务只生成 **提案**，不改 `variants` / `cover`。
+- 提案弹窗对比旧/新：采用 / 再改一版 / 保留原样。采用才写回；写回后可从「修改历史」回滚。
+- 封面单独三栏：文字（3 条候选，选中采用）、底图（分镜图 / 参考图 / 成片封面缩略图）、排版（底部/顶部、字号小/中/大）。
+- 标题采用后，若封面大字是自动跟随且已有封面，提示是否同步；手动改过的封面大字不自动动。
+
+### 数据
+
+- `publish.revisions[]`：`id / at / scope / feedback / status(proposed|accepted|rejected|reverted) / before / after / model / note / appliedAt`，最多 30 条。
+- `before/after` 只存 scope 内字段；封面大字提案的 `after.coverTexts` 最多 5 条候选。
+- `cover` 增加 `sourceRef / layout(bottom|top) / fontScale / textSource(auto|manual)`，保证可复现重渲染。
+
+### API 与状态机
+
+- `publish/revise`：校验 scope、feedback（2–500 字）、任务互斥；先把旧 proposed 标 rejected，再启动 `publish-revise` 任务。
+- `publish/revise/apply`：确认提案仍是 proposed；比较当前字段与 `before`，不一致时返回 409 `changed`（客户端确认后可带 `force`）；封面大字按 `coverTextIndex` 选中后重渲染封面；写回后用 `accepted` 标记。
+- `publish/revise/discard`：proposed → rejected，内容不变。
+- `publish/revise/revert`：accepted → reverted，把 before 写回；封面大字会按旧文字重渲染。
+- 任务失败 / 模型返回不可用：不产生提案，原内容不动。
+
+### Prompt 与校验
+
+- `src/publish/revise.js`：输入旁白稿、当前文案、scope、用户意见；要求只输出勾选字段，禁止编造事实。
+- 标题 ≤20 码点、正文 ≤1000 码点、封面大字每条 ≤20 码点；不满足就带错误反馈重试一次，仍失败抛错。
+- 封面大字一次给 3 条候选，去重；客户端用 radio 选择。
+
+### 边界
+
+- 未勾选字段 100% 不合并；提案弹窗展示 before/after，避免模型顺手改全文。
+- 任务跑的过程中用户继续编辑：采用时检测 `before` 不匹配，先确认再强制采用。
+- 提案未采用不写入草稿；刷新页面提案仍在（`publish.json` 落盘）。
+- V1 只做小红书；X 的按意见修改留到后续。
