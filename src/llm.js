@@ -1,6 +1,9 @@
 // 调 DeepSeek Harness 当前默认模型，不单独配置密钥。
 // 模型不可用时抛错，由调用方决定降级——不静默返回半成品。
 import { randomUUID } from 'node:crypto'
+import { appendFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 /**
  * 插件在会话之外调模型，自己带一个会话标识。有些网关按会话路由，
@@ -24,6 +27,22 @@ export function modelInfo(ctx) {
 export function resolveModel(ctx, route) {
   if (route?.provider && route?.model) return { provider: route.provider, model: route.model }
   return modelInfo(ctx)
+}
+
+/** 只记上下文，不记密钥；用于排查模型通道超时。 */
+function logModelFailure(info, err) {
+  try {
+    const dir = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'sound-picture-desk')
+    const line = JSON.stringify({
+      at: new Date().toISOString(),
+      provider: info?.provider,
+      model: info?.model,
+      message: err?.message,
+      cause: err?.cause?.code || err?.cause?.message || null,
+      stack: String(err?.stack || '').slice(0, 4000),
+    }) + '\n'
+    appendFile(join(dir, 'model-errors.log'), line).catch(() => {})
+  } catch {}
 }
 
 /** 网络/连接类错误重试；模型自身返回 4xx、内容不合格不重试。 */
@@ -99,7 +118,10 @@ export async function callModel(ctx, { system, user, maxTokens = 8000, signal, r
       try {
         return await once(budget)
       } catch (err) {
-        if (signal?.aborted || !transientModelError(err) || attempt >= 2) throw err
+        if (signal?.aborted || !transientModelError(err) || attempt >= 2) {
+          if (transientModelError(err)) logModelFailure(info, err)
+          throw err
+        }
         await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)))
       }
     }
