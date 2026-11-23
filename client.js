@@ -745,7 +745,7 @@ window.__ModuleLoader__.load({
                 item.counts.segments ? ` · ${item.counts.segments} 段 · 约 ${formatSecs(item.totalSecs || 0)}` : '')),
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onSettings, title: '设置' }, h(GearIcon))),
 
-          // 阶段导航
+          // 阶段导航（发布是独立入口，不进六阶段派生；没成片时置灰）
           h('div', { className: 'sd-tabnav' },
             TAB_KEYS.map((key, index) => {
               const stage = data.stages.find(row => row.id === key)
@@ -758,19 +758,17 @@ window.__ModuleLoader__.load({
               },
                 h('span', { className: 'sd-tabnav-mark' }, TabMark({ key, done, index, active })),
                 h('span', null, stage?.label ?? key))
-            })),
-
-          // 发布是独立入口，不进六阶段派生；没成片时置灰
-          h('span', { className: 'sd-tabnav-sep' }),
-          h('button', {
-            key: 'publish', type: 'button', className: 'sd-tabnav-btn',
-            'data-on': active === 'publish' ? '1' : '0',
-            disabled: !item.render,
-            title: item.render ? '生成发布包' : '先合成成片',
-            onClick: () => setPicked('publish'),
-          },
-            h('span', { className: 'sd-tabnav-mark' }, active === 'publish' ? '●' : '⑦'),
-            h('span', null, '发布')),
+            }),
+            h('span', { className: 'sd-tabnav-sep' }),
+            h('button', {
+              key: 'publish', type: 'button', className: 'sd-tabnav-btn',
+              'data-on': active === 'publish' ? '1' : '0',
+              disabled: !item.render,
+              title: item.render ? '生成发布包' : '先合成成片',
+              onClick: () => setPicked('publish'),
+            },
+              h('span', { className: 'sd-tabnav-mark' }, active === 'publish' ? '●' : '⑦'),
+              h('span', null, '发布'))),
 
           // 只在跑着或出错时占位：跑完就把进度条撤掉，免得停在一句中间文案上像没结束
           task && (task.running || task.error) ? h('div', null,
