@@ -72,6 +72,18 @@ function parseVariants(text, targets) {
   return variants
 }
 
+function parseOrNull(text, targets) {
+  try { return parseVariants(text, targets) } catch { return null }
+}
+
+function jsonOnlyPrompt({ item, targets }) {
+  return [
+    '上一次输出不是可解析的 JSON。请严格只输出一个 JSON 对象，不要 Markdown 代码块、解释或任何前后缀。',
+    '',
+    userPrompt({ item, targets }),
+  ].join('\n')
+}
+
 function blockingIssues(targets, variants) {
   const issues = []
   for (const id of targets) {
@@ -83,39 +95,64 @@ function blockingIssues(targets, variants) {
   return issues
 }
 
+/** 超限总量：条数相同但超得更多时，别用重试版覆盖第一版。 */
+function blockingScore(targets, variants) {
+  let score = 0
+  for (const id of targets) {
+    for (const check of validateCopy(id, variants[id])) {
+      if (check.state !== 'error') continue
+      const match = /(\d+)\s*\/\s*(\d+)/.exec(check.detail)
+      score += match ? Math.max(1, Number(match[1]) - Number(match[2])) : 1
+    }
+  }
+  return score
+}
+
 /**
  * 生成发布文案。
  * 第一次有超限项时自动带上反馈重试一次；仍超限不抛错——交给界面标红让用户手动改。
  */
-export async function generateCopyVariants(ctx, { item, targets, route, signal, onProgress }) {
+export async function generateCopyVariants(ctx, { item, targets, route, signal, onProgress, call = callModel }) {
   const list = normalizeTargets(targets)
-  const first = await callModel(ctx, {
+  const ask = user => call(ctx, {
     system: SYSTEM,
-    user: userPrompt({ item, targets: list }),
+    user,
     maxTokens: 3000,
     signal,
     route,
     onProgress,
   })
-  let variants = parseVariants(first.text, list)
+
+  // 第一轮不是 JSON 也要纠偏重试一次，而不是直接让整个任务失败
+  let response = await ask(userPrompt({ item, targets: list }))
+  let variants = parseOrNull(response.text, list)
+  if (!variants) {
+    response = await ask(jsonOnlyPrompt({ item, targets: list }))
+    variants = parseOrNull(response.text, list)
+    if (!variants) throw new Error('模型没有返回可解析的 JSON 文案，点「一键生成」再试一次')
+  }
+  let model = response.model ?? null
   let issues = blockingIssues(list, variants)
-  let model = first.model
+  let score = blockingScore(list, variants)
+
   if (issues.length) {
-    const second = await callModel(ctx, {
-      system: SYSTEM,
-      user: feedbackPrompt({ item, targets: list, previous: variants, issues }),
-      maxTokens: 3000,
-      signal,
-      route,
-      onProgress,
-    })
-    const retried = parseVariants(second.text, list)
-    const retriedIssues = blockingIssues(list, retried)
-    // 重试反而更差就保留第一版，别为了“重试过”牺牲内容
-    if (retriedIssues.length <= issues.length) {
-      variants = retried
-      issues = retriedIssues
-      model = second.model
+    try {
+      const second = await ask(feedbackPrompt({ item, targets: list, previous: variants, issues }))
+      const retried = parseOrNull(second.text, list)
+      if (retried) {
+        const retriedIssues = blockingIssues(list, retried)
+        const retriedScore = blockingScore(list, retried)
+        // 重试反而更差就保留第一版，别为了“重试过”牺牲内容
+        if (retriedIssues.length < issues.length
+          || (retriedIssues.length === issues.length && retriedScore < score)) {
+          variants = retried
+          issues = retriedIssues
+          score = retriedScore
+          model = second.model ?? model
+        }
+      }
+    } catch {
+      // 重试请求失败/不可解析时保留第一版（超限项仍会标红让用户手改）
     }
   }
   return { variants, model, issues }

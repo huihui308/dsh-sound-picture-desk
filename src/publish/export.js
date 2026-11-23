@@ -1,7 +1,7 @@
 // 发布包：把成片、封面、文案和清单整理成一个目录，用户自己上传。
 // 不登录平台、不调用任何账号接口。
 import { createHash } from 'node:crypto'
-import { copyFile, link, mkdir, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
 import { PLATFORMS, formatBytes, formatDuration } from './rules.js'
@@ -24,11 +24,6 @@ async function sha256(file) {
   return hash.digest('hex')
 }
 
-/** 同卷硬链接，省一份视频占位；跨卷或不支持就退回复制。 */
-async function linkOrCopy(source, target) {
-  try { await link(source, target); return 'link' } catch { await copyFile(source, target); return 'copy' }
-}
-
 function xhsCopyMarkdown(variant) {
   const title = String(variant.title ?? '').trim()
   const body = String(variant.body ?? '').trim()
@@ -47,6 +42,7 @@ function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover }) {
   lines.push('- 导出时间：' + stamp)
   lines.push('- 规则版本：' + ruleVersion)
   if (video) lines.push('- 视频：' + formatDuration(video.secs) + ' · ' + formatBytes(video.bytes))
+  if (!cover) lines.push('- 封面：本包未包含，上传时用平台默认首帧，或回工作台补生成')
   lines.push('')
   lines.push('## 怎么发')
   for (const id of targets) {
@@ -84,30 +80,44 @@ function checklistMarkdown({ item, targets }) {
   return lines.join('\n') + '\n'
 }
 
-function exportSlug(item) {
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i
+
+export function exportSlug(item) {
   const raw = String(item?.title ?? '').trim()
-  const clean = raw.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40)
-  return clean || String(item?.id ?? 'project')
+  let clean = raw.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40).replace(/[. ]+$/g, '')
+  if (!clean) clean = String(item?.id ?? 'project')
+  if (WINDOWS_RESERVED.test(clean)) clean = '_' + clean
+  return clean
 }
 
 /**
  * 生成发布包。返回的结构给 host 用来拼界面链接和记录。
  * 不负责校验文案——调用方先跑一遍规则检查，有阻断项就不要导。
+ *
+ * 导出是快照：视频/封面一律 copy 而不是硬链接，母版重渲染不会隔空改写旧包；
+ * 先写到隐藏临时目录，全部成功后再 rename 成正式目录，中途失败不会留下半成品。
  */
 export async function buildExport({ baseDir, item, publish, targets, ruleVersion, now = new Date() }) {
   if (!item?.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
-  const stamp = exportStamp(now)
+  const baseStamp = exportStamp(now)
+  let stamp = baseStamp
+  for (let index = 2; index <= 50; index += 1) {
+    const exists = await stat(join(baseDir, 'exports', stamp)).then(() => true, () => false)
+    if (!exists) break
+    stamp = baseStamp + '-' + index
+  }
   const relDir = 'exports/' + stamp
   const absDir = join(baseDir, 'exports', stamp)
-  await mkdir(absDir, { recursive: true })
+  const tmpDir = join(baseDir, 'exports', '.tmp-' + stamp + '-' + Math.random().toString(36).slice(2, 8))
 
   const videoSource = join(baseDir, item.render.path)
   const videoBytes = await fileSize(videoSource)
   if (!videoBytes) throw Object.assign(new Error('成片文件不见了，重新合成一次'), { status: 400 })
 
   const files = []
+  const tmpPath = rel => join(tmpDir, rel.slice(relDir.length + 1))
   const record = async (rel, extra = {}) => {
-    const abs = join(baseDir, rel)
+    const abs = tmpPath(rel)
     const bytes = extra.bytes ?? await fileSize(abs)
     files.push({
       path: rel,
@@ -117,75 +127,81 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
     })
   }
 
-  let coverIncluded = null
-  for (const id of targets) {
-    const platform = PLATFORMS[id]
-    if (!platform) continue
-    const platformDir = join(absDir, id)
-    await mkdir(platformDir, { recursive: true })
+  await mkdir(tmpDir, { recursive: true })
+  try {
+    let coverIncluded = null
+    for (const id of targets) {
+      const platform = PLATFORMS[id]
+      if (!platform) continue
+      const platformDir = join(tmpDir, id)
+      await mkdir(platformDir, { recursive: true })
 
-    const videoRel = relDir + '/' + id + '/video.mp4'
-    await linkOrCopy(videoSource, join(platformDir, 'video.mp4'))
-    await record(videoRel, { bytes: videoBytes })
+      const videoRel = relDir + '/' + id + '/video.mp4'
+      await copyFile(videoSource, join(platformDir, 'video.mp4'))
+      await record(videoRel, { bytes: videoBytes })
 
-    if (id === 'xiaohongshu' && publish?.cover?.path) {
-      const coverSource = join(baseDir, publish.cover.path)
-      const coverName = 'cover-' + publish.cover.width + 'x' + publish.cover.height + '.png'
-      const coverRel = relDir + '/' + id + '/' + coverName
-      try {
-        await linkOrCopy(coverSource, join(platformDir, coverName))
-        await record(coverRel)
-        coverIncluded = publish.cover
-      } catch {
-        // 封面文件没了就跳过，不阻断导出；界面会提示
+      if (id === 'xiaohongshu' && publish?.cover?.path) {
+        const coverSource = join(baseDir, publish.cover.path)
+        const coverName = 'cover-' + publish.cover.width + 'x' + publish.cover.height + '.png'
+        const coverRel = relDir + '/' + id + '/' + coverName
+        try {
+          await copyFile(coverSource, join(platformDir, coverName))
+          await record(coverRel)
+          coverIncluded = publish.cover
+        } catch {
+          // 封面文件没了就跳过，不阻断导出；README 会说明
+        }
       }
+
+      const copyRel = relDir + '/' + id + '/copy.md'
+      const markdown = id === 'xiaohongshu'
+        ? xhsCopyMarkdown(publish?.variants?.xiaohongshu ?? {})
+        : xCopyMarkdown(publish?.variants?.x ?? {})
+      await writeFile(join(platformDir, 'copy.md'), markdown, 'utf8')
+      await record(copyRel)
     }
 
-    const copyRel = relDir + '/' + id + '/copy.md'
-    const markdown = id === 'xiaohongshu'
-      ? xhsCopyMarkdown(publish?.variants?.xiaohongshu ?? {})
-      : xCopyMarkdown(publish?.variants?.x ?? {})
-    await writeFile(join(platformDir, 'copy.md'), markdown, 'utf8')
-    await record(copyRel)
-  }
+    const readmeRel = relDir + '/README.md'
+    await writeFile(join(tmpDir, 'README.md'), readmeMarkdown({
+      item, targets, stamp, ruleVersion, cover: coverIncluded,
+      video: { secs: item.render.secs, bytes: videoBytes },
+    }), 'utf8')
+    await record(readmeRel)
 
-  const readmeRel = relDir + '/README.md'
-  await writeFile(join(absDir, 'README.md'), readmeMarkdown({
-    item, targets, stamp, ruleVersion, cover: coverIncluded,
-    video: { secs: item.render.secs, bytes: videoBytes },
-  }), 'utf8')
-  await record(readmeRel)
+    const checklistRel = relDir + '/checklist.md'
+    await writeFile(join(tmpDir, 'checklist.md'), checklistMarkdown({ item, targets }), 'utf8')
+    await record(checklistRel)
 
-  const checklistRel = relDir + '/checklist.md'
-  await writeFile(join(absDir, 'checklist.md'), checklistMarkdown({ item, targets }), 'utf8')
-  await record(checklistRel)
+    const manifest = {
+      schemaVersion: 1,
+      generatedAt: now.toISOString(),
+      ruleVersion,
+      project: { id: item.id, title: item.title, secs: item.render.secs },
+      targets,
+      files: files.map(file => ({ path: file.name, bytes: file.bytes, sha256: file.sha256 })),
+    }
+    const manifestRel = relDir + '/manifest.json'
+    await writeFile(join(tmpDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8')
+    files.push({
+      path: manifestRel,
+      name: 'manifest.json',
+      bytes: await fileSize(join(tmpDir, 'manifest.json')),
+      sha256: null,
+    })
 
-  const manifest = {
-    schemaVersion: 1,
-    generatedAt: now.toISOString(),
-    ruleVersion,
-    project: { id: item.id, title: item.title, secs: item.render.secs },
-    targets,
-    files: files.map(file => ({ path: file.name, bytes: file.bytes, sha256: file.sha256 })),
-  }
-  const manifestRel = relDir + '/manifest.json'
-  await writeFile(join(absDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8')
-  files.push({
-    path: manifestRel,
-    name: 'manifest.json',
-    bytes: await fileSize(join(absDir, 'manifest.json')),
-    sha256: null,
-  })
-
-  const slug = exportSlug(item)
-  return {
-    stamp,
-    relDir,
-    absDir,
-    slug,
-    folderName: slug + '-' + stamp,
-    targets,
-    files,
-    manifest,
+    await rename(tmpDir, absDir)
+    return {
+      stamp,
+      relDir,
+      absDir,
+      slug: exportSlug(item),
+      folderName: exportSlug(item) + '-' + stamp,
+      targets,
+      files,
+      manifest,
+    }
+  } catch (err) {
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {})
+    throw err
   }
 }

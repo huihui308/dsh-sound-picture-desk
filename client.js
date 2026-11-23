@@ -215,28 +215,20 @@ window.__ModuleLoader__.load({
 .sd-pub-kicker{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary)}
 .sd-pub-title{font-size:15px;font-weight:650;margin-top:3px}
 .sd-pub-sub{font-size:11.5px;color:var(--dsw-alias-label-tertiary);margin-top:3px}
-.sd-pub-chips{display:flex;gap:6px;margin-left:auto;padding-bottom:2px}
 .sd-pub-chip{font-size:10.5px;padding:2px 8px;border-radius:5px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);white-space:nowrap}
 .sd-pub-chip[data-tone="ok"]{color:var(--dsw-alias-state-success-primary)}
 .sd-pub-chip[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
 .sd-pub-chip[data-tone="error"]{color:var(--dsw-alias-state-error-primary)}
-.sd-pub-platforms{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .sd-pub-tabs{display:flex;gap:8px;margin-top:12px}
 .sd-pub-tab{flex:1;display:flex;align-items:center;gap:9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:9px 12px;cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0}
 .sd-pub-tab[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,var(--dsw-alias-bg-layer-1))}
 .sd-pub-taberr{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 18%,transparent);color:var(--dsw-alias-state-error-primary);font-size:10.5px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .sd-pub-tabwarn{margin-left:auto;color:var(--dsw-alias-state-warn-primary);font-size:11px}
-.sd-pub-platform{display:flex;align-items:center;gap:9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:9px 11px;cursor:pointer;text-align:left;font:inherit;color:inherit}
-.sd-pub-platform:disabled{opacity:.65;cursor:default}
-.sd-pub-platform[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,var(--dsw-alias-bg-layer-1))}
-.sd-pub-check{width:15px;height:15px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;flex:0 0 auto}
-.sd-pub-check[data-on="1"]{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}
 .sd-pub-picon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;flex:0 0 auto;letter-spacing:.02em;text-align:center;line-height:1.1}
 .sd-pub-picon[data-platform="xiaohongshu"]{background:#ff2442}
 .sd-pub-picon[data-platform="x"]{background:#000;font-size:14px}
 .sd-pub-pname{font-size:12px;font-weight:600;display:block}
 .sd-pub-pmeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:1px;display:block}
-.sd-pub-pstate{margin-left:auto;font-size:10.5px;color:var(--dsw-alias-state-success-primary);white-space:nowrap}
 .sd-pub-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;margin-top:12px;align-items:start}
 .sd-pub-col{display:flex;flex-direction:column;gap:10px;min-width:0}
 .sd-pub-card{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:11px;display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -265,7 +257,7 @@ window.__ModuleLoader__.load({
 .sd-pub-record{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .sd-pub-record .sd-btn{padding:2px 7px;font-size:10px}
 .sd-pub-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l1);display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);flex-wrap:wrap}
-.sd-tabnav-sep{width:1px;height:14px;background:var(--dsw-alias-border-l2);margin:0 8px;flex:0 0 auto}
+.sd-tabnav-sep{width:1px;height:14px;background:var(--dsw-alias-border-l2);margin:0 8px;flex:0 0 auto;align-self:center}
 .sd-pub-error{color:var(--dsw-alias-state-error-primary);font-size:11.5px;line-height:1.6}
 .sd-pub-ok{color:var(--dsw-alias-state-success-primary);font-size:11.5px;line-height:1.6;word-break:break-all}
 .sd-pub-note{font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
@@ -1952,14 +1944,25 @@ window.__ModuleLoader__.load({
       const [exportResult, setExportResult] = useState(null)
       const [copyNote, setCopyNote] = useState('')
       const [activePlatform, setActivePlatform] = useState('xiaohongshu')
+      const coverTouchedRef = useRef(false)
+      const dirtyRef = useRef(false)
+      const draftsRef = useRef(null)
+      const prevVariantsRef = useRef(null)
+      const generatingRef = useRef(false)
+      const itemIdRef = useRef(item.id)
+      itemIdRef.current = item.id
       const task = item.task
       const generating = Boolean(task?.running && task.kind === 'publish-copy')
+      generatingRef.current = generating
+      const taskRunning = Boolean(task?.running)
 
       const refresh = useCallback(async () => {
         try {
           const body = await post('publish/read', { id: item.id })
           setView(body.publish)
-          setCoverTitle(prev => prev || body.publish.cover?.title || body.publish.variants?.xiaohongshu?.title || item.title || '')
+          if (!coverTouchedRef.current) {
+            setCoverTitle(body.publish.cover?.title || body.publish.variants?.xiaohongshu?.title || item.title || '')
+          }
           setLoadError(null)
         } catch (err) {
           setLoadError(err.message)
@@ -1977,14 +1980,29 @@ window.__ModuleLoader__.load({
         if (had && !running) refresh()
       }, [item.task?.running, item.task?.finishedAt, refresh])
 
-      // 只有文案内容真的变了才重置编辑草稿，避免生成封面 / 标记发布把用户没保存的字冲掉
+      // 只合并服务端真正变了的平台；单平台生成完成时，另一平台没保存的草稿要留着
       const variantsKey = view ? JSON.stringify(view.variants ?? {}) : ''
       useEffect(() => {
         if (!view) return
-        setDrafts(JSON.parse(JSON.stringify(view.variants ?? {})))
+        const next = view.variants ?? {}
+        const prev = prevVariantsRef.current
+        prevVariantsRef.current = JSON.parse(JSON.stringify(next))
+        setDrafts(current => {
+          if (!current) return JSON.parse(JSON.stringify(next))
+          const merged = JSON.parse(JSON.stringify(current))
+          for (const platformId of Object.keys(next)) {
+            if (!prev || JSON.stringify(prev[platformId] ?? {}) !== JSON.stringify(next[platformId] ?? {})) {
+              merged[platformId] = JSON.parse(JSON.stringify(next[platformId]))
+            }
+          }
+          return merged
+        })
       }, [variantsKey])
 
       const draftsSafe = drafts ?? {}
+      const dirty = Boolean(view && drafts && JSON.stringify(drafts) !== JSON.stringify(view.variants ?? {}))
+      dirtyRef.current = dirty
+      draftsRef.current = drafts
       const targets = view?.targets ?? []
       const platformById = id => (view?.platforms ?? []).find(row => row.id === id) ?? { id, label: id, summary: '', composeUrl: '' }
       const platformLabel = id => platformById(id).label
@@ -2004,22 +2022,16 @@ window.__ModuleLoader__.load({
         })
       }
 
-      const save = async patch => {
-        if (saving) return null
+      const save = async () => {
+        if (saving || taskRunning) return null
         setSaving(true)
         setNote(null)
         try {
-          const nextTargets = patch?.targets ?? targets
-          const payloadVariants = patch?.variants ?? draftsSafe
-          // 只提交当前选中平台的文案；取消勾选的平台保留原有内容，别被空草稿冲掉
-          const activeVariants = {}
-          for (const platformId of nextTargets) {
-            if (payloadVariants[platformId]) activeVariants[platformId] = payloadVariants[platformId]
-          }
+          // 两个平台都提交；服务端也固定两平台，避免旧的窄 targets 把另一平台静默丢掉
           const body = await post('publish/save', {
             id: item.id,
-            targets: nextTargets,
-            variants: activeVariants,
+            targets: ['xiaohongshu', 'x'],
+            variants: draftsSafe,
           })
           setView(body.publish)
           setDrafts(JSON.parse(JSON.stringify(body.publish.variants ?? {})))
@@ -2032,6 +2044,18 @@ window.__ModuleLoader__.load({
           setSaving(false)
         }
       }
+
+      const autoSave = () => {
+        if (dirty && !saving && !generating && !taskRunning) save()
+      }
+
+      // 切走页签/关闭页面时兜底保存，兜住「打了字直接切页」的常见路径
+      useEffect(() => () => {
+        if (!dirtyRef.current || generatingRef.current) return
+        const payload = draftsRef.current
+        if (!payload) return
+        post('publish/save', { id: itemIdRef.current, targets: ['xiaohongshu', 'x'], variants: payload }).catch(() => {})
+      }, [])
 
       const addTag = () => {
         const tag = tagInput.trim().replace(/^#+/, '').trim()
@@ -2046,20 +2070,21 @@ window.__ModuleLoader__.load({
       }
 
       const generate = () => {
-        if (generating) return
+        if (generating || taskRunning) return
         const has = Boolean(composeVariantText(activePlatform, draftsSafe[activePlatform] ?? {}))
         if (has && !window.confirm('会覆盖「' + platformLabel(activePlatform) + '」当前文案，继续？')) return
         onAction('publish/generate', { id: item.id, targets: [activePlatform] }, null)
       }
 
       const makeCover = async () => {
-        if (makingCover) return
+        if (makingCover || taskRunning) return
         setMakingCover(true)
         setNote(null)
         try {
           const saved = await save({})
           if (!saved) return
-          const body = await post('publish/cover', { id: item.id, title: coverTitle.trim() })
+          const body = await post('publish/cover', { id: item.id, title: coverTouchedRef.current ? coverTitle.trim() : '' })
+          coverTouchedRef.current = false
           setView(body.publish)
           setNote({ tone: 'ok', text: '封面已生成' })
         } catch (err) {
@@ -2070,7 +2095,7 @@ window.__ModuleLoader__.load({
       }
 
       const doExport = async () => {
-        if (exporting) return
+        if (exporting || taskRunning) return
         setExporting(true)
         setNote(null)
         setExportResult(null)
@@ -2147,7 +2172,7 @@ window.__ModuleLoader__.load({
         return h(React.Fragment, null, head, h('div', { className: 'sd-hint', style: { paddingTop: 24 } }, '正在读取发布数据…'))
       }
 
-      const platformTabs = h('div', { className: 'sd-pub-tabs' },
+      const platformTabs = h('div', { className: 'sd-pub-tabs', role: 'tablist', 'aria-label': '发布平台' },
         ['xiaohongshu', 'x'].map(platformId => {
           const info = platformById(platformId)
           const active = activePlatform === platformId
@@ -2155,6 +2180,8 @@ window.__ModuleLoader__.load({
           const warns = view.checks.filter(check => check.platform === platformId && check.state === 'warn').length
           return h('button', {
             key: platformId, type: 'button', className: 'sd-pub-tab',
+            role: 'tab', id: 'sd-pub-tab-' + platformId, 'aria-controls': 'sd-pub-panel',
+            'aria-selected': active ? 'true' : 'false',
             'data-on': active ? '1' : '0',
             onClick: () => setActivePlatform(platformId),
           },
@@ -2178,13 +2205,15 @@ window.__ModuleLoader__.load({
           h('span', { className: 'sd-pub-counter' },
             '标题 ' + xhsCount.title + '/' + (xhsInfo.title?.max ?? 20)
             + ' · 正文 ' + xhsCount.body + '/' + (xhsInfo.body?.max ?? 1000)
-            + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10))),
+            + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10)),
+          dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
           h('label', null, '标题'),
           h('input', {
             className: 'sd-input', value: xhs.title ?? '', maxLength: 120,
             placeholder: '20 字以内，带钩子',
             onChange: event => patchDraft('xiaohongshu', { title: event.target.value }),
+            onBlur: autoSave,
           })),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
           h('label', null, '正文'),
@@ -2192,6 +2221,7 @@ window.__ModuleLoader__.load({
             className: 'sd-text', value: xhs.body ?? '', rows: 6, style: { minHeight: 132 },
             placeholder: '300–600 字，分段写',
             onChange: event => patchDraft('xiaohongshu', { body: event.target.value }),
+            onBlur: autoSave,
           })),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
           h('label', null, '话题'),
@@ -2211,6 +2241,7 @@ window.__ModuleLoader__.load({
               value: tagInput,
               placeholder: '输入话题，回车添加',
               onChange: event => setTagInput(event.target.value),
+              onBlur: autoSave,
               onKeyDown: event => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
@@ -2221,9 +2252,9 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-card-foot' },
           h('button', {
             className: 'sd-btn', 'data-kind': 'primary', type: 'button',
-            disabled: generating || saving, onClick: generate,
+            disabled: generating || saving || taskRunning, onClick: generate,
           }, generating ? '生成中…' : '一键生成'),
-          h('button', { className: 'sd-btn', type: 'button', disabled: saving, onClick: () => save({}) },
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
             saving ? '保存中…' : '保存'),
           h('span', { style: { flex: 1 } }),
           h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('xiaohongshu') },
@@ -2236,19 +2267,21 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-pub-card-head' },
           h('span', { className: 'sd-pub-picon', 'data-platform': 'x', style: { width: 20, height: 20, fontSize: 11, borderRadius: 5 } }, 'X'),
           h('span', { className: 'sd-pub-card-title' }, 'X 文案'),
-          h('span', { className: 'sd-pub-counter' }, '加权 ' + xCount.weighted + '/' + (xInfo.text?.maxWeighted ?? 280))),
+          h('span', { className: 'sd-pub-counter' }, '加权 ' + xCount.weighted + '/' + (xInfo.text?.maxWeighted ?? 280)),
+          dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
           h('textarea', {
             className: 'sd-text', value: xDraft.text ?? '', rows: 5, style: { minHeight: 112 },
             placeholder: '一条 280 加权字符以内的帖子，话题内联',
             onChange: event => patchDraft('x', { text: event.target.value }),
+            onBlur: autoSave,
           })),
         h('div', { className: 'sd-card-foot' },
           h('button', {
             className: 'sd-btn', 'data-kind': 'primary', type: 'button',
-            disabled: generating || saving, onClick: generate,
+            disabled: generating || saving || taskRunning, onClick: generate,
           }, generating ? '生成中…' : '一键生成'),
-          h('button', { className: 'sd-btn', type: 'button', disabled: saving, onClick: () => save({}) },
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
             saving ? '保存中…' : '保存'),
           h('span', { style: { flex: 1 } }),
           h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('x') },
@@ -2285,12 +2318,12 @@ window.__ModuleLoader__.load({
               h('label', null, '封面大字'),
               h('input', {
                 className: 'sd-input', value: coverTitle, maxLength: 40,
-                onChange: event => setCoverTitle(event.target.value),
+                onChange: event => { coverTouchedRef.current = true; setCoverTitle(event.target.value) },
               })),
             h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
               h('button', {
                 className: 'sd-btn', 'data-kind': view.cover?.path ? undefined : 'primary', type: 'button',
-                disabled: makingCover || saving || generating || busy,
+                disabled: makingCover || saving || generating || taskRunning || busy,
                 onClick: makeCover,
               }, makingCover ? '生成中…' : view.cover?.path ? '重新生成' : '生成封面'),
               view.cover?.path ? h('a', {
@@ -2341,7 +2374,7 @@ window.__ModuleLoader__.load({
           })),
         h('button', {
           className: 'sd-btn', 'data-kind': 'primary', type: 'button',
-          disabled: exporting || saving || !view.canExport || view.blocking > 0,
+          disabled: exporting || saving || taskRunning || !view.canExport || view.blocking > 0,
           onClick: doExport,
         }, exporting ? '导出中…' : '导出发布包（' + targets.length + ' 个平台）'),
         view.blocking ? h('div', { className: 'sd-pub-error' }, '先改掉 ' + view.blocking + ' 项超限才能导出。') : null,
@@ -2388,7 +2421,10 @@ window.__ModuleLoader__.load({
         generating && task ? h('div', { className: 'sd-pub-note', style: { marginTop: 6 } },
           (task.message || '正在生成…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
         copyNote ? h('div', { className: 'sd-pub-ok', style: { marginTop: 6 } }, copyNote) : null,
-        h('div', { className: 'sd-pub-grid' },
+        h('div', {
+          className: 'sd-pub-grid', role: 'tabpanel', id: 'sd-pub-panel',
+          'aria-label': platformLabel(activePlatform) + ' 发布页',
+        },
           h('div', { className: 'sd-pub-col' },
             activePlatform === 'xiaohongshu' ? xhsCard : xCard,
             guideCard),

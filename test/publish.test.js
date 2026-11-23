@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  weightedLength, validateCopy, normalizeTargets, normalizePublish,
-  sanitizeVariant, composeCopy, countVariant, formatDuration, formatBytes,
+  weightedLength, validateCopy, validateVideo, normalizeTargets, normalizePublish,
+  sanitizeVariant, composeCopy, countVariant, formatDuration, formatBytes, variantIsEmpty,
 } from '../src/publish/rules.js'
 
 test('X 加权长度按官方口径', () => {
@@ -27,6 +27,37 @@ test('小红书标题与正文限制', () => {
 test('X 超过 280 加权字符要拦', () => {
   assert.equal(validateCopy('x', { text: '中'.repeat(140) })[0].state, 'ok')
   assert.equal(validateCopy('x', { text: '中'.repeat(141) })[0].state, 'error')
+})
+
+test('emoji 标题按码点计数，客户端与服务端同口径', () => {
+  const title = '中'.repeat(19) + '😀'
+  const checks = validateCopy('xiaohongshu', { title, body: '正文', tags: [] })
+  assert.equal([...title].length, 20)
+  assert.equal(checks.find(row => row.id === 'title').state, 'ok')
+  assert.equal(checks.find(row => row.id === 'title').detail, '20/20 字')
+})
+
+test('视频检查：超时长/超大小只 warn，时长读不出也要提示', () => {
+  const over = validateVideo('x', { secs: 200, bytes: 3 * 1024 ** 3, width: 1080, height: 1920 })
+  assert.equal(over.filter(row => row.state === 'error').length, 0)
+  assert.equal(over.find(row => row.id === 'video-secs').state, 'warn')
+  assert.equal(over.find(row => row.id === 'video-bytes').state, 'warn')
+  const unknown = validateVideo('xiaohongshu', { secs: 0, bytes: 1024, width: 1080, height: 1920 })
+  assert.equal(unknown.find(row => row.id === 'video-secs').state, 'warn')
+  assert.match(unknown.find(row => row.id === 'video-secs').detail, /读不出/)
+})
+
+test('老 publish.json 的窄 targets 读出来会修正为双平台', () => {
+  const publish = normalizePublish({ targets: ['xiaohongshu'], variants: { x: { text: 'hi' } } })
+  assert.deepEqual(publish.targets, ['xiaohongshu', 'x'])
+  assert.equal(publish.variants.x.text, 'hi')
+})
+
+test('variantIsEmpty 覆盖两平台', () => {
+  assert.equal(variantIsEmpty('x', { text: '  ' }), true)
+  assert.equal(variantIsEmpty('x', { text: 'hi' }), false)
+  assert.equal(variantIsEmpty('xiaohongshu', { title: '', body: '正文' }), false)
+  assert.equal(variantIsEmpty('xiaohongshu', { title: '', body: '', tags: ['a'] }), true)
 })
 
 test('目标平台归一化', () => {

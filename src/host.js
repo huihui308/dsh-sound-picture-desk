@@ -3,7 +3,7 @@
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { appendFile, copyFile, cp, open, rename, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
-import { dirname, extname, join, normalize, sep } from 'node:path'
+import { dirname, extname, join, normalize, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cpus, homedir } from 'node:os'
 
@@ -16,7 +16,7 @@ import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDu
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, publicTask, startTask } from './jobs.js'
-import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, composeCopy, countVariant, normalizeTargets, sanitizeVariant, validateCopy, validateVideo } from './publish/rules.js'
+import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, composeCopy, countVariant, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
 import { generateCopyVariants } from './publish/copy.js'
 import { buildExport } from './publish/export.js'
 
@@ -228,9 +228,12 @@ async function videoInfo(store, state, item) {
   const info = await stat(file).catch(() => null)
   if (!info) return null
   const settings = effectiveSettings(state, item)
+  // 渲染时 probe 失败会把 secs 存成 0；发布检查时补 probe 一次，别让视频检查整体消失
+  let secs = Number(item.render.secs) || 0
+  if (!secs) secs = Math.max(0, Math.round(await probeDuration(file)))
   return {
     path: item.render.path,
-    secs: Number(item.render.secs) || 0,
+    secs,
     bytes: info.size,
     width: Number(settings.width) || 1080,
     height: Number(settings.height) || 1920,
@@ -239,7 +242,7 @@ async function videoInfo(store, state, item) {
 }
 
 /** 把平台规则跑成界面上的检查列表；error 会挡住导出，warn 只提示。 */
-function publishChecks(publish, targets, video, coverExists) {
+export function publishChecks(publish, targets, video, coverExists) {
   const checks = []
   for (const id of targets) {
     const platform = PLATFORMS[id]
@@ -1487,26 +1490,32 @@ async function route(ctx, store, req, res) {
             report(0, '正在写文案（已写 ' + written + ' 字' + (thought ? '，思考 ' + thought + ' 字' : '') + '）')
           },
         })
-        const empty = targets.every(platformId => {
-          const variant = result.variants[platformId] ?? {}
-          return platformId === 'x'
-            ? !String(variant.text ?? '').trim()
-            : !String(variant.title ?? '').trim() && !String(variant.body ?? '').trim()
-        })
-        if (empty) throw new Error('模型没有返回可用的文案，点「重新生成」再试一次')
+        const generated = result.variants ?? {}
+        const generatedEmpty = targets.filter(platformId => variantIsEmpty(platformId, generated[platformId] ?? {}))
+        if (generatedEmpty.length === targets.length) {
+          throw new Error('模型没有返回可用的文案，点「一键生成」再试一次')
+        }
         await store.mutatePublish(id, draft => {
-          // 单平台重新生成只覆盖这个平台，不改发布范围
-          for (const platformId of targets) draft.variants[platformId] = result.variants[platformId]
+          // 单平台重新生成只覆盖这个平台，不改发布范围；模型漏掉的平台保留旧文案
+          draft.targets = [...PLATFORM_ORDER]
+          for (const platformId of targets) {
+            const next = generated[platformId] ?? {}
+            if (!variantIsEmpty(platformId, next)) {
+              draft.variants[platformId] = sanitizeVariant(platformId, next)
+            }
+          }
           return null
         })
         if (needCover) {
           report(1, '正在生成小红书封面…')
           await makePublishCover(store, id, {}).catch(() => null)
         }
-        report(needCover ? 2 : 1, result.issues?.length
+        const keptLabel = generatedEmpty.map(platformId => PLATFORMS[platformId].label).join(' / ')
+        const baseText = result.issues?.length
           ? '文案有 ' + result.issues.length + ' 处超限，请在页面上改'
-          : '完成')
-        return { model: result.model, issues: result.issues ?? [] }
+          : '完成'
+        report(needCover ? 2 : 1, baseText + (keptLabel ? '；' + keptLabel + ' 没生成，保留原文案' : ''))
+        return { model: result.model, issues: result.issues ?? [], keptPlatforms: generatedEmpty }
       })
       return json(res, 200, { task: publicTask(id) })
     }
@@ -1514,10 +1523,10 @@ async function route(ctx, store, req, res) {
       const id = String(body.id ?? '')
       const state = await store.read()
       findItem(state, id)
-      const targets = body.targets !== undefined ? normalizeTargets(body.targets) : null
+      // V1 界面固定两平台都进发布包，忽略客户端传来的 targets，避免旧数据/旧 bundle 把它改窄
       const variants = body.variants && typeof body.variants === 'object' ? body.variants : null
       await store.mutatePublish(id, draft => {
-        if (targets) draft.targets = targets
+        draft.targets = [...PLATFORM_ORDER]
         if (variants) {
           for (const platformId of PLATFORM_ORDER) {
             if (!(platformId in variants)) continue
@@ -1532,6 +1541,7 @@ async function route(ctx, store, req, res) {
       const id = String(body.id ?? '')
       const state = await store.read()
       findItem(state, id)
+      if (isBusy(id)) throw Object.assign(new Error('正在跑任务，等结束再生成封面'), { status: 409 })
       await makePublishCover(store, id, { title: body.title, ref: body.ref })
       return json(res, 200, { publish: await publishView(store, state, id) })
     }
@@ -1540,8 +1550,8 @@ async function route(ctx, store, req, res) {
       const state = await store.read()
       const item = findItem(state, id)
       if (!item.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
-      const publish = await store.readPublish(id)
-      const targets = normalizeTargets(body.targets ?? publish.targets)
+      if (isBusy(id)) throw Object.assign(new Error('正在跑任务，等结束再导出'), { status: 409 })
+      const targets = [...PLATFORM_ORDER]
       await store.mutatePublish(id, draft => { draft.targets = targets; return null })
       let fresh = await store.readPublish(id)
       // 小红书封面在发布包里是独立文件；没有就顺手补一张，补不出来再交给检查项提示
@@ -1559,9 +1569,12 @@ async function route(ctx, store, req, res) {
         const first = blocking[0]
         throw Object.assign(new Error('还有 ' + blocking.length + ' 项超过平台限制，先改文案：' + first.label + ' ' + first.detail), { status: 400 })
       }
+      const exportItem = video.secs && video.secs !== item.render?.secs
+        ? { ...item, render: { ...item.render, secs: video.secs } }
+        : item
       const result = await buildExport({
         baseDir: store.itemDir(id),
-        item,
+        item: exportItem,
         publish: fresh,
         targets,
         ruleVersion: RULE_VERSION,
@@ -1581,6 +1594,10 @@ async function route(ctx, store, req, res) {
         try {
           await mkdir(dir, { recursive: true })
           const dest = join(dir, result.folderName)
+          const relToSource = relative(resolve(result.absDir), resolve(dest))
+          if (!relToSource.startsWith('..')) {
+            throw Object.assign(new Error('导出目录不能放在发布包自己里面'), { status: 400 })
+          }
           await cp(result.absDir, dest, { recursive: true })
           copied = dest
         } catch (err) {

@@ -2,7 +2,7 @@
 // 所以「读—改—写」全程持锁（state.json.lock），避免两个 Host 进程互相覆盖。
 import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { normalizePublish } from './publish/rules.js'
 
@@ -100,6 +100,45 @@ export function migrateState(raw) {
   return state
 }
 
+const LOCK_STALE_MS = 10_000
+const LOCK_TIMEOUT_MS = 15_000
+
+/**
+ * 跨进程写锁。O_EXCL 建锁；陈旧锁用 rename 抢走再删，避免两个进程同时 rm + open 都拿到锁。
+ * 超时留得比 stale 阈值长，进程崩了最多等一轮接管，不会第一个请求就 503。
+ */
+async function acquireFileLock(lockFile, label) {
+  await mkdir(dirname(lockFile), { recursive: true })
+  const started = Date.now()
+  for (;;) {
+    try {
+      const handle = await open(lockFile, 'wx')
+      await handle.writeFile(process.pid + ' ' + new Date().toISOString())
+      await handle.close()
+      return
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err
+      const info = await stat(lockFile).catch(() => null)
+      if (info && Date.now() - info.mtimeMs > LOCK_STALE_MS) {
+        const stale = lockFile + '.stale-' + process.pid + '-' + Math.random().toString(36).slice(2)
+        try {
+          await rename(lockFile, stale)
+          await rm(stale, { force: true })
+        } catch {}
+        continue
+      }
+      if (Date.now() - started > LOCK_TIMEOUT_MS) {
+        throw Object.assign(new Error(label + ' 正被另一个进程写入，请稍后重试'), { status: 503 })
+      }
+      await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
+    }
+  }
+}
+
+async function releaseFileLock(lockFile) {
+  await rm(lockFile, { force: true }).catch(() => {})
+}
+
 export class Store {
   constructor(root = join(dshHome(), 'sound-picture-desk')) {
     this.root = root
@@ -148,37 +187,13 @@ export class Store {
     return this.refresh()
   }
 
-  /**
-   * 跨进程写锁：两个 Host（桌面端 + Web）可能同时改同一份 state.json。
-   * 用 O_EXCL 建锁文件，拿到锁才「读—改—写」；进程崩了留下的锁超过 10 秒视为陈旧。
-   */
-  async acquireLock(timeoutMs = 8000) {
-    await mkdir(this.root, { recursive: true })
-    const lockFile = `${this.file}.lock`
-    const started = Date.now()
-    for (;;) {
-      try {
-        const handle = await open(lockFile, 'wx')
-        await handle.writeFile(String(process.pid))
-        await handle.close()
-        return
-      } catch (err) {
-        if (err.code !== 'EEXIST') throw err
-        const info = await stat(lockFile).catch(() => null)
-        if (info && Date.now() - info.mtimeMs > 10_000) {
-          await rm(lockFile, { force: true }).catch(() => {})
-          continue
-        }
-        if (Date.now() - started > timeoutMs) {
-          throw Object.assign(new Error('state.json 正被另一个进程写入，请稍后重试'), { status: 503 })
-        }
-        await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
-      }
-    }
+  /** 状态文件写锁；与 publish.json 共用同一个原子接管实现。 */
+  async acquireLock() {
+    await acquireFileLock(`${this.file}.lock`, 'state.json')
   }
 
   async releaseLock() {
-    await rm(`${this.file}.lock`, { force: true }).catch(() => {})
+    await releaseFileLock(`${this.file}.lock`)
   }
 
   /** 写回 state.json。调用方必须已经持有写锁（mutate 会保证）。 */
@@ -247,26 +262,7 @@ export class Store {
       await mkdir(this.itemDir(itemId), { recursive: true })
       const file = this.publishFile(itemId)
       const lockFile = file + '.lock'
-      const started = Date.now()
-      for (;;) {
-        try {
-          const handle = await open(lockFile, 'wx')
-          await handle.writeFile(String(process.pid))
-          await handle.close()
-          break
-        } catch (err) {
-          if (err.code !== 'EEXIST') throw err
-          const info = await stat(lockFile).catch(() => null)
-          if (info && Date.now() - info.mtimeMs > 10_000) {
-            await rm(lockFile, { force: true }).catch(() => {})
-            continue
-          }
-          if (Date.now() - started > 8000) {
-            throw Object.assign(new Error('publish.json 正被另一个进程写入，请稍后重试'), { status: 503 })
-          }
-          await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
-        }
-      }
+      await acquireFileLock(lockFile, 'publish.json')
       try {
         const current = await this.readPublish(itemId)
         const draft = structuredClone(current)
@@ -279,7 +275,7 @@ export class Store {
         await rename(tmp, file)
         return { result, publish: normalized }
       } finally {
-        await rm(lockFile, { force: true }).catch(() => {})
+        await releaseFileLock(lockFile)
       }
     }
     const next = this.publishQueue.then(run, run)

@@ -44,12 +44,12 @@
 
 - 规则集中放 `src/publish/rules.js`，改一处就行；带 `RULE_VERSION` 标记口径日期。V1 随插件版本发布，不做数据目录热覆盖（真需要再补）。
 - X 计数按官方加权口径：CJK 字符 2、URL 23、其余 1，不要用简单字符数。
-- 界面显示当前规则版本与最近校准日期。
+- 界面不再单独显示规则版本与校准日期（v1.1 发布页顶部已移除）；规则版本写进 `manifest.json` 与 `RULE_VERSION`，随插件版本发布。
 
 ## 4. 页面与交互
 
 - 入口：成片页之后加一个独立「发布」入口。**不要塞进 `STAGES` / `TAB_KEYS`**，阶段派生保持六阶段不变；只有 `stageOf(item) === 'rendered'` 时可点。
-- 页面四块：目标平台 / 文案 / 封面（仅小红书）/ 发布检查与导出。
+- 页面结构：平台页签（小红书 / X）/ 当前平台文案 / 封面（仅小红书页）/ 发布前检查与导出。两个平台固定都进发布包，不再做目标平台勾选；老 `publish.json` 里的窄 `targets` 读入时自动修正。
 - 主流程：顶部「小红书 / X」两个平台页签切换；每页「一键生成」只生成当前平台的标题 / 正文 / 话题（X 是合并的一条）→ 编辑（计数、超限标红、一键复制）→ 小红书页生成 3:4 封面 → 发布前检查（只显示当前平台，另一平台的超限单独提示）→ 导出。两个平台都进发布包。
 - 复制走 `navigator.clipboard`，非安全上下文（局域网 http）降级到可全选的 textarea。
 - 可选按钮：`window.open` 打开平台投稿页，只导航、不代操作。
@@ -58,12 +58,12 @@
 ## 5. 导出包结构
 
 ```
-exports/<YYYYMMDD-HHmm>/
+exports/<YYYYMMDD-HHmmss>/
   README.md              # 每平台传什么、从哪进
   checklist.md           # 平台 | 账号 | 状态 | 链接
   manifest.json          # 文件清单 + sha256 + 规则版本 + 项目/时间
   xiaohongshu/
-    video.mp4            # 母版硬链接优先，跨卷回退复制
+    video.mp4            # 导出时复制，作为不可变快照
     cover-1080x1440.png
     copy.md              # 标题 / 正文 / 话题
   x/
@@ -86,7 +86,7 @@ exports/<YYYYMMDD-HHmm>/
 
 - Prompt 约束：小红书标题带钩子 ≤ 20 字、正文分段 300–600 字、话题 3–5 个；X 单条 ≤ 280 加权、中文紧凑、不用外链、话题 1–3 个内联。
 - 生成后校验；超限自动重试一次（把超出数量反馈给模型），仍超限就展示错误 + 手动改。
-- 复用 `callModel`（DSH 当前模型），沿用 `item.model` 覆盖；可取消，超时 90 秒。
+- 复用 `callModel`（DSH 当前模型），沿用 `item.model` 覆盖；可取消，超时沿用 jobs 队列的 20 分钟看门狗。
 - 结果写 `publish.json`；重新生成前确认覆盖。
 
 ## 7. 数据模型：`publish.json`
@@ -97,23 +97,24 @@ exports/<YYYYMMDD-HHmm>/
   "updatedAt": "2026-11-23T09:00:00.000Z",
   "targets": ["xiaohongshu", "x"],
   "variants": {
-    "xiaohongshu": { "title": "", "body": "", "tags": [], "generatedAt": "" },
-    "x": { "text": "", "generatedAt": "" }
+    "xiaohongshu": { "title": "", "body": "", "tags": [] },
+    "x": { "text": "" }
   },
-  "cover": { "path": "covers/xhs-1712.png", "width": 1080, "height": 1440, "title": "" },
-  "exports": [{ "at": "", "stamp": "", "targets": [], "files": [] }],
+  "cover": { "path": "covers/xhs-1712.png", "title": "", "width": 1080, "height": 1440, "at": null },
+  "exports": [{ "at": "", "stamp": "", "dir": "", "targets": [] }],
   "records": [{
     "platform": "xiaohongshu",
-    "publishedAt": "",
+    "status": "published",
     "url": "",
     "note": "",
-    "metrics": { "views": null, "likes": null, "comments": null, "saves": null }
+    "at": "",
+    "metrics": {}
   }]
 }
 ```
 
 - 每项目独立文件，不进 `state.json`（它已有锁争用）。
-- 写入沿用 `state.json` 的纪律：锁文件 + 持锁重读 + mtime 复查，防止桌面端和 Web 端双 Host 覆盖。
+- 写入沿用 `state.json` 的纪律：锁文件 + 持锁重读 + `tmp`/`rename` 原子写，防止桌面端和 Web 端双 Host 覆盖；锁对陈旧文件用 `rename` 原子接管。
 - 没有文件的旧项目按默认空对象处理，不需要迁移。
 
 ## 8. 服务端改动
@@ -129,12 +130,12 @@ exports/<YYYYMMDD-HHmm>/
 
 - 新视图独立于六页签，复用现有样式 token、`DropSelect`、复制/下载组件。
 - 计数、超限红标、复制按钮、下载链接、导出进度。
-- 入口徽标：缺文案 / 已导出 / 已发布。
+- 平台页签角标显示该平台超限数；顶部不再显示规则版本 / 不碰账号提示。
 - 错误翻人话，参照现有「本机生图模型没启动 → 去 Gen Studio」的处理方式。
 
 ## 10. 测试
 
-- `node:test`：X 加权计数、小红书字数、文件名安全化、超限判定、manifest 生成。
+- `node:test`：X 加权计数、小红书码点计数（含 emoji）、文件名安全化（Windows 保留名）、视频 warn / 阻断判定、manifest、同秒导出后缀、导出快照、缺封面、坏 JSON、陈旧锁、文案重试与保留首版。
 - 手工：短片与长片各一条；桌面本地导出 + 远程 Web 下载；两平台各实际发布一次；回填记录。
 - 回归：六阶段流程、旧项目打开、原有「导出成片」功能不受影响。
 
@@ -156,7 +157,7 @@ exports/<YYYYMMDD-HHmm>/
 | M3 | 发布页 UI + 记录/清单 | 1.5 天 |
 | M4 | 测试 + 文档 + 验收 | 1 天 |
 
-完成后 `develop` 合并回 `master`（`--no-ff`），版本 0.2.0。
+完成后 `develop` 合并回 `master`（`--no-ff`），版本 1.1.0。
 
 ## 13. 风险与开放问题
 
@@ -171,13 +172,15 @@ exports/<YYYYMMDD-HHmm>/
 ## 14. 分支与发布流程
 
 - `master` 稳定，`develop` 开发；不再直接往 `master` 提交功能。
-- 功能完成 → 自测 + 验收 → `git switch master && git merge --no-ff develop` → 版本 0.2.0 → push。
+- 功能完成 → 自测 + 验收 → `git switch master && git merge --no-ff develop` → 版本 1.1.0 → push。
 - 回滚：暂时移除「发布」入口或 revert 合并提交；接口都在 `publish/*` 命名空间下，便于整体摘掉。
 
 ## 15. 实现落点（2026-11-23）
 
 - 规则 / 计数 / 校验：`src/publish/rules.js`；文案生成：`src/publish/copy.js`；发布包：`src/publish/export.js`。
 - Host：`publish/read`、`publish/generate`、`publish/save`、`publish/cover`、`publish/export`、`publish/record` 六个 action；`MEDIA_DIRS` 加 `exports`，`.md` / `.txt` 可下载。
+- 2026-11-23 复审修复：发布范围固定双平台并修正老窄 `targets`；单平台生成不再用空串覆盖另一平台；导出改为 copy 快照 + 临时目录原子 rename + 同秒后缀；锁陈旧接管原子化、超时 15 秒；文案 JSON 解析失败纠偏重试、重试更差保留首版；导出/封面在任务运行时返回 409；视频时长缺失补 `probeDuration` 并给 warn；小红书计数统一按码点（emoji 算 1）。
+- 导出目录选择增加保护：不允许把发布包复制到自己里面；复制失败只回传错误，不影响项目内导出。
 - 客户端：「发布」是六个阶段页签之外的独立入口（不进 `STAGES` / `TAB_KEYS`），项目有 `render` 才可点；发布页内用平台页签切换，每平台独立一键生成，页签角标显示该平台超限数。
 - 存储：`projects/<id>/publish.json`（`schemaVersion: 1`，独立锁 + 双 Host 防覆盖）；发布包在 `projects/<id>/exports/<时间戳>/`。
 - 与设计稿的差异：

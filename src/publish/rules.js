@@ -92,19 +92,22 @@ export function validateCopy(platformId, variant = {}) {
     const title = String(variant.title ?? '').trim()
     const body = String(variant.body ?? '').trim()
     const tags = Array.isArray(variant.tags) ? variant.tags.filter(tag => String(tag).trim()) : []
+    // 计数用码点，和界面 / countVariant 保持同一口径（emoji 只算 1 个字）
+    const titleLen = [...title].length
+    const bodyLen = [...body].length
     if (!title) checks.push(row('title', '小红书标题', 'error', '还没填', '写一个 20 字以内的标题'))
-    else if (title.length > platform.title.max) {
+    else if (titleLen > platform.title.max) {
       checks.push(row('title', '小红书标题', 'error',
-        title.length + '/' + platform.title.max + ' 字',
-        '删掉 ' + (title.length - platform.title.max) + ' 个字'))
-    } else checks.push(row('title', '小红书标题', 'ok', title.length + '/' + platform.title.max + ' 字'))
+        titleLen + '/' + platform.title.max + ' 字',
+        '删掉 ' + (titleLen - platform.title.max) + ' 个字'))
+    } else checks.push(row('title', '小红书标题', 'ok', titleLen + '/' + platform.title.max + ' 字'))
 
     if (!body) checks.push(row('body', '小红书正文', 'error', '还没填', '写 300–600 字，分段'))
-    else if (body.length > platform.body.max) {
+    else if (bodyLen > platform.body.max) {
       checks.push(row('body', '小红书正文', 'error',
-        body.length + '/' + platform.body.max + ' 字',
-        '删掉 ' + (body.length - platform.body.max) + ' 个字'))
-    } else checks.push(row('body', '小红书正文', 'ok', body.length + '/' + platform.body.max + ' 字'))
+        bodyLen + '/' + platform.body.max + ' 字',
+        '删掉 ' + (bodyLen - platform.body.max) + ' 个字'))
+    } else checks.push(row('body', '小红书正文', 'ok', bodyLen + '/' + platform.body.max + ' 字'))
 
     checks.push(row('tags', '小红书话题', tags.length > platform.tags.max ? 'error' : 'ok',
       tags.length + '/' + platform.tags.max + ' 个',
@@ -128,24 +131,30 @@ export function validateCopy(platformId, variant = {}) {
  */
 export function validateVideo(platformId, video = {}) {
   const platform = PLATFORMS[platformId]
-  if (!platform || !video || !video.secs) return []
+  if (!platform || !video || typeof video !== 'object') return []
   const checks = []
   const width = Number(video.width) || platform.video.width
   const height = Number(video.height) || platform.video.height
+  const secs = Number(video.secs) || 0
+  const bytes = Number(video.bytes) || 0
   checks.push(row('video', '视频', 'ok',
-    width + '×' + height + ' · ' + formatDuration(video.secs) + ' · ' + formatBytes(video.bytes)))
+    width + '×' + height + ' · ' + (secs ? formatDuration(secs) : '时长未知') + ' · ' + formatBytes(bytes)))
+  if (secs <= 0) {
+    checks.push(row('video-secs', '视频时长', 'warn',
+      '读不出时长', '重新合成一次或检查 ffprobe；导出前无法核对平台时长上限'))
+  }
   if (width / height > 1) {
     checks.push(row('video-ratio', '画面比例', 'warn',
       width + '×' + height + ' 是横屏', '这两个平台都建议竖屏 9:16'))
   }
-  if (Number(video.secs) > platform.video.maxSecs) {
+  if (secs > 0 && secs > platform.video.maxSecs) {
     checks.push(row('video-secs', '视频时长', 'warn',
-      formatDuration(video.secs) + ' / ' + formatDuration(platform.video.maxSecs),
+      formatDuration(secs) + ' / ' + formatDuration(platform.video.maxSecs),
       platformId === 'x' ? '非 Premium 上限 2:20；Premium 可忽略，否则切条' : '超过平台推荐上限，建议切条'))
   }
-  if (Number(video.bytes) > platform.video.maxBytes) {
+  if (bytes > platform.video.maxBytes) {
     checks.push(row('video-bytes', '视频大小', 'warn',
-      formatBytes(video.bytes) + ' / ' + formatBytes(platform.video.maxBytes), '压缩后再传'))
+      formatBytes(bytes) + ' / ' + formatBytes(platform.video.maxBytes), '压缩后再传'))
   }
   return checks
 }
@@ -158,6 +167,12 @@ export function normalizeTargets(value) {
 
 export function emptyVariant(platformId) {
   return platformId === 'xiaohongshu' ? { title: '', body: '', tags: [] } : { text: '' }
+}
+
+/** 某个平台的文案是否为空。多平台生成时用来判断“模型漏了哪个平台”，避免拿空串覆盖旧文案。 */
+export function variantIsEmpty(platformId, variant = {}) {
+  if (platformId === 'x') return !String(variant.text ?? '').trim()
+  return !String(variant.title ?? '').trim() && !String(variant.body ?? '').trim()
 }
 
 function textOf(value, max) {
@@ -214,7 +229,8 @@ export function normalizePublish(raw) {
   const next = emptyPublish()
   if (typeof src.schemaVersion === 'number') next.schemaVersion = src.schemaVersion
   if (typeof src.updatedAt === 'string') next.updatedAt = src.updatedAt
-  next.targets = normalizeTargets(src.targets)
+  // V1 界面上两个平台页签始终都在，发布范围固定为两平台；老文件里的窄 targets 在此顺带修正
+  next.targets = [...PLATFORM_ORDER]
   for (const id of PLATFORM_ORDER) {
     const base = emptyVariant(id)
     next.variants[id] = sanitizeVariant(id, { ...base, ...(src.variants?.[id] ?? {}) })
