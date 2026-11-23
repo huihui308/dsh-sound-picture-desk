@@ -50,7 +50,7 @@
 
 - 入口：成片页之后加一个独立「发布」入口。**不要塞进 `STAGES` / `TAB_KEYS`**，阶段派生保持六阶段不变；只有 `stageOf(item) === 'rendered'` 时可点。
 - 页面四块：目标平台 / 文案 / 封面（仅小红书）/ 发布检查与导出。
-- 主流程：勾平台（默认两个都勾）→ 生成文案（进度、可取消）→ 编辑两平台文案（计数、超限标红、一键复制）→ 生成 3:4 封面 → 发布前检查 → 导出。
+- 主流程：顶部「小红书 / X」两个平台页签切换；每页「一键生成」只生成当前平台的标题 / 正文 / 话题（X 是合并的一条）→ 编辑（计数、超限标红、一键复制）→ 小红书页生成 3:4 封面 → 发布前检查（只显示当前平台，另一平台的超限单独提示）→ 导出。两个平台都进发布包。
 - 复制走 `navigator.clipboard`，非安全上下文（局域网 http）降级到可全选的 textarea。
 - 可选按钮：`window.open` 打开平台投稿页，只导航、不代操作。
 - 文案未通过校验时阻断导出，必须改到达标；视频超限只警告并给修法（切条建议），不硬阻断。
@@ -178,7 +178,7 @@ exports/<YYYYMMDD-HHmm>/
 
 - 规则 / 计数 / 校验：`src/publish/rules.js`；文案生成：`src/publish/copy.js`；发布包：`src/publish/export.js`。
 - Host：`publish/read`、`publish/generate`、`publish/save`、`publish/cover`、`publish/export`、`publish/record` 六个 action；`MEDIA_DIRS` 加 `exports`，`.md` / `.txt` 可下载。
-- 客户端：「发布」是六个阶段页签之外的独立入口（不进 `STAGES` / `TAB_KEYS`），项目有 `render` 才可点。
+- 客户端：「发布」是六个阶段页签之外的独立入口（不进 `STAGES` / `TAB_KEYS`），项目有 `render` 才可点；发布页内用平台页签切换，每平台独立一键生成，页签角标显示该平台超限数。
 - 存储：`projects/<id>/publish.json`（`schemaVersion: 1`，独立锁 + 双 Host 防覆盖）；发布包在 `projects/<id>/exports/<时间戳>/`。
 - 与设计稿的差异：
   - 生成文案后自动补一张小红书 3:4 封面（失败不影响文案）；导出时封面缺失会再试一次。

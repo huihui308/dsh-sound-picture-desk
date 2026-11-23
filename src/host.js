@@ -1475,7 +1475,7 @@ async function route(ctx, store, req, res) {
       const targets = normalizeTargets(body.targets ?? existing.targets)
       const needCover = targets.includes('xiaohongshu') && !existing.cover?.path
       const task = startTask(id, 'publish-copy', needCover ? 2 : 1, async ({ report, signal }) => {
-        report(0, '正在写小红书 / X 文案…')
+        report(0, '正在写' + targets.map(platformId => PLATFORMS[platformId].label).join(' / ') + '文案…')
         const result = await generateCopyVariants(ctx, {
           item,
           targets,
@@ -1495,7 +1495,7 @@ async function route(ctx, store, req, res) {
         })
         if (empty) throw new Error('模型没有返回可用的文案，点「重新生成」再试一次')
         await store.mutatePublish(id, draft => {
-          draft.targets = targets
+          // 单平台重新生成只覆盖这个平台，不改发布范围
           for (const platformId of targets) draft.variants[platformId] = result.variants[platformId]
           return null
         })

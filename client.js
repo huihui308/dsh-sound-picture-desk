@@ -221,6 +221,11 @@ window.__ModuleLoader__.load({
 .sd-pub-chip[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
 .sd-pub-chip[data-tone="error"]{color:var(--dsw-alias-state-error-primary)}
 .sd-pub-platforms{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.sd-pub-tabs{display:flex;gap:8px;margin-top:12px}
+.sd-pub-tab{flex:1;display:flex;align-items:center;gap:9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:9px 12px;cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0}
+.sd-pub-tab[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,var(--dsw-alias-bg-layer-1))}
+.sd-pub-taberr{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 18%,transparent);color:var(--dsw-alias-state-error-primary);font-size:10.5px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.sd-pub-tabwarn{margin-left:auto;color:var(--dsw-alias-state-warn-primary);font-size:11px}
 .sd-pub-platform{display:flex;align-items:center;gap:9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:9px 11px;cursor:pointer;text-align:left;font:inherit;color:inherit}
 .sd-pub-platform:disabled{opacity:.65;cursor:default}
 .sd-pub-platform[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,var(--dsw-alias-bg-layer-1))}
@@ -1946,6 +1951,7 @@ window.__ModuleLoader__.load({
       const [dir, setDir] = useState('')
       const [exportResult, setExportResult] = useState(null)
       const [copyNote, setCopyNote] = useState('')
+      const [activePlatform, setActivePlatform] = useState('xiaohongshu')
       const task = item.task
       const generating = Boolean(task?.running && task.kind === 'publish-copy')
 
@@ -2027,19 +2033,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const toggleTarget = async platformId => {
-        if (saving) return
-        const order = ['xiaohongshu', 'x']
-        const next = targets.includes(platformId)
-          ? targets.filter(id => id !== platformId)
-          : order.filter(id => targets.includes(id) || id === platformId)
-        if (!next.length) {
-          setNote({ tone: 'error', text: '至少留一个平台' })
-          return
-        }
-        await save({ targets: next })
-      }
-
       const addTag = () => {
         const tag = tagInput.trim().replace(/^#+/, '').trim()
         if (!tag) return
@@ -2054,9 +2047,9 @@ window.__ModuleLoader__.load({
 
       const generate = () => {
         if (generating) return
-        const has = targets.some(id => composeVariantText(id, draftsSafe[id] ?? {}))
-        if (has && !window.confirm('会覆盖当前文案，继续？')) return
-        onAction('publish/generate', { id: item.id, targets }, null)
+        const has = Boolean(composeVariantText(activePlatform, draftsSafe[activePlatform] ?? {}))
+        if (has && !window.confirm('会覆盖「' + platformLabel(activePlatform) + '」当前文案，继续？')) return
+        onAction('publish/generate', { id: item.id, targets: [activePlatform] }, null)
       }
 
       const makeCover = async () => {
@@ -2130,10 +2123,7 @@ window.__ModuleLoader__.load({
         h('div', null,
           h('div', { className: 'sd-pub-kicker' }, '发布准备'),
           h('div', { className: 'sd-pub-title' }, '小红书 / X · 生成文案和发布包，自己上传'),
-          h('div', { className: 'sd-pub-sub' }, '不登录平台、不代发；文案可改，检查通过后导出。')),
-        view ? h('div', { className: 'sd-pub-chips' },
-          h('span', { className: 'sd-pub-chip', 'data-tone': 'ok' }, '不碰账号'),
-          h('span', { className: 'sd-pub-chip' }, '规则版本 ' + view.ruleVersion)) : null)
+          h('div', { className: 'sd-pub-sub' }, '不登录平台、不代发；文案可改，检查通过后导出。')))
 
       if (!item.render) {
         return h(React.Fragment, null,
@@ -2157,23 +2147,25 @@ window.__ModuleLoader__.load({
         return h(React.Fragment, null, head, h('div', { className: 'sd-hint', style: { paddingTop: 24 } }, '正在读取发布数据…'))
       }
 
-      const platformCards = h('div', { className: 'sd-pub-platforms' },
+      const platformTabs = h('div', { className: 'sd-pub-tabs' },
         ['xiaohongshu', 'x'].map(platformId => {
           const info = platformById(platformId)
-          const on = targets.includes(platformId)
+          const active = activePlatform === platformId
+          const errors = view.checks.filter(check => check.platform === platformId && check.state === 'error').length
+          const warns = view.checks.filter(check => check.platform === platformId && check.state === 'warn').length
           return h('button', {
-            key: platformId, type: 'button', className: 'sd-pub-platform',
-            'data-on': on ? '1' : '0',
-            disabled: saving,
-            onClick: () => toggleTarget(platformId),
+            key: platformId, type: 'button', className: 'sd-pub-tab',
+            'data-on': active ? '1' : '0',
+            onClick: () => setActivePlatform(platformId),
           },
-            h('span', { className: 'sd-pub-check', 'data-on': on ? '1' : '0' }, '✓'),
             h('span', { className: 'sd-pub-picon', 'data-platform': platformId },
               platformId === 'xiaohongshu' ? '小红书' : 'X'),
             h('span', { style: { minWidth: 0, textAlign: 'left' } },
               h('span', { className: 'sd-pub-pname' }, info.label),
-              h('span', { className: 'sd-pub-pmeta' }, info.summary)),
-            h('span', { className: 'sd-pub-pstate' }, on ? '已选' : '不选'))
+              h('span', { className: 'sd-pub-pmeta' },
+                platformId === 'xiaohongshu' ? '标题 · 正文 · 话题 · 3:4 封面' : '单条 · 280 加权字符 · 取首帧')),
+            errors ? h('span', { className: 'sd-pub-taberr' }, errors)
+              : warns ? h('span', { className: 'sd-pub-tabwarn' }, '!') : null)
         }))
 
       const xhsInfo = platformById('xiaohongshu')
@@ -2228,14 +2220,14 @@ window.__ModuleLoader__.load({
             }))),
         h('div', { className: 'sd-card-foot' },
           h('button', {
-            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            className: 'sd-btn', 'data-kind': 'primary', type: 'button',
             disabled: generating || saving, onClick: generate,
-          }, generating ? '生成中…' : '重新生成文案'),
-          h('span', { style: { flex: 1 } }),
+          }, generating ? '生成中…' : '一键生成'),
           h('button', { className: 'sd-btn', type: 'button', disabled: saving, onClick: () => save({}) },
-            saving ? '保存中…' : '保存文案'),
-          h('button', { className: 'sd-btn', type: 'button', disabled: saving || !targets.includes('xiaohongshu'), onClick: () => doCopy('xiaohongshu') },
-            '复制小红书文案')))
+            saving ? '保存中…' : '保存'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('xiaohongshu') },
+            '复制文案')))
 
       const xInfo = platformById('x')
       const xDraft = draftsSafe.x ?? { text: '' }
@@ -2253,14 +2245,14 @@ window.__ModuleLoader__.load({
           })),
         h('div', { className: 'sd-card-foot' },
           h('button', {
-            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            className: 'sd-btn', 'data-kind': 'primary', type: 'button',
             disabled: generating || saving, onClick: generate,
-          }, generating ? '生成中…' : '重新生成文案'),
-          h('span', { style: { flex: 1 } }),
+          }, generating ? '生成中…' : '一键生成'),
           h('button', { className: 'sd-btn', type: 'button', disabled: saving, onClick: () => save({}) },
-            saving ? '保存中…' : '保存文案'),
-          h('button', { className: 'sd-btn', type: 'button', disabled: saving || !targets.includes('x'), onClick: () => doCopy('x') },
-            '复制 X 文案')))
+            saving ? '保存中…' : '保存'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('x') },
+            '复制文案')))
 
       const guideCard = h('div', { className: 'sd-pub-card', style: { gap: 6 } },
         h('div', { className: 'sd-pub-card-head' },
@@ -2268,10 +2260,10 @@ window.__ModuleLoader__.load({
           h('span', { className: 'sd-pub-counter' }, '不调用平台接口')),
         h('div', { className: 'sd-hint' }, '打开平台投稿页 → 上传视频 → 回来勾一下「已发布」。'),
         h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
-          targets.map(platformId => h('button', {
-            key: platformId, className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
-            onClick: () => window.open(platformById(platformId).composeUrl, '_blank', 'noopener,noreferrer'),
-          }, '打开' + platformLabel(platformId)))))
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            onClick: () => window.open(platformById(activePlatform).composeUrl, '_blank', 'noopener,noreferrer'),
+          }, '打开' + platformLabel(activePlatform))))
 
       const coverCard = h('div', { className: 'sd-pub-card' },
         h('div', { className: 'sd-pub-card-head' },
@@ -2312,14 +2304,17 @@ window.__ModuleLoader__.load({
         : state === 'warn'
           ? 'var(--dsw-alias-state-warn-primary)'
           : 'var(--dsw-alias-state-success-primary)'
+      const activeChecks = view.checks.filter(check => check.platform === activePlatform)
+      const activeBlocking = activeChecks.filter(check => check.state === 'error').length
+      const otherBlocking = view.blocking - activeBlocking
       const checksCard = h('div', { className: 'sd-pub-card' },
         h('div', { className: 'sd-pub-card-head' },
-          h('span', { className: 'sd-pub-card-title' }, '发布前检查'),
+          h('span', { className: 'sd-pub-card-title' }, '发布前检查 · ' + platformLabel(activePlatform)),
           h('span', {
-            className: 'sd-pub-chip', 'data-tone': view.blocking ? 'error' : 'ok', style: { marginLeft: 'auto' },
-          }, view.blocking ? view.blocking + ' 项要改' : '全部通过')),
-        view.checks.length
-          ? view.checks.map(check => h('div', { key: check.platform + ':' + check.id, className: 'sd-pub-checkrow' },
+            className: 'sd-pub-chip', 'data-tone': activeBlocking ? 'error' : 'ok', style: { marginLeft: 'auto' },
+          }, activeBlocking ? activeBlocking + ' 项要改' : '本页通过')),
+        activeChecks.length
+          ? activeChecks.map(check => h('div', { key: check.platform + ':' + check.id, className: 'sd-pub-checkrow' },
             h('span', { className: 'sd-pub-checkmark', style: { color: stateColor(check.state) } },
               check.state === 'ok' ? '✓' : check.state === 'warn' ? '!' : '×'),
             h('span', { className: 'sd-pub-checkname' }, check.label),
@@ -2328,7 +2323,10 @@ window.__ModuleLoader__.load({
               title: [check.detail, check.fix].filter(Boolean).join(' · '),
             }, check.detail)))
           : h('div', { className: 'sd-hint' }, '还没有检查项'),
-        h('div', { className: 'sd-hint' }, '改了文案要点「保存文案」或直接导出，检查才会更新。'))
+        otherBlocking > 0
+          ? h('div', { className: 'sd-pub-error' }, '另一个平台还有 ' + otherBlocking + ' 项要改，导出会被挡住。')
+          : null,
+        h('div', { className: 'sd-hint' }, '改了文案要点「保存」或直接导出，检查才会更新。'))
 
       const exportCard = h('div', { className: 'sd-pub-card' },
         h('div', { className: 'sd-pub-card-head' },
@@ -2382,7 +2380,7 @@ window.__ModuleLoader__.load({
 
       return h(React.Fragment, null,
         head,
-        platformCards,
+        platformTabs,
         note ? h('div', {
           className: note.tone === 'error' ? 'sd-pub-error' : 'sd-pub-ok',
           style: { marginTop: 8 },
@@ -2391,8 +2389,13 @@ window.__ModuleLoader__.load({
           (task.message || '正在生成…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
         copyNote ? h('div', { className: 'sd-pub-ok', style: { marginTop: 6 } }, copyNote) : null,
         h('div', { className: 'sd-pub-grid' },
-          h('div', { className: 'sd-pub-col' }, xhsCard, xCard, guideCard),
-          h('div', { className: 'sd-pub-col' }, coverCard, checksCard, exportCard)),
+          h('div', { className: 'sd-pub-col' },
+            activePlatform === 'xiaohongshu' ? xhsCard : xCard,
+            guideCard),
+          h('div', { className: 'sd-pub-col' },
+            activePlatform === 'xiaohongshu' ? coverCard : null,
+            checksCard,
+            exportCard)),
         h('div', { className: 'sd-pub-foot' },
           h('span', null, '发布包写到项目 exports/ 目录，可随时删除'),
           h('span', null, '数据只在本机 · 不上传云端')))
