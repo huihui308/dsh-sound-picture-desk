@@ -1,12 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Story desk">
-  <rect width="64" height="64" rx="14" fill="#2a2019"/>
-  <!-- 摊开的书：左页与右页 -->
-  <path d="M13 23.5 26 19.5v27l-13 4z" fill="#efe2c8"/>
-  <path d="M26 19.5 39 23.5v27l-13-4z" fill="#dccaa6"/>
-  <path d="M26 19.5v27" stroke="#8a7248" stroke-width="1.4" stroke-linecap="round"/>
-  <!-- 说书人的声波 -->
-  <path d="M43 26.5c3.2 2.4 5 5.6 5 9.5s-1.8 7.1-5 9.5" stroke="#d9a441" stroke-width="2.6" stroke-linecap="round" fill="none"/>
-  <path d="M49.5 21.5c4.8 3.6 7.5 8.6 7.5 14.5s-2.7 10.9-7.5 14.5" stroke="#a87f31" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.72"/>
-  <!-- 灯下的一点暖光 -->
-  <circle cx="19.5" cy="34" r="2.1" fill="#d9a441" opacity="0.85"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="声画工作台">
+  <rect width="512" height="512" rx="112" fill="#241b15"/>
+  <defs>
+    <clipPath id="slateTop">
+      <rect x="76" y="132" width="360" height="68" rx="14"/>
+    </clipPath>
+  </defs>
+  <g transform="rotate(-4 256 166)">
+    <rect x="76" y="132" width="360" height="68" rx="14" fill="#d9a441"/>
+    <g clip-path="url(#slateTop)">
+      <path d="M120 120 L168 212 L214 212 L166 120 Z" fill="#241b15"/>
+      <path d="M232 120 L280 212 L326 212 L278 120 Z" fill="#241b15"/>
+      <path d="M344 120 L392 212 L438 212 L390 120 Z" fill="#241b15"/>
+    </g>
+  </g>
+  <rect x="76" y="204" width="360" height="232" rx="18" fill="#f2e6cf"/>
+  <circle cx="104" cy="206" r="10" fill="#d9a441"/>
+  <circle cx="408" cy="206" r="10" fill="#d9a441"/>
+  <g>
+    <rect x="204" y="288" width="36" height="64" rx="18" fill="#5b4428"/>
+    <rect x="256" y="254" width="36" height="132" rx="18" fill="#c9442d"/>
+    <rect x="308" y="288" width="36" height="64" rx="18" fill="#5b4428"/>
+  </g>
 </svg>

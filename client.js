@@ -309,16 +309,16 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------ 图标
 
     function DeskIcon({ size = 18 }) {
-      // 卷轴 + 声波：旁白
+      // 场记板线稿：侧栏 16px / 页头 17px 共用；实心 currentColor，小尺寸不靠细描边
       return h('svg', {
-        width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
-        stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round',
+        width: size, height: size, viewBox: '0 0 24 24', fill: 'currentColor',
         'aria-hidden': true, style: { display: 'block' },
       },
-      h('path', { d: 'M4 5.5h11a2.5 2.5 0 0 1 0 5H4z' }),
-      h('path', { d: 'M4 10.5h9v8H4z' }),
-      h('path', { d: 'M13 14.5c1.4 1.6 1.4 3.4 0 5' }),
-      h('path', { d: 'M16 13c2.6 2.6 2.6 5.4 0 8' }))
+      h('rect', { x: 2.5, y: 4.2, width: 17.6, height: 2.9, rx: 1.3, transform: 'rotate(-15 11.3 5.7)' }),
+      h('path', {
+        fillRule: 'evenodd',
+        d: 'M5.5 9.6 H18.5 C19.66 9.6 20.6 10.54 20.6 11.7 V18.3 C20.6 19.46 19.66 20.4 18.5 20.4 H5.5 C4.34 20.4 3.4 19.46 3.4 18.3 V11.7 C3.4 10.54 4.34 9.6 5.5 9.6 Z M9.3 12.3 H10.7 V16.6 H9.3 Z M11.7 11.3 H13.1 V17.6 H11.7 Z M14.1 12.3 H15.5 V16.6 H14.1 Z',
+      }))
     }
 
     function GearIcon() {
@@ -611,7 +611,9 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-head' },
           h('div', { className: 'sd-head-row' },
             h('div', { className: 'sd-head-title' },
-              h('h1', { className: 'sd-h1' }, '声画工作台'),
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 9 } },
+                h(DeskIcon, { size: 24 }),
+                h('h1', { className: 'sd-h1' }, '声画工作台')),
               h('div', { className: 'sd-sub' }, '一个主题或一本书 → 稿子 → 旁白 → 分镜图 → 竖屏成片')),
             h('button', { className: 'sd-btn', 'data-kind': 'primary', onClick: onCreate }, '新建项目'))),
         h('div', { className: 'sd-body' },

@@ -1,5 +1,7 @@
 # 声画工作台 · DSH Sound & Picture Desk
 
+<p align="center"><img src="icon.svg" width="88" alt="声画工作台"></p>
+
 **中文** | [English](README.en.md)
 
 把一个主题、一段历史、一本书，做成一条竖屏旁白成片：写稿 → 定人物 → 配音 → 出图 → 合成，全部在一个面板里完成。

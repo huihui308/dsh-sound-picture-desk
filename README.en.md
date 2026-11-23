@@ -1,5 +1,7 @@
 # Sound & Picture Desk · DSH Plugin
 
+<p align="center"><img src="icon.svg" width="88" alt="声画工作台"></p>
+
 [中文](README.md) | **English**
 
 Turn a topic, a slice of history, or a book into a vertical narrated video: script → character references → voice → images → final cut, all inside one panel.
