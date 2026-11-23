@@ -82,6 +82,18 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 
 成片页可以把 mp4 和 srt 复制到指定目录（留空则 `~/Downloads`），文件名取项目标题并清掉路径非法字符。
 
+## 发布（V1）
+
+成片之后有独立的「发布」入口，只做发布包，不登录平台：小红书 / X 两个平台。
+
+- 文案：`callModel` 从同一份旁白稿生成两平台版本；小红书标题 ≤20 字、正文 ≤1000、话题 ≤10，X 单条 ≤280 加权字符（CJK 2、URL 23）。超限自动带反馈重试一次，仍超限在页面标红并挡住导出。
+- 封面：复用 `renderCoverImage()` 出 1080×1440，单独存 `publish.cover`，不覆盖成片首帧的 `item.cover`。
+- 发布包：`projects/<id>/exports/<stamp>/`，每平台一个子目录（video / cover / copy.md），外加 README / checklist / manifest（含 sha256）。
+- 数据：`projects/<id>/publish.json`（独立锁 + mtime 复查），不写 `state.json`。
+- 导出走媒体路由（`MEDIA_DIRS` 含 `exports`），远程 Web 不依赖本机目录。
+- 任务：文案生成用现有 jobs 队列，kind `publish-copy`，可停止。
+- 已知：不做自动填表 / 自动发布 / 打 zip；平台规则以 `src/publish/rules.js` 的 `RULE_VERSION` 为准。
+
 ## 助手
 
 右侧 300px 常驻对话栏，模型跟随 DSH 当前默认模型。每次对话把当前项目的分段（含 id、旁白、画面描述、配音状态）和最近六条对话一起给模型，要求它返回 `{reply, segments}`。
@@ -101,6 +113,7 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 - 画面比例可以在项目里改，但已有图片不会自动重出。
 - 字幕烧录需要系统中文字体；缺字体时只落 SRT，不压画面。
 - 没有逐字时间戳，字幕时间按字数比例估算，不是 TTS 返回的真实对齐。
+- 发布只生成发布包，不登录平台、不代发。
 
 ## 字幕时间轴
 

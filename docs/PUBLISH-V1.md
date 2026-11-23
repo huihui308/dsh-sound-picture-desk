@@ -1,6 +1,6 @@
 # 发布功能 V1 设计：小红书 / X 发布包
 
-> 状态：设计稿 · 2026-11-23 · 分支 `develop`
+> 状态：已实现（develop，2026-11-23） · 分支 `develop`
 > 前置讨论：媒体工作台功能拆解 → 只取「发布包 + 引导」，不碰账号。
 > 本文只定方案，不含实现。
 
@@ -42,7 +42,7 @@
 
 落地要求：
 
-- 规则集中放 `src/publish/rules.js`，每条带 `verifiedAt` 和说明；允许 `$DSH_HOME/sound-picture-desk/publish-rules.json` 覆盖，改规则不用发版。
+- 规则集中放 `src/publish/rules.js`，改一处就行；带 `RULE_VERSION` 标记口径日期。V1 随插件版本发布，不做数据目录热覆盖（真需要再补）。
 - X 计数按官方加权口径：CJK 字符 2、URL 23、其余 1，不要用简单字符数。
 - 界面显示当前规则版本与最近校准日期。
 
@@ -160,17 +160,31 @@ exports/<YYYYMMDD-HHmm>/
 
 ## 13. 风险与开放问题
 
-- 平台规则会变：配置化 + 规则日期，允许数据目录覆盖。
+- 平台规则会变：集中配置 + `RULE_VERSION` 标记日期；改规则随插件版本发布。
 - X 账号档位未知：时长/大小超限给警告，提示 Premium 可忽略，不硬阻断。
 - 长视频不适配短视频平台：V1 只提示切条，不做自动切条。
 - 文案 JSON 解析不稳定：重试 + 手动编辑兜底。
 - 封面中文字体跨平台：复用现有 `COVER_FONT`，缺失时提示。
 - 大文件下载：流式响应，不做断点续传。
-- 功能开关：`PICTURE_DESK_PUBLISH=0` 隐藏入口，出问题可整体关闭。
 - 开放问题：发布是否最终拆成独立插件（V1 不拆，模块内聚，等加浏览器自动化再评估）。
 
 ## 14. 分支与发布流程
 
 - `master` 稳定，`develop` 开发；不再直接往 `master` 提交功能。
 - 功能完成 → 自测 + 验收 → `git switch master && git merge --no-ff develop` → 版本 0.2.0 → push。
-- 回滚：关功能开关，必要时 revert 合并提交。
+- 回滚：暂时移除「发布」入口或 revert 合并提交；接口都在 `publish/*` 命名空间下，便于整体摘掉。
+
+## 15. 实现落点（2026-11-23）
+
+- 规则 / 计数 / 校验：`src/publish/rules.js`；文案生成：`src/publish/copy.js`；发布包：`src/publish/export.js`。
+- Host：`publish/read`、`publish/generate`、`publish/save`、`publish/cover`、`publish/export`、`publish/record` 六个 action；`MEDIA_DIRS` 加 `exports`，`.md` / `.txt` 可下载。
+- 客户端：「发布」是六个阶段页签之外的独立入口（不进 `STAGES` / `TAB_KEYS`），项目有 `render` 才可点。
+- 存储：`projects/<id>/publish.json`（`schemaVersion: 1`，独立锁 + 双 Host 防覆盖）；发布包在 `projects/<id>/exports/<时间戳>/`。
+- 与设计稿的差异：
+  - 生成文案后自动补一张小红书 3:4 封面（失败不影响文案）；导出时封面缺失会再试一次。
+  - 视频超平台时长 / 大小只 warn 不挡导出；文案超限才挡。
+  - V1 不做 zip；远程访问逐个文件下载。
+  - 封面标题按字数自动缩字号，20 字也不会溢出 1080 宽。
+- 测试：`npm test`（规则 / 计数 / 导出包 / publish.json 读写，共 10 项）。
+- 验证前需重启 `dsh-web.service`：Host 半片改了，不重启看不到新接口。
+
