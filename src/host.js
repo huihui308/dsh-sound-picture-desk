@@ -2,7 +2,7 @@
 // 文案走 DSH 当前模型，旁白走 MiMo TTS，画面走本机/平台生图，成片走 ffmpeg。
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { appendFile, copyFile, open, rename, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
+import { appendFile, copyFile, cp, open, rename, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
 import { dirname, extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cpus, homedir } from 'node:os'
@@ -16,11 +16,14 @@ import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDu
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, publicTask, startTask } from './jobs.js'
+import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, composeCopy, countVariant, normalizeTargets, sanitizeVariant, validateCopy, validateVideo } from './publish/rules.js'
+import { generateCopyVariants } from './publish/copy.js'
+import { buildExport } from './publish/export.js'
 
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_JSON = 8_000_000
-const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.json': 'application/json' }
-const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers'])
+const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8' }
+const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers', 'exports'])
 
 function json(res, status, body) {
   res.statusCode = status
@@ -216,6 +219,105 @@ function effectiveSettings(state, item) {
  * 参考视频只抓得到标题和简介——视频内容模型看不见。
  * 抓不到也不算错，链接本身照样进写稿上下文。
  */
+// ------------------------------------------------------------------ 发布
+
+/** 成片信息：时长、大小、画面尺寸。没有成片返回 null。 */
+async function videoInfo(store, state, item) {
+  if (!item.render?.path) return null
+  const file = join(store.itemDir(item.id), item.render.path)
+  const info = await stat(file).catch(() => null)
+  if (!info) return null
+  const settings = effectiveSettings(state, item)
+  return {
+    path: item.render.path,
+    secs: Number(item.render.secs) || 0,
+    bytes: info.size,
+    width: Number(settings.width) || 1080,
+    height: Number(settings.height) || 1920,
+    at: item.render.at ?? null,
+  }
+}
+
+/** 把平台规则跑成界面上的检查列表；error 会挡住导出，warn 只提示。 */
+function publishChecks(publish, targets, video, coverExists) {
+  const checks = []
+  for (const id of targets) {
+    const platform = PLATFORMS[id]
+    if (!platform) continue
+    for (const check of validateCopy(id, publish.variants?.[id] ?? {})) {
+      checks.push({ ...check, platform: id, platformLabel: platform.label })
+    }
+    if (video) {
+      for (const check of validateVideo(id, video)) {
+        checks.push({ ...check, platform: id, platformLabel: platform.label, label: platform.label + ' · ' + check.label })
+      }
+    }
+  }
+  if (targets.includes('xiaohongshu')) {
+    const cover = publish.cover
+    checks.push({
+      id: 'cover',
+      platform: 'xiaohongshu',
+      platformLabel: PLATFORMS.xiaohongshu.label,
+      label: '小红书 · 封面',
+      state: coverExists ? 'ok' : 'warn',
+      detail: coverExists
+        ? cover.width + '×' + cover.height
+        : cover?.path ? '封面文件不见了，重新生成' : '还没有 3:4 封面',
+      fix: coverExists ? '' : '点「生成封面」',
+    })
+  }
+  return checks
+}
+
+/** 给「发布」页的完整视图。导出前先看 blocking 项。 */
+async function publishView(store, state, itemId) {
+  const item = findItem(state, itemId)
+  const publish = await store.readPublish(itemId)
+  const targets = normalizeTargets(publish.targets)
+  const video = await videoInfo(store, state, item)
+  const coverPath = publish.cover?.path ? join(store.itemDir(itemId), publish.cover.path) : ''
+  const coverExists = coverPath ? Boolean(await stat(coverPath).catch(() => null)) : false
+  const checks = publishChecks(publish, targets, video, coverExists)
+  const blocking = checks.filter(check => check.state === 'error').length
+  return {
+    id: item.id,
+    schemaVersion: publish.schemaVersion,
+    ruleVersion: RULE_VERSION,
+    updatedAt: publish.updatedAt,
+    targets,
+    platforms: PLATFORM_ORDER.map(id => {
+      const platform = PLATFORMS[id]
+      return {
+        id,
+        label: platform.label,
+        summary: platform.summary,
+        composeUrl: platform.composeUrl,
+        cover: platform.cover ?? null,
+        video: platform.video,
+        title: platform.title ?? null,
+        body: platform.body ?? null,
+        tags: platform.tags ?? null,
+        text: platform.text ?? null,
+      }
+    }),
+    variants: publish.variants,
+    counts: { xiaohongshu: countVariant('xiaohongshu', publish.variants.xiaohongshu), x: countVariant('x', publish.variants.x) },
+    copyTexts: {
+      xiaohongshu: composeCopy('xiaohongshu', publish.variants.xiaohongshu),
+      x: composeCopy('x', publish.variants.x),
+    },
+    cover: publish.cover,
+    exports: publish.exports,
+    records: publish.records,
+    checks,
+    blocking,
+    video,
+    canExport: Boolean(video) && targets.length > 0 && blocking === 0,
+    renderAt: item.render?.at ?? null,
+  }
+}
+
 async function inspectReference(url) {
   const clean = String(url ?? '').trim()
   if (!/^https?:\/\//i.test(clean)) return { url: clean, title: '', error: '不是 http 链接' }
@@ -883,11 +985,11 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
  * 生成视频封面：底图（分镜图 / 参考图）+ 标题文字，输出平台竖版尺寸。
  * 标题走 textfile 传，避免中文和特殊符号在 drawtext 里转义出错。
  */
-async function makeCover(store, itemId, { ref, title, width = 1206, height = 2160 }) {
+async function renderCoverImage(store, itemId, { ref, title, width = 1206, height = 2160, maxText = 40 } = {}) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const dirs = await store.ensureItemDirs(itemId)
-  const text = String(title ?? item.title ?? '').trim().slice(0, 40)
+  const text = String(title ?? item.title ?? '').trim().slice(0, maxText)
   if (!text) throw Object.assign(new Error('封面标题不能为空'), { status: 400 })
 
   // 解析底图：允许 segment:<id> / anchor:<id> / 直接给相对路径
@@ -914,7 +1016,9 @@ async function makeCover(store, itemId, { ref, title, width = 1206, height = 216
   // 编码器要求宽高为偶数
   const w = Math.round(width / 2) * 2
   const h = Math.round(height / 2) * 2
-  const fontSize = Math.round(w * 0.085)
+  // 标题越长字号越小：20 字标题也要能压在 1080 宽的封面上
+  const textLength = [...text].length
+  const fontSize = Math.max(24, Math.min(Math.round(w * 0.085), Math.floor((w * 0.86) / Math.max(4, textLength))))
   const margin = Math.round(w * 0.08)
   const vf = [
     `scale=${w}:${h}:force_original_aspect_ratio=increase`,
@@ -932,13 +1036,50 @@ async function makeCover(store, itemId, { ref, title, width = 1206, height = 216
   })
   await rm(textFile, { force: true }).catch(() => {})
 
+  return { path: outName, title: text, width: w, height: h }
+}
+
+/** 成片首帧用的封面：沿用原来的 9:16 竖版封面，存到 item.cover。 */
+async function makeCover(store, itemId, { ref, title, width = 1206, height = 2160 } = {}) {
+  const cover = await renderCoverImage(store, itemId, { ref, title, width, height })
   await store.mutate(draft => {
     const target = findItem(draft, itemId)
-    target.cover = { path: outName, title: text, source: String(ref || ''), width: w, height: h, at: new Date().toISOString() }
+    target.cover = { ...cover, source: String(ref || ''), at: new Date().toISOString() }
     target.updatedAt = new Date().toISOString()
     return null
   })
-  return { cover: { path: outName, title: text, width: w, height: h } }
+  return { cover }
+}
+
+/** 小红书发布封面：3:4，单独存 publish.cover，不覆盖成片首帧那张。 */
+async function makePublishCover(store, itemId, { title, ref } = {}) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const publish = await store.readPublish(itemId)
+  const fallbackTitle = String(publish.variants?.xiaohongshu?.title ?? item.title ?? '').trim()
+  const cover = await renderCoverImage(store, itemId, {
+    ref: ref || defaultPublishCoverRef(item),
+    title: title || fallbackTitle || item.title,
+    width: PLATFORMS.xiaohongshu.cover.width,
+    height: PLATFORMS.xiaohongshu.cover.height,
+    maxText: 20,
+  })
+  await store.mutatePublish(itemId, draft => {
+    draft.cover = { path: cover.path, title: cover.title, width: cover.width, height: cover.height, at: new Date().toISOString() }
+    return null
+  })
+  return cover
+}
+
+/** 发布封面默认用第一张分镜图，其次定稿参考图，最后才退回已有封面。 */
+function defaultPublishCoverRef(item) {
+  const segment = (item.segments ?? []).find(row => row.imagePath)
+  if (segment) return 'segment:' + segment.id
+  const list = item.anchors ?? []
+  const anchor = list.find(row => row.approved) ?? list[0]
+  if (anchor) return 'anchor:' + anchor.id
+  if (item.cover?.path) return item.cover.path
+  return ''
 }
 
 /**
@@ -1318,6 +1459,168 @@ async function route(ctx, store, req, res) {
         height: body.height,
       })
       return json(res, 200, result)
+    }
+    case 'publish/read': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/generate': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      if (!item.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
+      const existing = await store.readPublish(id)
+      const targets = normalizeTargets(body.targets ?? existing.targets)
+      const needCover = targets.includes('xiaohongshu') && !existing.cover?.path
+      const task = startTask(id, 'publish-copy', needCover ? 2 : 1, async ({ report, signal }) => {
+        report(0, '正在写小红书 / X 文案…')
+        const result = await generateCopyVariants(ctx, {
+          item,
+          targets,
+          route: item.model ?? null,
+          signal,
+          onProgress: progress => {
+            const written = Number(progress?.text) || 0
+            const thought = Number(progress?.reasoning) || 0
+            report(0, '正在写文案（已写 ' + written + ' 字' + (thought ? '，思考 ' + thought + ' 字' : '') + '）')
+          },
+        })
+        const empty = targets.every(platformId => {
+          const variant = result.variants[platformId] ?? {}
+          return platformId === 'x'
+            ? !String(variant.text ?? '').trim()
+            : !String(variant.title ?? '').trim() && !String(variant.body ?? '').trim()
+        })
+        if (empty) throw new Error('模型没有返回可用的文案，点「重新生成」再试一次')
+        await store.mutatePublish(id, draft => {
+          draft.targets = targets
+          for (const platformId of targets) draft.variants[platformId] = result.variants[platformId]
+          return null
+        })
+        if (needCover) {
+          report(1, '正在生成小红书封面…')
+          await makePublishCover(store, id, {}).catch(() => null)
+        }
+        report(needCover ? 2 : 1, result.issues?.length
+          ? '文案有 ' + result.issues.length + ' 处超限，请在页面上改'
+          : '完成')
+        return { model: result.model, issues: result.issues ?? [] }
+      })
+      return json(res, 200, { task: publicTask(id) })
+    }
+    case 'publish/save': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      const targets = body.targets !== undefined ? normalizeTargets(body.targets) : null
+      const variants = body.variants && typeof body.variants === 'object' ? body.variants : null
+      await store.mutatePublish(id, draft => {
+        if (targets) draft.targets = targets
+        if (variants) {
+          for (const platformId of PLATFORM_ORDER) {
+            if (!(platformId in variants)) continue
+            draft.variants[platformId] = sanitizeVariant(platformId, { ...draft.variants[platformId], ...variants[platformId] })
+          }
+        }
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/cover': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      await makePublishCover(store, id, { title: body.title, ref: body.ref })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/export': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      if (!item.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
+      const publish = await store.readPublish(id)
+      const targets = normalizeTargets(body.targets ?? publish.targets)
+      await store.mutatePublish(id, draft => { draft.targets = targets; return null })
+      let fresh = await store.readPublish(id)
+      // 小红书封面在发布包里是独立文件；没有就顺手补一张，补不出来再交给检查项提示
+      let coverAbs = fresh.cover?.path ? join(store.itemDir(id), fresh.cover.path) : ''
+      if (targets.includes('xiaohongshu') && !(coverAbs && await stat(coverAbs).catch(() => null))) {
+        await makePublishCover(store, id, {}).catch(() => null)
+        fresh = await store.readPublish(id)
+        coverAbs = fresh.cover?.path ? join(store.itemDir(id), fresh.cover.path) : ''
+      }
+      const video = await videoInfo(store, state, item)
+      const checks = publishChecks(fresh, targets, video, Boolean(coverAbs && await stat(coverAbs).catch(() => null)))
+      const blocking = checks.filter(check => check.state === 'error')
+      if (!video) throw Object.assign(new Error('成片文件不见了，重新合成一次'), { status: 400 })
+      if (blocking.length) {
+        const first = blocking[0]
+        throw Object.assign(new Error('还有 ' + blocking.length + ' 项超过平台限制，先改文案：' + first.label + ' ' + first.detail), { status: 400 })
+      }
+      const result = await buildExport({
+        baseDir: store.itemDir(id),
+        item,
+        publish: fresh,
+        targets,
+        ruleVersion: RULE_VERSION,
+      })
+      await store.mutatePublish(id, draft => {
+        draft.exports = [...(draft.exports ?? []), {
+          at: new Date().toISOString(),
+          stamp: result.stamp,
+          dir: result.relDir,
+          targets,
+        }].slice(-20)
+        return null
+      })
+      let copied = null
+      const dir = String(body.dir ?? '').trim()
+      if (dir) {
+        try {
+          await mkdir(dir, { recursive: true })
+          const dest = join(dir, result.folderName)
+          await cp(result.absDir, dest, { recursive: true })
+          copied = dest
+        } catch (err) {
+          copied = { error: String(err.message || err).slice(0, 200) }
+        }
+      }
+      return json(res, 200, {
+        export: {
+          stamp: result.stamp,
+          relDir: result.relDir,
+          folderName: result.folderName,
+          files: result.files.map(file => ({ path: file.path, name: file.name, bytes: file.bytes })),
+          copied,
+        },
+        publish: await publishView(store, state, id),
+      })
+    }
+    case 'publish/record': {
+      const id = String(body.id ?? '')
+      const platformId = String(body.platform ?? '')
+      if (!PLATFORMS[platformId]) throw Object.assign(new Error('不支持的平台'), { status: 400 })
+      const state = await store.read()
+      findItem(state, id)
+      const status = body.status === 'published' ? 'published' : 'pending'
+      await store.mutatePublish(id, draft => {
+        const rest = (draft.records ?? []).filter(row => row.platform !== platformId)
+        if (status === 'published' || body.url || body.note) {
+          rest.push({
+            platform: platformId,
+            status,
+            url: String(body.url ?? ''),
+            note: String(body.note ?? ''),
+            at: new Date().toISOString(),
+            metrics: body.metrics && typeof body.metrics === 'object' ? body.metrics : {},
+          })
+        }
+        draft.records = rest
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
     }
     case 'trash-list': {
       const state = await store.read()

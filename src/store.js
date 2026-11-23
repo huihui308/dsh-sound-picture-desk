@@ -4,6 +4,7 @@ import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { normalizePublish } from './publish/rules.js'
 
 export function dshHome(env = process.env) {
   return env.DSH_HOME || join(homedir(), '.dsh')
@@ -110,6 +111,8 @@ export class Store {
     /** 读到的文件版本（mtime+size），写回前用来判断有没有被别人改过。 */
     this.stamp = null
     this.queue = Promise.resolve()
+    /** publish.json 的写入队列，和 state.json 分开排队。 */
+    this.publishQueue = Promise.resolve()
   }
 
   async refresh(force = false) {
@@ -215,6 +218,75 @@ export class Store {
     return next
   }
 
+  // ---------------------------------------------------------------- 发布数据
+  publishFile(itemId) {
+    return join(this.itemDir(itemId), 'publish.json')
+  }
+
+  /** 读发布数据；没有文件就返回完整空结构，老项目不用迁移。 */
+  async readPublish(itemId) {
+    let raw
+    try {
+      raw = await readFile(this.publishFile(itemId), 'utf8')
+    } catch (err) {
+      if (err.code === 'ENOENT') return normalizePublish(null)
+      throw err
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      throw Object.assign(new Error('publish.json 不是有效的 JSON，已停止写入以免覆盖'), { status: 500 })
+    }
+    return normalizePublish(parsed)
+  }
+
+  /** 读-改-写 publish.json；锁和 state.json 同纪律，防止桌面端/Web 端双 Host 覆盖。 */
+  async mutatePublish(itemId, mutator) {
+    const run = async () => {
+      await mkdir(this.itemDir(itemId), { recursive: true })
+      const file = this.publishFile(itemId)
+      const lockFile = file + '.lock'
+      const started = Date.now()
+      for (;;) {
+        try {
+          const handle = await open(lockFile, 'wx')
+          await handle.writeFile(String(process.pid))
+          await handle.close()
+          break
+        } catch (err) {
+          if (err.code !== 'EEXIST') throw err
+          const info = await stat(lockFile).catch(() => null)
+          if (info && Date.now() - info.mtimeMs > 10_000) {
+            await rm(lockFile, { force: true }).catch(() => {})
+            continue
+          }
+          if (Date.now() - started > 8000) {
+            throw Object.assign(new Error('publish.json 正被另一个进程写入，请稍后重试'), { status: 503 })
+          }
+          await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
+        }
+      }
+      try {
+        const current = await this.readPublish(itemId)
+        const draft = structuredClone(current)
+        const result = await mutator(draft)
+        draft.schemaVersion = 1
+        draft.updatedAt = new Date().toISOString()
+        const normalized = normalizePublish(draft)
+        const tmp = file + '.' + process.pid + '.tmp'
+        await writeFile(tmp, JSON.stringify(normalized, null, 2))
+        await rename(tmp, file)
+        return { result, publish: normalized }
+      } finally {
+        await rm(lockFile, { force: true }).catch(() => {})
+      }
+    }
+    const next = this.publishQueue.then(run, run)
+    this.publishQueue = next.then(() => undefined, () => undefined)
+    return next
+  }
+
   itemDir(itemId) {
     return join(this.projectsDir, itemId)
   }
@@ -227,6 +299,7 @@ export class Store {
       audio: join(base, 'audio'),
       renders: join(base, 'renders'),
       work: join(base, 'work'),
+      exports: join(base, 'exports'),
     }
     for (const dir of Object.values(dirs)) await mkdir(dir, { recursive: true })
     return dirs

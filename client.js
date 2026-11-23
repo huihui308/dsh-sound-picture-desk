@@ -106,9 +106,10 @@ window.__ModuleLoader__.load({
 .sd-lb-close{margin-left:auto;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;border-radius:6px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
 .sd-lb-close:hover{background:rgba(255,255,255,.18)}
 .sd-lb-hint{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:rgba(255,255,255,.5);font-size:11px;pointer-events:none}
-.sd-tabnav{display:flex;gap:2px;border-bottom:1px solid var(--dsw-alias-border-l1);margin-top:2px}
+.sd-tabnav{display:flex;flex-wrap:wrap;gap:2px;row-gap:0;border-bottom:1px solid var(--dsw-alias-border-l1);margin-top:2px}
 .sd-tabnav-btn{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12.5px;padding:8px 13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;line-height:1.4;white-space:nowrap}
 .sd-tabnav-btn:hover{color:var(--dsw-alias-label-primary)}
+.sd-tabnav-btn:disabled{opacity:.45;cursor:not-allowed}
 .sd-tabnav-btn[data-on="1"]{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
 .sd-tabnav-btn[data-done="1"]{color:var(--dsw-alias-state-success-primary)}
 .sd-tabnav-btn[data-on="1"][data-done="1"]{color:var(--dsw-alias-brand-primary)}
@@ -209,6 +210,61 @@ window.__ModuleLoader__.load({
 .sd-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:1.6;margin-top:8px;word-break:break-word}
 .sd-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-idle-primary);flex:0 0 auto}
 .sd-dot[data-on="1"]{background:var(--dsw-alias-state-success-primary)}
+/* ---------------- 发布页 ---------------- */
+.sd-pub-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.sd-pub-kicker{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary)}
+.sd-pub-title{font-size:15px;font-weight:650;margin-top:3px}
+.sd-pub-sub{font-size:11.5px;color:var(--dsw-alias-label-tertiary);margin-top:3px}
+.sd-pub-chips{display:flex;gap:6px;margin-left:auto;padding-bottom:2px}
+.sd-pub-chip{font-size:10.5px;padding:2px 8px;border-radius:5px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.sd-pub-chip[data-tone="ok"]{color:var(--dsw-alias-state-success-primary)}
+.sd-pub-chip[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
+.sd-pub-chip[data-tone="error"]{color:var(--dsw-alias-state-error-primary)}
+.sd-pub-platforms{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.sd-pub-platform{display:flex;align-items:center;gap:9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:9px 11px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.sd-pub-platform:disabled{opacity:.65;cursor:default}
+.sd-pub-platform[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,var(--dsw-alias-bg-layer-1))}
+.sd-pub-check{width:15px;height:15px;border-radius:4px;border:1px solid var(--dsw-alias-border-l2);display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;flex:0 0 auto}
+.sd-pub-check[data-on="1"]{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}
+.sd-pub-picon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;flex:0 0 auto;letter-spacing:.02em;text-align:center;line-height:1.1}
+.sd-pub-picon[data-platform="xiaohongshu"]{background:#ff2442}
+.sd-pub-picon[data-platform="x"]{background:#000;font-size:14px}
+.sd-pub-pname{font-size:12px;font-weight:600;display:block}
+.sd-pub-pmeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:1px;display:block}
+.sd-pub-pstate{margin-left:auto;font-size:10.5px;color:var(--dsw-alias-state-success-primary);white-space:nowrap}
+.sd-pub-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;margin-top:12px;align-items:start}
+.sd-pub-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sd-pub-card{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:11px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.sd-pub-card-head{display:flex;align-items:center;gap:8px;min-height:20px}
+.sd-pub-card-title{font-size:12.5px;font-weight:600}
+.sd-pub-counter{margin-left:auto;font-size:10.5px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sd-pub-tags{display:flex;flex-wrap:wrap;gap:5px;align-items:center;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);border-radius:6px;padding:5px 7px;min-height:32px}
+.sd-pub-tags input{border:none;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:11px;min-width:120px;flex:1;padding:2px 0}
+.sd-pub-tagx{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:11px;padding:0 0 0 2px;line-height:1}
+.sd-pub-coverrow{display:flex;gap:10px;align-items:flex-start}
+.sd-pub-coverbox{width:132px;height:176px;flex:0 0 132px;border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);position:relative}
+.sd-pub-coverbox img{width:100%;height:100%;object-fit:cover;display:block}
+.sd-pub-cover-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:10.5px;text-align:center;padding:8px;line-height:1.5}
+.sd-pub-checkrow{display:flex;align-items:center;gap:8px;min-height:22px;font-size:11px;border-top:1px solid var(--dsw-alias-border-l1)}
+.sd-pub-checkrow:first-of-type{border-top:none}
+.sd-pub-checkmark{width:12px;flex:0 0 12px;text-align:center}
+.sd-pub-checkname{color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.sd-pub-checkval{margin-left:auto;color:var(--dsw-alias-label-tertiary);font-size:10.5px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62%}
+.sd-pub-checkval[data-state="warn"]{color:var(--dsw-alias-state-warn-primary)}
+.sd-pub-checkval[data-state="error"]{color:var(--dsw-alias-state-error-primary)}
+.sd-pub-tree{background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:7px;padding:7px 8px;display:flex;flex-direction:column;gap:1px;max-height:180px;overflow:auto}
+.sd-pub-treerow{display:flex;align-items:center;gap:8px;min-height:19px;font-size:10.5px}
+.sd-pub-treepath{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-pub-treelink{margin-left:auto;color:var(--dsw-alias-link);text-decoration:none;font-size:10px;white-space:nowrap}
+.sd-pub-records{display:flex;flex-wrap:wrap;gap:12px;margin-top:2px}
+.sd-pub-record{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.sd-pub-record .sd-btn{padding:2px 7px;font-size:10px}
+.sd-pub-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l1);display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);flex-wrap:wrap}
+.sd-tabnav-sep{width:1px;height:14px;background:var(--dsw-alias-border-l2);margin:0 8px;flex:0 0 auto}
+.sd-pub-error{color:var(--dsw-alias-state-error-primary);font-size:11.5px;line-height:1.6}
+.sd-pub-ok{color:var(--dsw-alias-state-success-primary);font-size:11.5px;line-height:1.6;word-break:break-all}
+.sd-pub-note{font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
+
 `
 
     // ------------------------------------------------------------------ 工具
@@ -677,7 +733,7 @@ window.__ModuleLoader__.load({
       const task = item.task
       const running = Boolean(task?.running)
       const pct = task && task.total ? Math.min(100, Math.round((task.done / task.total) * 100)) : 0
-      const pages = { item, data, busy, notice, onAction, onReload, onSettings }
+      const pages = { item, data, busy, notice, onAction, onReload, onSettings, onGoTab: setPicked }
 
       return h('div', { className: 'sd-pane' },
         h('div', { className: 'sd-head' },
@@ -703,6 +759,18 @@ window.__ModuleLoader__.load({
                 h('span', { className: 'sd-tabnav-mark' }, TabMark({ key, done, index, active })),
                 h('span', null, stage?.label ?? key))
             })),
+
+          // 发布是独立入口，不进六阶段派生；没成片时置灰
+          h('span', { className: 'sd-tabnav-sep' }),
+          h('button', {
+            key: 'publish', type: 'button', className: 'sd-tabnav-btn',
+            'data-on': active === 'publish' ? '1' : '0',
+            disabled: !item.render,
+            title: item.render ? '生成发布包' : '先合成成片',
+            onClick: () => setPicked('publish'),
+          },
+            h('span', { className: 'sd-tabnav-mark' }, active === 'publish' ? '●' : '⑦'),
+            h('span', null, '发布')),
 
           // 只在跑着或出错时占位：跑完就把进度条撤掉，免得停在一句中间文案上像没结束
           task && (task.running || task.error) ? h('div', null,
@@ -746,6 +814,7 @@ window.__ModuleLoader__.load({
               : active === 'voiced' ? h(VoicePage, pages)
                 : active === 'anchors' ? h(AnchorPage, pages)
                   : active === 'imaged' ? h(ImagePage, pages)
+                  : active === 'publish' ? h(PublishPage, pages)
                   : h(RenderPage, pages)))
     }
 
@@ -1796,6 +1865,539 @@ window.__ModuleLoader__.load({
                   href: mediaUrl(item.id, item.render.srtPath, renderStamp(item)), download: `${downloadName(item)}.srt`, target: '_blank', rel: 'noreferrer',
                 }, '下载 SRT') : null)))
           : h('div', { className: 'sd-empty' }, ready ? '素材齐了，点「合成成片」。' : '音画还不齐，先去③④补上。'))
+    }
+
+    // ------------------------------------------------------------------ 发布页
+
+    /** 与 src/publish/rules.js 同一口径；改规则时两边一起改。 */
+    function xWeightedLength(value) {
+      const text = String(value ?? '')
+      const urlPattern = /https?:\/\/[^\s]+/g
+      // 中日韩文字与全角标点按 2 计重
+      const cjkPattern = /[\u1100-\u11FF\u2E80-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]/
+      const weight = chunk => {
+        let sum = 0
+        for (const ch of String(chunk)) {
+          sum += ch.codePointAt(0) > 0xffff ? 2 : cjkPattern.test(ch) ? 2 : 1
+        }
+        return sum
+      }
+      let total = 0
+      let last = 0
+      for (const match of text.matchAll(urlPattern)) {
+        total += weight(text.slice(last, match.index)) + 23
+        last = match.index + match[0].length
+      }
+      return total + weight(text.slice(last))
+    }
+
+    function formatFileSize(bytes) {
+      const size = Number(bytes) || 0
+      if (size < 1024) return size + ' B'
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+      if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + ' MB'
+      return (size / 1024 / 1024 / 1024).toFixed(2) + ' GB'
+    }
+
+    function composeVariantText(platformId, variant) {
+      if (platformId === 'xiaohongshu') {
+        const parts = []
+        const title = String(variant?.title ?? '').trim()
+        const body = String(variant?.body ?? '').trim()
+        const tags = (Array.isArray(variant?.tags) ? variant.tags : []).map(tag => '#' + String(tag).trim())
+        if (title) parts.push(title)
+        if (body) parts.push(body)
+        if (tags.length) parts.push(tags.join(' '))
+        return parts.join('\n\n')
+      }
+      return String(variant?.text ?? '').trim()
+    }
+
+    async function copyPlainText(text) {
+      try {
+        await navigator.clipboard.writeText(text)
+        return true
+      } catch {
+        // 局域网 http 不是安全上下文，clipboard 用不了，退回 execCommand
+      }
+      try {
+        const area = document.createElement('textarea')
+        area.value = text
+        area.style.position = 'fixed'
+        area.style.opacity = '0'
+        document.body.appendChild(area)
+        area.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(area)
+        return ok
+      } catch {
+        return false
+      }
+    }
+
+    function PublishPage({ item, data, busy, onAction, onReload, onGoTab }) {
+      const [view, setView] = useState(null)
+      const [loadError, setLoadError] = useState(null)
+      const [drafts, setDrafts] = useState(null)
+      const [tagInput, setTagInput] = useState('')
+      const [coverTitle, setCoverTitle] = useState('')
+      const [note, setNote] = useState(null)
+      const [saving, setSaving] = useState(false)
+      const [makingCover, setMakingCover] = useState(false)
+      const [exporting, setExporting] = useState(false)
+      const [dir, setDir] = useState('')
+      const [exportResult, setExportResult] = useState(null)
+      const [copyNote, setCopyNote] = useState('')
+      const task = item.task
+      const generating = Boolean(task?.running && task.kind === 'publish-copy')
+
+      const refresh = useCallback(async () => {
+        try {
+          const body = await post('publish/read', { id: item.id })
+          setView(body.publish)
+          setCoverTitle(prev => prev || body.publish.cover?.title || body.publish.variants?.xiaohongshu?.title || item.title || '')
+          setLoadError(null)
+        } catch (err) {
+          setLoadError(err.message)
+        }
+      }, [item.id, item.title])
+
+      useEffect(() => { refresh() }, [refresh, item.render?.at])
+
+      // 文案生成 / 封面生成这类任务跑完，刷新一次发布数据
+      const wasRunning = useRef(false)
+      useEffect(() => {
+        const running = Boolean(item.task?.running)
+        const had = wasRunning.current
+        wasRunning.current = running
+        if (had && !running) refresh()
+      }, [item.task?.running, item.task?.finishedAt, refresh])
+
+      // 只有文案内容真的变了才重置编辑草稿，避免生成封面 / 标记发布把用户没保存的字冲掉
+      const variantsKey = view ? JSON.stringify(view.variants ?? {}) : ''
+      useEffect(() => {
+        if (!view) return
+        setDrafts(JSON.parse(JSON.stringify(view.variants ?? {})))
+      }, [variantsKey])
+
+      const draftsSafe = drafts ?? {}
+      const targets = view?.targets ?? []
+      const platformById = id => (view?.platforms ?? []).find(row => row.id === id) ?? { id, label: id, summary: '', composeUrl: '' }
+      const platformLabel = id => platformById(id).label
+      const countsOf = platformId => platformId === 'xiaohongshu'
+        ? {
+          title: [...String(draftsSafe.xiaohongshu?.title ?? '')].length,
+          body: [...String(draftsSafe.xiaohongshu?.body ?? '')].length,
+          tags: (Array.isArray(draftsSafe.xiaohongshu?.tags) ? draftsSafe.xiaohongshu.tags : []).length,
+        }
+        : { weighted: xWeightedLength(draftsSafe.x?.text ?? '') }
+
+      const patchDraft = (platformId, patch) => {
+        setDrafts(prev => {
+          const next = JSON.parse(JSON.stringify(prev ?? {}))
+          next[platformId] = { ...(next[platformId] ?? {}), ...patch }
+          return next
+        })
+      }
+
+      const save = async patch => {
+        if (saving) return null
+        setSaving(true)
+        setNote(null)
+        try {
+          const nextTargets = patch?.targets ?? targets
+          const payloadVariants = patch?.variants ?? draftsSafe
+          // 只提交当前选中平台的文案；取消勾选的平台保留原有内容，别被空草稿冲掉
+          const activeVariants = {}
+          for (const platformId of nextTargets) {
+            if (payloadVariants[platformId]) activeVariants[platformId] = payloadVariants[platformId]
+          }
+          const body = await post('publish/save', {
+            id: item.id,
+            targets: nextTargets,
+            variants: activeVariants,
+          })
+          setView(body.publish)
+          setDrafts(JSON.parse(JSON.stringify(body.publish.variants ?? {})))
+          setNote({ tone: 'ok', text: '已保存' })
+          return body.publish
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+          return null
+        } finally {
+          setSaving(false)
+        }
+      }
+
+      const toggleTarget = async platformId => {
+        if (saving) return
+        const order = ['xiaohongshu', 'x']
+        const next = targets.includes(platformId)
+          ? targets.filter(id => id !== platformId)
+          : order.filter(id => targets.includes(id) || id === platformId)
+        if (!next.length) {
+          setNote({ tone: 'error', text: '至少留一个平台' })
+          return
+        }
+        await save({ targets: next })
+      }
+
+      const addTag = () => {
+        const tag = tagInput.trim().replace(/^#+/, '').trim()
+        if (!tag) return
+        const xhs = draftsSafe.xiaohongshu ?? { tags: [] }
+        const tags = Array.isArray(xhs.tags) ? xhs.tags : []
+        const max = platformById('xiaohongshu').tags?.max ?? 10
+        if (tags.includes(tag)) { setTagInput(''); return }
+        if (tags.length >= max) { setNote({ tone: 'error', text: '话题最多 ' + max + ' 个' }); return }
+        patchDraft('xiaohongshu', { tags: [...tags, tag] })
+        setTagInput('')
+      }
+
+      const generate = () => {
+        if (generating) return
+        const has = targets.some(id => composeVariantText(id, draftsSafe[id] ?? {}))
+        if (has && !window.confirm('会覆盖当前文案，继续？')) return
+        onAction('publish/generate', { id: item.id, targets }, null)
+      }
+
+      const makeCover = async () => {
+        if (makingCover) return
+        setMakingCover(true)
+        setNote(null)
+        try {
+          const saved = await save({})
+          if (!saved) return
+          const body = await post('publish/cover', { id: item.id, title: coverTitle.trim() })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '封面已生成' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setMakingCover(false)
+        }
+      }
+
+      const doExport = async () => {
+        if (exporting) return
+        setExporting(true)
+        setNote(null)
+        setExportResult(null)
+        try {
+          const saved = await save({})
+          if (!saved) return
+          const body = await post('publish/export', { id: item.id, dir })
+          setExportResult(body.export)
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '发布包已生成' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setExporting(false)
+        }
+      }
+
+      const markPublished = async platformId => {
+        const record = (view?.records ?? []).find(row => row.platform === platformId)
+        const url = window.prompt('作品链接（可留空）：', record?.url ?? '')
+        if (url === null) return
+        try {
+          const body = await post('publish/record', {
+            id: item.id, platform: platformId, status: 'published', url: url.trim(),
+          })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '已标记发布' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        }
+      }
+
+      const unmarkPublished = async platformId => {
+        try {
+          const body = await post('publish/record', { id: item.id, platform: platformId, status: 'pending' })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '已取消标记' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        }
+      }
+
+      const doCopy = async platformId => {
+        const ok = await copyPlainText(composeVariantText(platformId, draftsSafe[platformId] ?? {}))
+        setCopyNote(ok ? platformLabel(platformId) + '文案已复制' : '复制失败，请手动选中复制')
+        setTimeout(() => setCopyNote(''), 2500)
+      }
+
+      const head = h('div', { className: 'sd-pub-head' },
+        h('div', null,
+          h('div', { className: 'sd-pub-kicker' }, '发布准备'),
+          h('div', { className: 'sd-pub-title' }, '小红书 / X · 生成文案和发布包，自己上传'),
+          h('div', { className: 'sd-pub-sub' }, '不登录平台、不代发；文案可改，检查通过后导出。')),
+        view ? h('div', { className: 'sd-pub-chips' },
+          h('span', { className: 'sd-pub-chip', 'data-tone': 'ok' }, '不碰账号'),
+          h('span', { className: 'sd-pub-chip' }, '规则版本 ' + view.ruleVersion)) : null)
+
+      if (!item.render) {
+        return h(React.Fragment, null,
+          head,
+          h('div', { className: 'sd-empty', style: { marginTop: 14 } },
+            h('div', null, '还没有成片，先在「⑥ 成片」合成一条，再来做发布包。'),
+            h('div', { style: { marginTop: 12 } },
+              h('button', { className: 'sd-btn', type: 'button', onClick: () => onGoTab('rendered') }, '去成片页'))))
+      }
+
+      if (loadError) {
+        return h(React.Fragment, null,
+          head,
+          h('div', { className: 'sd-empty', style: { marginTop: 14 } },
+            h('div', null, '发布数据加载失败：' + loadError),
+            h('div', { style: { marginTop: 12 } },
+              h('button', { className: 'sd-btn', type: 'button', onClick: refresh }, '重试'))))
+      }
+
+      if (!view) {
+        return h(React.Fragment, null, head, h('div', { className: 'sd-hint', style: { paddingTop: 24 } }, '正在读取发布数据…'))
+      }
+
+      const platformCards = h('div', { className: 'sd-pub-platforms' },
+        ['xiaohongshu', 'x'].map(platformId => {
+          const info = platformById(platformId)
+          const on = targets.includes(platformId)
+          return h('button', {
+            key: platformId, type: 'button', className: 'sd-pub-platform',
+            'data-on': on ? '1' : '0',
+            disabled: saving,
+            onClick: () => toggleTarget(platformId),
+          },
+            h('span', { className: 'sd-pub-check', 'data-on': on ? '1' : '0' }, '✓'),
+            h('span', { className: 'sd-pub-picon', 'data-platform': platformId },
+              platformId === 'xiaohongshu' ? '小红书' : 'X'),
+            h('span', { style: { minWidth: 0, textAlign: 'left' } },
+              h('span', { className: 'sd-pub-pname' }, info.label),
+              h('span', { className: 'sd-pub-pmeta' }, info.summary)),
+            h('span', { className: 'sd-pub-pstate' }, on ? '已选' : '不选'))
+        }))
+
+      const xhsInfo = platformById('xiaohongshu')
+      const xhs = draftsSafe.xiaohongshu ?? { title: '', body: '', tags: [] }
+      const xhsCount = countsOf('xiaohongshu')
+      const xhsCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-picon', 'data-platform': 'xiaohongshu', style: { width: 20, height: 20, fontSize: 5.5, borderRadius: 5 } }, '小红书'),
+          h('span', { className: 'sd-pub-card-title' }, '小红书文案'),
+          h('span', { className: 'sd-pub-counter' },
+            '标题 ' + xhsCount.title + '/' + (xhsInfo.title?.max ?? 20)
+            + ' · 正文 ' + xhsCount.body + '/' + (xhsInfo.body?.max ?? 1000)
+            + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10))),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('label', null, '标题'),
+          h('input', {
+            className: 'sd-input', value: xhs.title ?? '', maxLength: 120,
+            placeholder: '20 字以内，带钩子',
+            onChange: event => patchDraft('xiaohongshu', { title: event.target.value }),
+          })),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('label', null, '正文'),
+          h('textarea', {
+            className: 'sd-text', value: xhs.body ?? '', rows: 6, style: { minHeight: 132 },
+            placeholder: '300–600 字，分段写',
+            onChange: event => patchDraft('xiaohongshu', { body: event.target.value }),
+          })),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('label', null, '话题'),
+          h('div', { className: 'sd-pub-tags' },
+            (Array.isArray(xhs.tags) ? xhs.tags : []).map((tag, index) => h('span', {
+              key: String(tag) + index, className: 'sd-tag',
+              style: { display: 'inline-flex', alignItems: 'center', gap: 3 },
+            },
+              '#' + tag,
+              h('button', {
+                type: 'button', className: 'sd-pub-tagx', title: '移除',
+                onClick: () => patchDraft('xiaohongshu', {
+                  tags: (Array.isArray(xhs.tags) ? xhs.tags : []).filter((row, i) => i !== index),
+                }),
+              }, '×'))),
+            h('input', {
+              value: tagInput,
+              placeholder: '输入话题，回车添加',
+              onChange: event => setTagInput(event.target.value),
+              onKeyDown: event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addTag()
+                }
+              },
+            }))),
+        h('div', { className: 'sd-card-foot' },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            disabled: generating || saving, onClick: generate,
+          }, generating ? '生成中…' : '重新生成文案'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving, onClick: () => save({}) },
+            saving ? '保存中…' : '保存文案'),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || !targets.includes('xiaohongshu'), onClick: () => doCopy('xiaohongshu') },
+            '复制小红书文案')))
+
+      const xInfo = platformById('x')
+      const xDraft = draftsSafe.x ?? { text: '' }
+      const xCount = countsOf('x')
+      const xCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-picon', 'data-platform': 'x', style: { width: 20, height: 20, fontSize: 11, borderRadius: 5 } }, 'X'),
+          h('span', { className: 'sd-pub-card-title' }, 'X 文案'),
+          h('span', { className: 'sd-pub-counter' }, '加权 ' + xCount.weighted + '/' + (xInfo.text?.maxWeighted ?? 280))),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('textarea', {
+            className: 'sd-text', value: xDraft.text ?? '', rows: 5, style: { minHeight: 112 },
+            placeholder: '一条 280 加权字符以内的帖子，话题内联',
+            onChange: event => patchDraft('x', { text: event.target.value }),
+          })),
+        h('div', { className: 'sd-card-foot' },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            disabled: generating || saving, onClick: generate,
+          }, generating ? '生成中…' : '重新生成文案'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving, onClick: () => save({}) },
+            saving ? '保存中…' : '保存文案'),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || !targets.includes('x'), onClick: () => doCopy('x') },
+            '复制 X 文案')))
+
+      const guideCard = h('div', { className: 'sd-pub-card', style: { gap: 6 } },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '复制文案，自己去发'),
+          h('span', { className: 'sd-pub-counter' }, '不调用平台接口')),
+        h('div', { className: 'sd-hint' }, '打开平台投稿页 → 上传视频 → 回来勾一下「已发布」。'),
+        h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+          targets.map(platformId => h('button', {
+            key: platformId, className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            onClick: () => window.open(platformById(platformId).composeUrl, '_blank', 'noopener,noreferrer'),
+          }, '打开' + platformLabel(platformId)))))
+
+      const coverCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '小红书封面'),
+          h('span', { className: 'sd-pub-counter' }, view.cover
+            ? view.cover.width + '×' + view.cover.height + ' · 3:4'
+            : '1080×1440 · 3:4')),
+        h('div', { className: 'sd-pub-coverrow' },
+          h('div', { className: 'sd-pub-coverbox' },
+            view.cover?.path
+              ? h('img', {
+                src: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
+                alt: '封面预览',
+              })
+              : h('div', { className: 'sd-pub-cover-empty' }, '还没有封面')),
+          h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 } },
+            h('div', { className: 'sd-hint' }, '大字压在画面底部，导出时按 3:4 单独出图。'),
+            h('div', { className: 'sd-field', style: { marginTop: 0 } },
+              h('label', null, '封面大字'),
+              h('input', {
+                className: 'sd-input', value: coverTitle, maxLength: 40,
+                onChange: event => setCoverTitle(event.target.value),
+              })),
+            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+              h('button', {
+                className: 'sd-btn', 'data-kind': view.cover?.path ? undefined : 'primary', type: 'button',
+                disabled: makingCover || saving || generating || busy,
+                onClick: makeCover,
+              }, makingCover ? '生成中…' : view.cover?.path ? '重新生成' : '生成封面'),
+              view.cover?.path ? h('a', {
+                className: 'sd-btn', 'data-kind': 'ghost',
+                href: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
+                download: 'cover-3x4.png', target: '_blank', rel: 'noreferrer',
+              }, '下载封面') : null))))
+
+      const stateColor = state => state === 'error'
+        ? 'var(--dsw-alias-state-error-primary)'
+        : state === 'warn'
+          ? 'var(--dsw-alias-state-warn-primary)'
+          : 'var(--dsw-alias-state-success-primary)'
+      const checksCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '发布前检查'),
+          h('span', {
+            className: 'sd-pub-chip', 'data-tone': view.blocking ? 'error' : 'ok', style: { marginLeft: 'auto' },
+          }, view.blocking ? view.blocking + ' 项要改' : '全部通过')),
+        view.checks.length
+          ? view.checks.map(check => h('div', { key: check.platform + ':' + check.id, className: 'sd-pub-checkrow' },
+            h('span', { className: 'sd-pub-checkmark', style: { color: stateColor(check.state) } },
+              check.state === 'ok' ? '✓' : check.state === 'warn' ? '!' : '×'),
+            h('span', { className: 'sd-pub-checkname' }, check.label),
+            h('span', {
+              className: 'sd-pub-checkval', 'data-state': check.state,
+              title: [check.detail, check.fix].filter(Boolean).join(' · '),
+            }, check.detail)))
+          : h('div', { className: 'sd-hint' }, '还没有检查项'),
+        h('div', { className: 'sd-hint' }, '改了文案要点「保存文案」或直接导出，检查才会更新。'))
+
+      const exportCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '发布包'),
+          h('span', { className: 'sd-pub-counter' }, '写到项目 exports/')),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('label', null, '复制到指定目录（可留空）'),
+          h('input', {
+            className: 'sd-input', value: dir, spellCheck: false,
+            placeholder: '留空就只生成在项目里',
+            onChange: event => setDir(event.target.value),
+          })),
+        h('button', {
+          className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+          disabled: exporting || saving || !view.canExport || view.blocking > 0,
+          onClick: doExport,
+        }, exporting ? '导出中…' : '导出发布包（' + targets.length + ' 个平台）'),
+        view.blocking ? h('div', { className: 'sd-pub-error' }, '先改掉 ' + view.blocking + ' 项超限才能导出。') : null,
+        exportResult ? h('div', null,
+          h('div', { className: 'sd-pub-ok' },
+            '已生成 ' + exportResult.relDir
+            + (exportResult.copied && !exportResult.copied.error ? '，并复制到 ' + exportResult.copied : '')),
+          exportResult.copied && exportResult.copied.error
+            ? h('div', { className: 'sd-pub-error' }, '复制到目录失败：' + exportResult.copied.error)
+            : null,
+          h('div', { className: 'sd-pub-tree' },
+            exportResult.files.map(file => h('div', { key: file.path, className: 'sd-pub-treerow' },
+              h('span', { className: 'sd-pub-treepath', title: file.path + ' · ' + formatFileSize(file.bytes) }, file.name),
+              h('a', {
+                className: 'sd-pub-treelink',
+                href: mediaUrl(item.id, file.path),
+                download: String(file.name || '').split('/').pop() || 'download',
+                target: '_blank', rel: 'noreferrer',
+              }, '下载')))))
+          : view.exports?.length
+            ? h('div', { className: 'sd-hint' }, '上次导出：' + view.exports[view.exports.length - 1].dir)
+            : null,
+        h('div', { className: 'sd-pub-records' },
+          targets.map(platformId => {
+            const record = (view.records ?? []).find(row => row.platform === platformId)
+            const published = record?.status === 'published'
+            return h('div', { key: platformId, className: 'sd-pub-record' },
+              h('span', null, platformLabel(platformId)),
+              h('span', { className: 'sd-pub-chip', 'data-tone': published ? 'ok' : undefined },
+                published ? '已发布' : '待发布'),
+              h('button', {
+                className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+                onClick: () => (published ? unmarkPublished(platformId) : markPublished(platformId)),
+              }, published ? '取消标记' : '标记已发布'))
+          })))
+
+      return h(React.Fragment, null,
+        head,
+        platformCards,
+        note ? h('div', {
+          className: note.tone === 'error' ? 'sd-pub-error' : 'sd-pub-ok',
+          style: { marginTop: 8 },
+        }, note.text) : null,
+        generating && task ? h('div', { className: 'sd-pub-note', style: { marginTop: 6 } },
+          (task.message || '正在生成…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
+        copyNote ? h('div', { className: 'sd-pub-ok', style: { marginTop: 6 } }, copyNote) : null,
+        h('div', { className: 'sd-pub-grid' },
+          h('div', { className: 'sd-pub-col' }, xhsCard, xCard, guideCard),
+          h('div', { className: 'sd-pub-col' }, coverCard, checksCard, exportCard)),
+        h('div', { className: 'sd-pub-foot' },
+          h('span', null, '发布包写到项目 exports/ 目录，可随时删除'),
+          h('span', null, '数据只在本机 · 不上传云端')))
     }
 
     // ------------------------------------------------------------------ 分段卡片
