@@ -224,7 +224,7 @@ exports/<YYYYMMDD-HHmmss>/
 - `publish/revise/apply`：确认提案仍是 proposed；比较当前字段与 `before`，不一致时返回 409 `changed`（客户端确认后可带 `force`）；封面大字按 `coverTextIndex` 选中后重渲染封面；写回后用 `accepted` 标记。
 - `publish/revise/discard`：proposed → rejected，内容不变。
 - `publish/revise/revert`：accepted → reverted，把 before 写回；封面大字会按旧文字重渲染。
-- 任务失败 / 模型返回不可用：不产生提案，原内容不动。
+- 任务失败 / 模型返回不可用：不产生提案，原内容不动；网络类错误（ETIMEDOUT / ECONNRESET 等）在 `llm.js` 自动重试两次，仍失败给「稍后再试或换模型」提示。
 
 ### Prompt 与校验
 

@@ -1623,6 +1623,12 @@ async function route(ctx, store, req, res) {
           feedback,
           route: item.model ?? null,
           signal,
+        }).catch(err => {
+          const raw = String(err?.message ?? '') + ' ' + String(err?.cause?.code ?? '')
+          if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|fetch failed|Request timed out|network/i.test(raw)) {
+            throw new Error('模型请求超时（网络或模型通道不稳），已自动重试仍失败。稍后再点一次「提意见」；如果一直超时，去设置里换一个模型。')
+          }
+          throw err
         })
         const revision = {
           id: newId('rev'),

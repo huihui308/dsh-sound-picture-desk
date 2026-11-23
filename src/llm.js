@@ -26,6 +26,17 @@ export function resolveModel(ctx, route) {
   return modelInfo(ctx)
 }
 
+/** 网络/连接类错误重试；模型自身返回 4xx、内容不合格不重试。 */
+function transientModelError(err) {
+  const text = [
+    err?.message,
+    err?.cause?.code,
+    err?.cause?.message,
+    err?.cause?.cause?.code,
+  ].filter(Boolean).join(' ')
+  return /ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|UND_ERR|fetch failed|Request timed out|socket hang up|network/i.test(text)
+}
+
 /**
  * 调一次模型，返回完整文本。
  * @param {object} ctx - Cordis 上下文。
@@ -82,11 +93,23 @@ export async function callModel(ctx, { system, user, maxTokens = 8000, signal, r
     return { text, reasoning, stopped }
   }
 
-  let result = await once(maxTokens)
+  // 网络抖动（常见 ETIMEDOUT / ECONNRESET）自动重试两次；模型内容错误不重试
+  const onceStable = async budget => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await once(budget)
+      } catch (err) {
+        if (signal?.aborted || !transientModelError(err) || attempt >= 2) throw err
+        await new Promise(resolve => setTimeout(resolve, 900 * (attempt + 1)))
+      }
+    }
+  }
+
+  let result = await onceStable(maxTokens)
   // 推理把预算烧光了：翻倍给一次机会，比直接报错有用
   const burned = !result.text.trim() && result.reasoning.trim()
     && ['max-tokens', 'length', 'max_tokens'].includes(String(result.stopped))
-  if (burned) result = await once(Math.min(maxTokens * 3, 64000))
+  if (burned) result = await onceStable(Math.min(maxTokens * 3, 64000))
 
   if (!result.text.trim()) {
     const truncated = ['max-tokens', 'length', 'max_tokens'].includes(String(result.stopped))
