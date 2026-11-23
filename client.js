@@ -1949,7 +1949,7 @@ window.__ModuleLoader__.load({
         }
       }
 
-      return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onClose() } },
+      return h('div', { className: 'sd-mask', ...maskHandlers(onClose) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建项目' },
           h('h3', null, '新建项目'),
           h('div', { className: 'sd-hint' }, '给一个主题就行。有现成材料就展开贴上，稿子会照着材料写。'),
@@ -2000,9 +2000,25 @@ window.__ModuleLoader__.load({
       return hit ? hit.id : 'custom'
     }
 
+    /**
+     * 遮罩关闭守卫：按下和松开都落在遮罩上才算「点空白关闭」。
+     * 在对话框里按下、拖到遮罩上松开（编辑时框选文字很常见）不算，避免误关丢输入。
+     */
+    function maskHandlers(onClose) {
+      let downOnMask = false
+      let upOnMask = false
+      return {
+        onMouseDown: event => { downOnMask = event.target === event.currentTarget },
+        onMouseUp: event => { upOnMask = event.target === event.currentTarget },
+        onClick: event => {
+          if (downOnMask && upOnMask && event.target === event.currentTarget) onClose()
+        },
+      }
+    }
+
     /** 删除前的确认。文案说清「进回收站还能找回」，免得用户以为是彻底删除。 */
     function ConfirmDelete({ item, days, onCancel, onConfirm, busy }) {
-      return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onCancel() } },
+      return h('div', { className: 'sd-mask', ...maskHandlers(onCancel) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '删除项目', style: { width: 'min(420px,92vw)' } },
           h('h3', null, '删除这个项目？'),
           h('div', { className: 'sd-hint', style: { marginTop: 6, lineHeight: 1.8 } },
@@ -2058,7 +2074,7 @@ window.__ModuleLoader__.load({
 
       const items = data?.items ?? []
 
-      return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onClose() } },
+      return h('div', { className: 'sd-mask', ...maskHandlers(onClose) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '回收站', style: { width: 'min(520px,94vw)' } },
           h('h3', null, '回收站'),
           h('div', { className: 'sd-hint', style: { marginTop: 4 } },
@@ -2103,6 +2119,16 @@ window.__ModuleLoader__.load({
 
       const set = (key, value) => setForm(prev => ({ ...prev, [key]: value }))
       const keyFor = target => (target === 'image' ? imageKey.trim() : ttsKey.trim())
+
+      // 有未保存改动时点遮罩/取消要先确认，别一声不吭把填的东西全丢了
+      const dirty = useMemo(() => {
+        const base = settings ?? {}
+        const changed = Object.keys({ ...base, ...form }).some(key => JSON.stringify(form[key]) !== JSON.stringify(base[key]))
+        return changed || Boolean(ttsKey.trim() || imageKey.trim())
+      }, [form, settings, ttsKey, imageKey])
+      const requestClose = useCallback(() => {
+        if (!dirty || window.confirm('设置有改动还没保存，确定关闭？')) onClose()
+      }, [dirty, onClose])
 
       const imageModels = test.image?.models ?? []
       // 候选 = 服务端返回 + 当前值（图像模型常常不在 /models 里，当前值必须保住）
@@ -2163,7 +2189,7 @@ window.__ModuleLoader__.load({
         h('option', { key: 'custom', value: 'custom' }, '自定义（自己填地址）'),
       ]
 
-      return h('div', { className: 'sd-mask', onClick: event => { if (event.target === event.currentTarget) onClose() } },
+      return h('div', { className: 'sd-mask', ...maskHandlers(requestClose) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '声画工作台设置' },
           h('h3', null, '设置'),
           h('div', { className: 'sd-hint' },
@@ -2339,7 +2365,7 @@ window.__ModuleLoader__.load({
           error ? h('div', { className: 'sd-error' }, error) : null,
 
           h('div', { className: 'sd-dialog-foot' },
-            h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onClose, disabled: busy }, '取消'),
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: requestClose, disabled: busy }, '取消'),
             h('button', { className: 'sd-btn', 'data-kind': 'primary', onClick: save, disabled: busy },
               busy ? '保存中…' : '保存'))))
     }
