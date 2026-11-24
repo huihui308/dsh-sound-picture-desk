@@ -46,8 +46,9 @@ MiniMax ships two lanes, routed automatically by model name: `image-01` / `image
 ### 1. Get the code
 
 ```bash
-git clone git@github.com:huihui308/dsh-sound-picture-desk.git
-cd dsh-sound-picture-desk
+mkdir -p ~/src
+git clone https://github.com/huihui308/dsh-sound-picture-desk.git ~/src/dsh-sound-picture-desk
+cd ~/src/dsh-sound-picture-desk
 ```
 
 ### 2. Install into the profile
@@ -56,7 +57,7 @@ DSH loads plugins from the profile's `node_modules`. Use `dsh plugin` to install
 
 ```bash
 # <profile> is your actual profile name (default: web)
-dsh plugin --profile web add /absolute/path/to/dsh-sound-picture-desk
+dsh plugin --profile web add ~/src/dsh-sound-picture-desk
 ```
 
 Or symlink it manually:

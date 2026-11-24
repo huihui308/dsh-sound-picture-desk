@@ -46,8 +46,9 @@ MiniMax 有两条通道，插件按模型名自动分流：`image-01` / `image-0
 ### 1. 拿到代码
 
 ```bash
-git clone git@github.com:huihui308/dsh-sound-picture-desk.git
-cd dsh-sound-picture-desk
+mkdir -p ~/src
+git clone https://github.com/huihui308/dsh-sound-picture-desk.git ~/src/dsh-sound-picture-desk
+cd ~/src/dsh-sound-picture-desk
 ```
 
 ### 2. 装进 profile
@@ -56,7 +57,7 @@ DSH 从 profile 的 `node_modules` 里加载插件。用 `dsh plugin` 安装本�
 
 ```bash
 # <profile> 是本机实际的 profile 名，默认 web
-dsh plugin --profile web add /绝对路径/dsh-sound-picture-desk
+dsh plugin --profile web add ~/src/dsh-sound-picture-desk
 ```
 
 也可以手动软链接：
