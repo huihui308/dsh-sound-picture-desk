@@ -41,7 +41,7 @@ function xCopyMarkdown(variant) {
   return posts.map((post, index) => (index === 0 ? '【主帖】\n' : '【回复 ' + index + '】\n') + post).join('\n\n') + '\n'
 }
 
-function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover, hasComment }) {
+function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover, hasComment, hasClip, hasCards }) {
   const lines = []
   lines.push('# ' + (item.title || '未命名') + ' · 发布包')
   lines.push('')
@@ -60,8 +60,10 @@ function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover, hasCo
         steps.push('上传 ' + id + '/cover-' + size.width + 'x' + size.height + '.png 作为封面')
       }
       steps.push('打开 ' + id + '/copy.md，复制标题、正文和话题')
+      if (hasCards) steps.push('发图文笔记：按 ' + id + '/cards/01… 顺序上传；发视频笔记：上传 ' + id + '/video.mp4')
       if (hasComment) steps.push('发布后打开 ' + id + '/comment.md，把置顶评论贴到第一条评论并置顶（定时笔记发布前不能评论）')
     } else {
+      if (hasClip) steps.push('主帖上传 ' + id + '/video-60s.mp4（≤60 秒切片），回复 1 上传 ' + id + '/video.mp4（全片）')
       steps.push('打开 ' + id + '/copy.md，按主帖、回复 1…的顺序逐条发；主帖先发，回复挂在前一条下')
     }
     lines.push('')
@@ -77,7 +79,7 @@ function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover, hasCo
   return lines.join('\n') + '\n'
 }
 
-function checklistMarkdown({ item, targets, hasComment }) {
+function checklistMarkdown({ item, targets, hasComment, hasClip, hasCards }) {
   const lines = [
     '# 发布清单 · ' + (item.title || '未命名'),
     '',
@@ -87,11 +89,12 @@ function checklistMarkdown({ item, targets, hasComment }) {
   for (const id of targets) lines.push('| ' + PLATFORMS[id].label + ' |  | 待发布 |  |')
   lines.push('')
   lines.push('## 发布后')
-  if (targets.includes('xiaohongshu') && hasComment) {
-    lines.push('- 小红书：发布后把 comment.md 贴到第一条评论并置顶；定时笔记发布前不能评论。')
+  if (targets.includes('xiaohongshu')) {
+    if (hasCards) lines.push('- 小红书：图文笔记按 cards/01… 顺序上传；视频笔记用 video.mp4。')
+    if (hasComment) lines.push('- 小红书：发布后把 comment.md 贴到第一条评论并置顶；定时笔记发布前不能评论。')
   }
   if (targets.includes('x')) {
-    lines.push('- X：按 copy.md 的主帖/回复顺序逐条发，回复挂在前一条下，主帖置顶。')
+    lines.push('- X：按 copy.md 的主帖/回复顺序逐条发，回复挂在前一条下，主帖置顶。' + (hasClip ? ' 主帖视频用 video-60s.mp4。' : ''))
   }
   return lines.join('\n') + '\n'
 }
@@ -131,6 +134,8 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
   if (!videoBytes) throw Object.assign(new Error('成片文件不见了，重新合成一次'), { status: 400 })
 
   const files = []
+  let clipIncluded = false
+  let cardsIncluded = 0
   const tmpPath = rel => join(tmpDir, rel.slice(relDir.length + 1))
   const record = async (rel, extra = {}) => {
     const abs = tmpPath(rel)
@@ -156,6 +161,18 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
       await copyFile(videoSource, join(platformDir, 'video.mp4'))
       await record(videoRel, { bytes: videoBytes })
 
+      // X 主帖单独带 60 秒切片；全片仍留给回复 1
+      if (id === 'x' && publish?.clip?.path) {
+        const clipSource = join(baseDir, publish.clip.path)
+        try {
+          await copyFile(clipSource, join(platformDir, 'video-60s.mp4'))
+          await record(relDir + '/' + id + '/video-60s.mp4')
+          clipIncluded = true
+        } catch {
+          // 切片文件没了不阻断导出，README 会退回“上传全片”的说明
+        }
+      }
+
       if (id === 'xiaohongshu' && publish?.cover?.path) {
         const coverSource = join(baseDir, publish.cover.path)
         const coverName = 'cover-' + publish.cover.width + 'x' + publish.cover.height + '.png'
@@ -176,6 +193,22 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
       await writeFile(join(platformDir, 'copy.md'), markdown, 'utf8')
       await record(copyRel)
 
+      if (id === 'xiaohongshu' && Array.isArray(publish?.cards) && publish.cards.length) {
+        const cardsDir = join(platformDir, 'cards')
+        await mkdir(cardsDir, { recursive: true })
+        for (let index = 0; index < publish.cards.length; index += 1) {
+          const card = publish.cards[index]
+          const name = String(index + 1).padStart(2, '0') + '.png'
+          try {
+            await copyFile(join(baseDir, card.path), join(cardsDir, name))
+            await record(relDir + '/' + id + '/cards/' + name)
+            cardsIncluded += 1
+          } catch {
+            // 单张卡片丢了就跳过，不阻断整个发布包
+          }
+        }
+      }
+
       if (id === 'xiaohongshu' && String(publish?.variants?.xiaohongshu?.comment ?? '').trim()) {
         const commentRel = relDir + '/' + id + '/comment.md'
         await writeFile(join(platformDir, 'comment.md'), String(publish.variants.xiaohongshu.comment).trim() + '\n', 'utf8')
@@ -187,6 +220,8 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
     await writeFile(join(tmpDir, 'README.md'), readmeMarkdown({
       item, targets, stamp, ruleVersion, cover: coverIncluded,
       hasComment: Boolean(String(publish?.variants?.xiaohongshu?.comment ?? '').trim()),
+      hasClip: clipIncluded,
+      hasCards: cardsIncluded > 0,
       video: { secs: item.render.secs, bytes: videoBytes },
     }), 'utf8')
     await record(readmeRel)
@@ -195,6 +230,8 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
     await writeFile(join(tmpDir, 'checklist.md'), checklistMarkdown({
       item, targets,
       hasComment: Boolean(String(publish?.variants?.xiaohongshu?.comment ?? '').trim()),
+      hasClip: clipIncluded,
+      hasCards: cardsIncluded > 0,
     }), 'utf8')
     await record(checklistRel)
 

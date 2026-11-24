@@ -16,7 +16,7 @@ import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDu
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, isTaskLocked, publicTask, startTask } from './jobs.js'
-import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, composeCopy, countVariant, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
+import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, clipWindow, composeCopy, countVariant, formatDuration, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
 import { generateCopyVariants } from './publish/copy.js'
 import { reviseCopy } from './publish/revise.js'
 import { buildExport } from './publish/export.js'
@@ -24,7 +24,7 @@ import { buildExport } from './publish/export.js'
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_JSON = 8_000_000
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8' }
-const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers', 'exports'])
+const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers', 'clips', 'exports'])
 
 /** ffmpeg/ffprobe 的口径与 encoders.js / render.js 一致：环境变量优先，旧名仍认。 */
 const FFMPEG = process.env.PICTURE_DESK_FFMPEG || process.env.STORY_DESK_FFMPEG || 'ffmpeg'
@@ -362,6 +362,19 @@ export function publishChecks(publish, targets, video, coverExists) {
 }
 
 /** 给「发布」页的完整视图。导出前先看 blocking 项。 */
+/** X 主帖切片的起点候选：按分段音频累计时长给 0:00、每段开头。 */
+function clipOptionsFor(item) {
+  const rows = []
+  let at = 0
+  const segments = item?.segments ?? []
+  for (let index = 0; index < segments.length && index < 12; index += 1) {
+    const seg = segments[index]
+    rows.push({ sec: Math.round(at * 10) / 10, label: '开始 ' + formatDuration(at) + ' · 第 ' + (index + 1) + ' 段' })
+    at += Math.max(0, Number(seg.audioSecs) || 0)
+  }
+  return rows.length ? rows : [{ sec: 0, label: '从开头切' }]
+}
+
 async function publishView(store, state, itemId) {
   const item = findItem(state, itemId)
   const publish = await store.readPublish(itemId)
@@ -401,6 +414,9 @@ async function publishView(store, state, itemId) {
       x: composeCopy('x', publish.variants.x),
     },
     cover: publish.cover,
+    clip: publish.clip,
+    cards: publish.cards ?? [],
+    clipOptions: clipOptionsFor(item),
     coverSources: coverSourceList(item),
     exports: publish.exports,
     records: publish.records,
@@ -2057,6 +2073,94 @@ async function route(ctx, store, req, res) {
         layout: body.layout,
         fontScale: body.fontScale,
         textSource: body.textSource,
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/cards': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      const conflict = busyConflictError(id, '正在跑任务，等结束再做图文卡片')
+      if (conflict) throw conflict
+      const count = Math.min(10, Math.max(2, Number(body.count) || 10))
+      let fresh = await store.readPublish(id)
+      let coverAbs = fresh.cover?.path ? join(store.itemDir(id), fresh.cover.path) : ''
+      if (!coverAbs || !(await stat(coverAbs).catch(() => null))) {
+        await makePublishCover(store, id, {})
+        fresh = await store.readPublish(id)
+        coverAbs = fresh.cover?.path ? join(store.itemDir(id), fresh.cover.path) : ''
+      }
+      if (!coverAbs || !(await stat(coverAbs).catch(() => null))) {
+        throw Object.assign(new Error('小红书封面还没生成，先补一张 3:4 封面'), { status: 400 })
+      }
+      const cards = [{
+        path: fresh.cover.path,
+        title: String(fresh.cover.title ?? '').slice(0, 100),
+        kind: 'cover',
+        at: new Date().toISOString(),
+      }]
+      const segments = (item.segments ?? []).filter(seg => seg.imagePath).slice(0, count - 1)
+      for (let index = 0; index < segments.length; index += 1) {
+        const seg = segments[index]
+        const title = String(seg.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 26) || ('第 ' + (index + 1) + ' 幕')
+        const card = await renderCoverImage(store, id, {
+          ref: 'segment:' + seg.id,
+          title,
+          width: 1080,
+          height: 1440,
+          maxText: 26,
+          layout: 'bottom',
+          fontScale: 0.9,
+        })
+        cards.push({ path: card.path, title: card.title, kind: 'segment', at: new Date().toISOString() })
+      }
+      if (cards.length < 2) throw Object.assign(new Error('至少需要一张分镜图才能做图文卡片'), { status: 400 })
+      await store.mutatePublish(id, draft => {
+        draft.cards = cards
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/clip': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      if (!item.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
+      const conflict = busyConflictError(id, '正在跑任务，等结束再切主帖')
+      if (conflict) throw conflict
+      const source = join(store.itemDir(id), item.render.path)
+      const sourceInfo = await stat(source).catch(() => null)
+      if (!sourceInfo?.isFile()) throw Object.assign(new Error('成片文件不见了，重新合成一次'), { status: 400 })
+      const video = await videoInfo(store, state, item)
+      const total = Number(video?.secs) || Number(item.render.secs) || 0
+      if (!total) throw Object.assign(new Error('读不出成片时长，重新合成一次再切'), { status: 400 })
+      const win = clipWindow(total, body.start, 60)
+      if (win.secs < 1) throw Object.assign(new Error('切片窗口为空'), { status: 400 })
+      const dirs = await store.ensureItemDirs(id)
+      const clipDir = join(dirs.base, 'clips')
+      await mkdir(clipDir, { recursive: true })
+      const out = join(clipDir, 'x-main-60s.mp4')
+      await new Promise((resolve, reject) => {
+        execFile(FFMPEG, [
+          '-y', '-v', 'error',
+          '-ss', String(win.start), '-i', source, '-t', String(win.secs),
+          '-map', '0:v:0', '-map', '0:a?',
+          '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+          '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+          out,
+        ], { timeout: 10 * 60_000 }, err => {
+          if (err) reject(new Error('切主帖失败：' + String(err.message).slice(0, 160)))
+          else resolve()
+        })
+      })
+      await store.mutatePublish(id, draft => {
+        draft.clip = {
+          path: 'clips/x-main-60s.mp4',
+          start: win.start,
+          secs: win.secs,
+          at: new Date().toISOString(),
+        }
+        return null
       })
       return json(res, 200, { publish: await publishView(store, state, id) })
     }

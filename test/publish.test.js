@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   weightedLength, validateCopy, validateVideo, normalizeTargets, normalizePublish,
-  sanitizeVariant, composeCopy, countVariant, formatDuration, formatBytes, variantIsEmpty,
+  sanitizeVariant, composeCopy, countVariant, clipWindow, formatDuration, formatBytes, variantIsEmpty,
 } from '../src/publish/rules.js'
 
 test('X 加权长度按官方口径', () => {
@@ -124,12 +124,35 @@ test('计数与格式化', () => {
 test('X thread：老 text 归一成一条，新 posts 逐条校验', () => {
   assert.deepEqual(sanitizeVariant('x', { text: '旧单条' }), { text: '旧单条', posts: ['旧单条'] })
   assert.deepEqual(sanitizeVariant('x', { posts: ['主帖', '回复 1'] }), { text: '主帖', posts: ['主帖', '回复 1'] })
+  // 空回复是用户刚加出来的占位，保存时不能吞掉
+  assert.deepEqual(sanitizeVariant('x', { posts: ['主帖', ''] }), { text: '主帖', posts: ['主帖', ''] })
   const legacy = normalizePublish({ variants: { x: { text: '旧单条' } } })
   assert.deepEqual(legacy.variants.x.posts, ['旧单条'])
   const rows = validateCopy('x', { posts: ['中'.repeat(140), '中'.repeat(141)] })
   assert.equal(rows.find(row => row.id === 'post-0').state, 'ok')
   assert.equal(rows.find(row => row.id === 'post-1').state, 'error')
+  assert.equal(validateCopy('x', { posts: ['主帖', ''] }).find(row => row.id === 'post-1').state, 'error')
   assert.match(composeCopy('x', { posts: ['主帖', '回复'] }), /【主帖】[\s\S]*【回复 1】/)
+})
+
+test('X 主帖切片窗口：按片长夹住，最多 60 秒', () => {
+  assert.deepEqual(clipWindow(771.5, 0, 60), { start: 0, secs: 60 })
+  assert.deepEqual(clipWindow(30, 0, 60), { start: 0, secs: 30 })
+  assert.deepEqual(clipWindow(100, 95, 60), { start: 95, secs: 5 })
+  assert.deepEqual(clipWindow(0, 0, 60), { start: 0, secs: 0 })
+})
+
+test('clip 与 cards 字段可归一化', () => {
+  const publish = normalizePublish({
+    clip: { path: 'clips/x-main-60s.mp4', start: 5, secs: 60 },
+    cards: [
+      { path: 'covers/01.png', title: '封面', kind: 'cover' },
+      { path: 'covers/02.png', title: '第一幕', kind: 'segment' },
+    ],
+  })
+  assert.equal(publish.clip.path, 'clips/x-main-60s.mp4')
+  assert.equal(publish.cards.length, 2)
+  assert.equal(publish.cards[0].kind, 'cover')
 })
 
 test('小红书置顶评论：长度校验，正文提到但没写时给 warn', () => {

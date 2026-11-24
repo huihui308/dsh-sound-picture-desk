@@ -2126,6 +2126,9 @@ window.__ModuleLoader__.load({
       const [note, setNote] = useState(null)
       const [saving, setSaving] = useState(false)
       const [makingCover, setMakingCover] = useState(false)
+      const [clipBusy, setClipBusy] = useState(false)
+      const [clipStart, setClipStart] = useState(0)
+      const [cardsBusy, setCardsBusy] = useState(false)
       const [exporting, setExporting] = useState(false)
       const [dir, setDir] = useState('')
       const [exportResult, setExportResult] = useState(null)
@@ -2140,7 +2143,9 @@ window.__ModuleLoader__.load({
       const [coverBusy, setCoverBusy] = useState(false)
       const [coverChoice, setCoverChoice] = useState(0)
       const [historyOpen, setHistoryOpen] = useState(false)
+      const [proposalHidden, setProposalHidden] = useState(false)
       const coverTouchedRef = useRef(false)
+      const saveTimerRef = useRef(null)
       const dirtyRef = useRef(false)
       const draftsRef = useRef(null)
       // 这批草稿属于哪个项目：卸载兜底保存只能写回它，不能写进切换后的项目
@@ -2169,6 +2174,11 @@ window.__ModuleLoader__.load({
       }, [item.id, item.title])
 
       useEffect(() => { refresh() }, [refresh, item.render?.at])
+
+      // 已有切片时把起点同步到下拉，重新切不会默默从 0 开始
+      useEffect(() => {
+        if (view?.clip) setClipStart(Number(view.clip.start) || 0)
+      }, [view?.clip?.path])
 
       // 文案生成 / 封面生成这类任务跑完，刷新一次发布数据
       const wasRunning = useRef(false)
@@ -2241,12 +2251,23 @@ window.__ModuleLoader__.load({
           return { weighted: weights.length ? Math.max(...weights) : 0, posts: weights, count: posts.length }
         })()
 
+      const scheduleSave = () => {
+        if (inputsLocked) return
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+        // 让检查/页签徽标跟着输入走：停止输入 900ms 后自动存一次，不再等 onBlur
+        saveTimerRef.current = setTimeout(() => {
+          saveTimerRef.current = null
+          if (dirtyRef.current && !generatingRef.current) save()
+        }, 900)
+      }
+
       const patchDraft = (platformId, patch) => {
         setDrafts(prev => {
           const next = JSON.parse(JSON.stringify(prev ?? {}))
           next[platformId] = { ...(next[platformId] ?? {}), ...patch }
           return next
         })
+        scheduleSave()
       }
 
       // 服务端已经采用/回滚了提案：本地草稿与「上一次服务端值」都对齐到新版本。
@@ -2259,15 +2280,20 @@ window.__ModuleLoader__.load({
       }
 
       const save = async () => {
+        if (saveTimerRef.current) {
+          clearTimeout(saveTimerRef.current)
+          saveTimerRef.current = null
+        }
         if (saving || taskRunning) return null
         setSaving(true)
         setNote(null)
         try {
-          // 两个平台都提交；服务端也固定两平台，避免旧的窄 targets 把另一平台静默丢掉
+          // 两个平台都提交；从 ref 取最新草稿，避免 900ms 自动保存拿到上一次渲染的旧快照
+          const payload = draftsRef.current ?? {}
           const body = await post('publish/save', {
             id: item.id,
             targets: ['xiaohongshu', 'x'],
-            variants: draftsSafe,
+            variants: payload,
           })
           setView(body.publish)
           setDrafts(JSON.parse(JSON.stringify(body.publish.variants ?? {})))
@@ -2295,8 +2321,19 @@ window.__ModuleLoader__.load({
         post('publish/save', { id: item.id, targets: ['xiaohongshu', 'x'], variants: payload }).catch(() => {})
       }, [item.id])
 
+      // 服务端出现新提案时重新弹出；用户点「稍后处理」后本轮不再自动弹
+      useEffect(() => {
+        const pending = (view?.revisions ?? []).some(row => row.status === 'proposed')
+        if (pending) setProposalHidden(false)
+      }, [view?.revisions])
+
       // 换项目后旧的 dirty 标记作废，避免新项目首帧被误判成有未保存改动
       useEffect(() => { dirtyRef.current = false }, [item.id])
+
+      // 卸载时清掉自动保存定时器，避免组件已卸载还发请求
+      useEffect(() => () => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      }, [])
 
       const addTag = () => {
         const tag = tagInput.trim().replace(/^#+/, '').trim()
@@ -2310,10 +2347,13 @@ window.__ModuleLoader__.load({
         setTagInput('')
       }
 
-      const generate = () => {
+      const generate = async () => {
         if (generating || taskRunning) return
         const has = Boolean(composeVariantText(activePlatform, draftsSafe[activePlatform] ?? {}))
         if (has && !window.confirm('会覆盖「' + platformLabel(activePlatform) + '」当前文案，继续？')) return
+        // 先落盘再生成：否则模型按服务端旧文案写，完成后又会把刚编辑的内容覆盖掉
+        const saved = await save()
+        if (!saved) return
         onAction('publish/generate', { id: item.id, targets: [activePlatform] }, null)
       }
 
@@ -2336,6 +2376,38 @@ window.__ModuleLoader__.load({
           setNote({ tone: 'error', text: err.message })
         } finally {
           setMakingCover(false)
+        }
+      }
+
+      const makeCards = async () => {
+        if (cardsBusy || taskRunning) return
+        setCardsBusy(true)
+        setNote(null)
+        try {
+          const saved = await save()
+          if (!saved) return
+          const body = await post('publish/cards', { id: item.id, count: 10 })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '图文卡片已生成' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setCardsBusy(false)
+        }
+      }
+
+      const makeClip = async () => {
+        if (clipBusy || taskRunning) return
+        setClipBusy(true)
+        setNote(null)
+        try {
+          const body = await post('publish/clip', { id: item.id, start: Number(clipStart) || 0 })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: 'X 主帖切片已生成' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setClipBusy(false)
         }
       }
 
@@ -2458,6 +2530,7 @@ window.__ModuleLoader__.load({
         if (text.length < 2) { setNote({ tone: 'error', text: '修改意见太短，至少写两个字' }); return }
         setRevisionBusy(true)
         setRevisionPending(true)
+        setProposalHidden(false)
         setNote(null)
         try {
           const saved = await save()
@@ -2678,7 +2751,7 @@ window.__ModuleLoader__.load({
             },
               '#' + tag,
               h('button', {
-                type: 'button', className: 'sd-pub-tagx', title: '移除',
+                type: 'button', className: 'sd-pub-tagx', title: '移除', disabled: inputsLocked,
                 onClick: () => patchDraft('xiaohongshu', {
                   tags: (Array.isArray(xhs.tags) ? xhs.tags : []).filter((row, i) => i !== index),
                 }),
@@ -2761,7 +2834,7 @@ window.__ModuleLoader__.load({
             h('span', { className: 'sd-pub-counter' }, (xWeights[index] ?? 0) + '/' + xMaxWeighted),
             xPostsSafe.length > 1
               ? h('button', {
-                className: 'sd-pub-tagx', type: 'button', title: '删除这条',
+                className: 'sd-pub-tagx', type: 'button', title: '删除这条', disabled: inputsLocked,
                 onClick: () => removeXPost(index),
               }, '×')
               : null),
@@ -2783,6 +2856,35 @@ window.__ModuleLoader__.load({
                 setTimeout(() => setCopyNote(''), 2500)
               },
             }, index === 0 ? '复制主帖' : '复制这条')))),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, 'X 主帖切片'),
+            h('span', { className: 'sd-pub-counter' }, view.clip ? Math.round(view.clip.secs) + ' 秒' : '未切')),
+          h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+            h('select', {
+              className: 'sd-input', value: clipStart, disabled: inputsLocked || clipBusy,
+              style: { maxWidth: 230 },
+              onChange: event => setClipStart(Number(event.target.value) || 0),
+            }, (Array.isArray(view.clipOptions) && view.clipOptions.length ? view.clipOptions : [{ sec: 0, label: '从开头切' }])
+              .map(option => h('option', { key: String(option.sec), value: option.sec }, option.label))),
+            h('input', {
+              className: 'sd-input', type: 'number', min: 0, step: 0.1, value: clipStart,
+              disabled: inputsLocked || clipBusy, style: { maxWidth: 96 },
+              title: '也可以手填起点秒数', placeholder: '起点秒',
+              onChange: event => setClipStart(Math.max(0, Number(event.target.value) || 0)),
+            }),
+            h('button', {
+              className: 'sd-btn', 'data-kind': view.clip ? 'ghost' : 'primary', type: 'button',
+              disabled: clipBusy || saving || taskRunning, onClick: makeClip,
+            }, clipBusy ? '切…' : view.clip ? '重新切' : '切 60 秒')),
+          h('div', { className: 'sd-hint' }, '主帖发 ≤60 秒切片，回复 1 再发全片；导出包会带 x/video-60s.mp4。'),
+          view.clip?.path
+            ? h('a', {
+              className: 'sd-btn', 'data-kind': 'ghost',
+              href: mediaUrl(item.id, view.clip.path, view.clip.at ? Date.parse(view.clip.at) : undefined),
+              download: 'x-main-60s.mp4', target: '_blank', rel: 'noreferrer', style: { alignSelf: 'flex-start' },
+            }, '下载切片')
+            : null),
         h('div', { className: 'sd-card-foot' },
           h('button', {
             className: 'sd-btn', 'data-kind': 'primary', type: 'button',
@@ -2792,7 +2894,7 @@ window.__ModuleLoader__.load({
             saving ? '保存中…' : '保存'),
           h('button', {
             className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
-            disabled: saving || xPostsSafe.length >= xMaxPosts, onClick: addXPost,
+            disabled: saving || inputsLocked || xPostsSafe.length >= xMaxPosts, onClick: addXPost,
           }, '加一条回复'),
           h('span', { style: { flex: 1 } }),
           h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('x') },
@@ -2893,6 +2995,37 @@ window.__ModuleLoader__.load({
                   onClick: () => applyCover({ fontScale: value }),
                 }, label)))))
 
+      const xhsCards = Array.isArray(view.cards) ? view.cards : []
+      const cardsCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '小红书图文卡片'),
+          h('span', { className: 'sd-pub-counter' }, xhsCards.length ? xhsCards.length + ' 张 · 3:4' : '未生成')),
+        h('div', { className: 'sd-hint' }, '封面 + 分镜说明，1080×1440；发图文笔记时按 01… 顺序上传，导出包写到 xiaohongshu/cards/。'),
+        xhsCards.length
+          ? h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 6 } },
+            xhsCards.map((card, index) => h('a', {
+              key: String(card.path) + index,
+              href: mediaUrl(item.id, card.path),
+              download: 'xhs-card-' + String(index + 1).padStart(2, '0') + '.png',
+              target: '_blank', rel: 'noreferrer',
+              style: { display: 'block', minWidth: 0, color: 'inherit', textDecoration: 'none' },
+              title: card.title || '卡片 ' + (index + 1),
+            },
+              h('img', {
+                src: mediaUrl(item.id, card.path),
+                alt: card.title || '图文卡片',
+                loading: 'lazy',
+                style: { width: '100%', aspectRatio: '3 / 4', objectFit: 'cover', borderRadius: 6, display: 'block' },
+              }),
+              h('span', { className: 'sd-hint', style: { display: 'block', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
+                String(index + 1).padStart(2, '0') + ' · ' + (card.title || '卡片')))))
+          : null,
+        h('button', {
+          className: 'sd-btn', 'data-kind': xhsCards.length ? 'ghost' : 'primary', type: 'button',
+          disabled: cardsBusy || saving || taskRunning,
+          onClick: makeCards, style: { alignSelf: 'flex-start' },
+        }, cardsBusy ? '生成中…' : xhsCards.length ? '重新生成' : '生成 10 张卡片'))
+
       const stateColor = state => state === 'error'
         ? 'var(--dsw-alias-state-error-primary)'
         : state === 'warn'
@@ -2920,7 +3053,7 @@ window.__ModuleLoader__.load({
         otherBlocking > 0
           ? h('div', { className: 'sd-pub-error' }, '另一个平台还有 ' + otherBlocking + ' 项要改，导出会被挡住。')
           : null,
-        h('div', { className: 'sd-hint' }, '改了文案要点「保存」或直接导出，检查才会更新。'))
+        h('div', { className: 'sd-hint' }, '输入停止约 1 秒后会自动保存，检查与本页徽标会跟着更新。'))
 
       const exportCard = h('div', { className: 'sd-pub-card' },
         h('div', { className: 'sd-pub-card-head' },
@@ -2985,7 +3118,7 @@ window.__ModuleLoader__.load({
         return rows
       }
 
-      const feedbackModal = feedbackOpen ? h('div', { className: 'sd-mask' },
+      const feedbackModal = feedbackOpen ? h('div', { className: 'sd-mask', ...maskHandlers(() => setFeedbackOpen(false)) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '按意见修改', style: { maxWidth: 580 } },
           h('h3', null, '按意见修改'),
           h('div', { className: 'sd-hint' }, '只改勾选的字段；生成提案后先预览，采用后才写回。'),
@@ -3021,7 +3154,7 @@ window.__ModuleLoader__.load({
               onClick: submitFeedback,
             }, revisionBusy ? '提交中…' : '生成修改提案')))) : null
 
-      const proposalModal = proposed && !feedbackOpen && !revisionPending && !revising ? h('div', { className: 'sd-mask' },
+      const proposalModal = proposed && !feedbackOpen && !revisionPending && !revising && !proposalHidden ? h('div', { className: 'sd-mask', ...maskHandlers(() => setProposalHidden(true)) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '修改提案', style: { maxWidth: 620 } },
           h('h3', null, '修改提案'),
           h('div', { className: 'sd-hint' }, '意见：' + (proposed.feedback || '（无）')),
@@ -3051,9 +3184,10 @@ window.__ModuleLoader__.load({
           h('div', { className: 'sd-rev-actions' },
             h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', disabled: revisionBusy, onClick: applyRevision }, revisionBusy ? '处理中…' : '采用'),
             h('button', { className: 'sd-btn', type: 'button', disabled: revisionBusy, onClick: reviseAgain }, '再改一版'),
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: revisionBusy, onClick: () => setProposalHidden(true) }, '稍后处理'),
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: revisionBusy, onClick: discardRevision }, '保留原样')))) : null
 
-      const historyModal = historyOpen ? h('div', { className: 'sd-mask' },
+      const historyModal = historyOpen ? h('div', { className: 'sd-mask', ...maskHandlers(() => setHistoryOpen(false)) },
         h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '修改历史', style: { maxWidth: 620 } },
           h('h3', null, '修改历史'),
           h('div', { className: 'sd-hint' }, '采用过的提案可以回滚；生成中的提案会显示在上一个弹窗。'),
@@ -3099,6 +3233,7 @@ window.__ModuleLoader__.load({
             guideCard),
           h('div', { className: 'sd-pub-col' },
             activePlatform === 'xiaohongshu' ? coverCard : null,
+            activePlatform === 'xiaohongshu' ? cardsCard : null,
             checksCard,
             exportCard)),
         proposalModal,

@@ -8,6 +8,12 @@ Turn a topic, a slice of history, or a book into a vertical narrated video: scri
 
 It is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai) (DSH). No editing software involved — it outputs a 1080×1920 `.mp4` plus an `.srt` subtitle file, then builds ready-to-upload publish packages (copy, cover, checklist) for Xiaohongshu and X.
 
+<p align="center">
+  <img src="docs/assets/panel-overview.jpg" width="31%" alt="Panel overview">
+  <img src="docs/assets/topic.jpg" width="31%" alt="Topic page">
+  <img src="docs/assets/storyboard.jpg" width="31%" alt="Storyboard page">
+</p>
+
 > Naming: the Chinese name 声画工作台 is "sound & picture", hence `dsh-sound-picture-desk`. Environment variables keep the shorter `PICTURE_DESK_*` prefix (the legacy `STORY_DESK_*` still works).
 
 ---
@@ -165,10 +171,10 @@ Preview the result in place, or **Export** to a chosen folder (defaults to `~/Do
 
 After the final cut, open the separate **Publish** entry. It never logs into a platform and never posts for you:
 
-- Two clickable platform tabs. Each page has its own **Generate** action. X generates a **main post + reply thread** with 280 weighted characters per post; each post can be edited, copied, or added/removed. Xiaohongshu generates title / body / topics.
-- Xiaohongshu gets a 1080×1440 cover and an optional **pinned comment** (up to 1000 characters) to post after publishing; X uses the video's first frame.
+- Two clickable platform tabs. Each page has its own **Generate** action. X generates a **main post + reply thread** with 280 weighted characters per post; each post can be edited, copied, or added/removed, and a **60-second main-post clip** can be cut from any segment start (`x/video-60s.mp4`). Xiaohongshu generates title / body / topics plus **3:4 image cards** (`xiaohongshu/cards/`).
+- Xiaohongshu gets a 1080×1440 cover, optional card set and an optional **pinned comment** (up to 1000 characters) to post after publishing; X uses the video's first frame. Inputs auto-save after about one second, so pre-flight checks follow the draft.
 - **Pre-flight checks** cover copy length, per-post X weighted length, video duration / size and cover. Copy errors block export; video over-limit is a warning only.
-- **Export package** writes `exports/<timestamp>/` with `xiaohongshu/`, `x/` subfolders (video, copy.md, optional comment.md for Xiaohongshu, optional cover) plus `README.md`, `checklist.md`, `manifest.json`. The package is an immutable snapshot: re-rendering the source video later does not rewrite an old package.
+- **Export package** writes `exports/<timestamp>/` with `xiaohongshu/`, `x/` subfolders (video, copy.md, optional `video-60s.mp4` for X, optional `cards/` and `comment.md` for Xiaohongshu, optional cover) plus `README.md`, `checklist.md`, `manifest.json`. The package is an immutable snapshot: re-rendering the source video later does not rewrite an old package.
 - **Revise by feedback**: click Ask on the title, body or cover; pick a quick chip or write your own note. The plugin proposes a change first (only the checked fields), shows old vs new, and writes back only after you choose Adopt; every accepted revision can be reverted. Cover has separate Text / Base image / Layout tabs.
 - Upload, paste and publish yourself, then mark each platform as published in the page.
 

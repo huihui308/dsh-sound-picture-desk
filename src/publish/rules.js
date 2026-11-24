@@ -93,6 +93,17 @@ export function formatDuration(value) {
   return minutes + ':' + String(secs).padStart(2, '0')
 }
 
+/** X 主帖切片窗口：从 start 开始最多 maxSecs 秒；越界夹到片长内。 */
+export function clipWindow(totalSecs, startSecs = 0, maxSecs = 60) {
+  const total = Math.max(0, Number(totalSecs) || 0)
+  const start = Math.min(Math.max(0, Number(startSecs) || 0), Math.max(0, total - 0.5))
+  const secs = Math.min(Math.max(1, Number(maxSecs) || 60), Math.max(0, total - start))
+  return {
+    start: Math.round(start * 10) / 10,
+    secs: Math.round(secs * 10) / 10,
+  }
+}
+
 export function formatBytes(value) {
   const bytes = Number(value) || 0
   if (bytes < 1024) return bytes + ' B'
@@ -247,9 +258,9 @@ export function sanitizeVariant(platformId, input = {}) {
     }
   }
   const text = textOf(input.text, 5000)
+  // 空回复也保留：用户点“加一条回复”后先保存、再补字是正常路径，不能在保存时吞掉占位。
   const posts = (Array.isArray(input.posts) ? input.posts : [])
     .map(post => textOf(post, 5000))
-    .filter(Boolean)
     .slice(0, PLATFORMS.x.thread?.maxPosts ?? 5)
   const finalPosts = posts.length ? posts : (text ? [text] : [])
   return { text: finalPosts[0] ?? '', posts: finalPosts }
@@ -282,6 +293,8 @@ export function emptyPublish() {
     targets: [...PLATFORM_ORDER],
     variants,
     cover: null,
+    clip: null,
+    cards: [],
     exports: [],
     records: [],
     revisions: [],
@@ -363,6 +376,26 @@ export function normalizePublish(raw) {
       textSource: src.cover.textSource === 'manual' ? 'manual' : 'auto',
     }
   }
+  if (src.clip && typeof src.clip === 'object' && typeof src.clip.path === 'string' && src.clip.path) {
+    next.clip = {
+      path: src.clip.path.slice(0, 300),
+      start: Math.max(0, Number(src.clip.start) || 0),
+      secs: Math.max(0, Number(src.clip.secs) || 0),
+      at: typeof src.clip.at === 'string' ? src.clip.at : null,
+    }
+  }
+  next.cards = Array.isArray(src.cards)
+    ? src.cards
+      .filter(card => card && typeof card === 'object' && typeof card.path === 'string' && card.path)
+      .slice(0, 12)
+      .map((card, index) => ({
+        path: card.path.slice(0, 300),
+        title: String(card.title ?? '').slice(0, 100),
+        kind: card.kind === 'cover' ? 'cover' : 'segment',
+        index: index + 1,
+        at: typeof card.at === 'string' ? card.at : null,
+      }))
+    : []
   next.exports = Array.isArray(src.exports)
     ? src.exports.filter(item => item && typeof item === 'object').slice(-20).map(item => ({
       at: typeof item.at === 'string' ? item.at : null,
