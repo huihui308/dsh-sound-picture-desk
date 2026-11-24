@@ -1,10 +1,12 @@
 # Sound & Picture Desk · DSH Plugin
 
+<p align="center"><img src="icon.svg" width="88" alt="声画工作台"></p>
+
 [中文](README.md) | **English**
 
 Turn a topic, a slice of history, or a book into a vertical narrated video: script → character references → voice → images → final cut, all inside one panel.
 
-It is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai) (DSH). No editing software involved — it outputs a 1080×1920 `.mp4` plus an `.srt` subtitle file.
+It is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai) (DSH). No editing software involved — it outputs a 1080×1920 `.mp4` plus an `.srt` subtitle file, then builds ready-to-upload publish packages (copy, cover, checklist) for Xiaohongshu and X.
 
 > Naming: the Chinese name 声画工作台 is "sound & picture", hence `dsh-sound-picture-desk`. Environment variables keep the shorter `PICTURE_DESK_*` prefix (the legacy `STORY_DESK_*` still works).
 
@@ -19,7 +21,7 @@ The usual workflow is "write a script → hunt for footage → record voiceover 
 - Unsure about the voice? Nine voices, click and listen, then decide.
 - Bad image? Regenerate that one shot instead of the whole batch.
 
-**Output**: a vertical mp4 (1080×1920, optionally with burned-in subtitles) and a matching `.srt`.
+**Output**: a vertical mp4 (1080×1920, optionally with burned-in subtitles), a matching `.srt`, and a per-platform publish package under `projects/<id>/exports/`.
 
 ---
 
@@ -44,8 +46,9 @@ MiniMax ships two lanes, routed automatically by model name: `image-01` / `image
 ### 1. Get the code
 
 ```bash
-git clone git@github.com:huihui308/dsh-sound-picture-desk.git
-cd dsh-sound-picture-desk
+mkdir -p ~/src
+git clone https://github.com/huihui308/dsh-sound-picture-desk.git ~/src/dsh-sound-picture-desk
+cd ~/src/dsh-sound-picture-desk
 ```
 
 ### 2. Install into the profile
@@ -54,7 +57,7 @@ DSH loads plugins from the profile's `node_modules`. Use `dsh plugin` to install
 
 ```bash
 # <profile> is your actual profile name (default: web)
-dsh plugin --profile web add /absolute/path/to/dsh-sound-picture-desk
+dsh plugin --profile web add ~/src/dsh-sound-picture-desk
 ```
 
 Or symlink it manually:
@@ -94,7 +97,7 @@ Once a task is running, a **Stop** button appears next to the progress bar. It k
 
 ## Quick start
 
-Six tabs, walk them top to bottom. Each tab shows its state (`✓` done / `●` current).
+Six production tabs, walk them top to bottom, then use the separate **Publish** entry after the final cut. Each tab shows its state (`✓` done / `●` current).
 
 ### ① Idea
 
@@ -158,6 +161,19 @@ Preview the result in place, or **Export** to a chosen folder (defaults to `~/Do
 
 ---
 
+## ⑦ Publish (Xiaohongshu / X)
+
+After the final cut, open the separate **Publish** entry. It never logs into a platform and never posts for you:
+
+- Two clickable platform tabs. Each page has its own **Generate** action, so it only rewrites the current platform's title / body / topics (X is one weighted post).
+- Xiaohongshu gets a 1080×1440 cover; X uses the video's first frame. Copy is editable and copyable.
+- **Pre-flight checks** cover copy length, X weighted length, video duration / size and cover. Copy errors block export; video over-limit is a warning only.
+- **Export package** writes `exports/<timestamp>/` with `xiaohongshu/`, `x/` subfolders (video, copy.md, optional cover) plus `README.md`, `checklist.md`, `manifest.json`. The package is an immutable snapshot: re-rendering the source video later does not rewrite an old package.
+- **Revise by feedback**: click Ask on the title, body or cover; pick a quick chip or write your own note. The plugin proposes a change first (only the checked fields), shows old vs new, and writes back only after you choose Adopt; every accepted revision can be reverted. Cover has separate Text / Base image / Layout tabs.
+- Upload, paste and publish yourself, then mark each platform as published in the page.
+
+---
+
 ## Where data lives
 
 ```
@@ -170,6 +186,8 @@ $DSH_HOME/sound-picture-desk/
     ├── images/             per-segment visuals
     ├── renders/            final mp4 / srt / ass
     ├── samples/            voice audition samples
+    ├── publish.json        Xiaohongshu / X copy, cover and publish records
+    ├── exports/            generated publish packages (video, cover, copy, manifest)
     └── work/               render intermediates
 ```
 
@@ -206,10 +224,13 @@ src/render.js      ffmpeg pipeline (Ken Burns, concat, subtitles)
 src/store.js       persistence, default settings
 src/jobs.js        background tasks, progress, timeouts
 src/llm.js         model calls, streaming progress, empty-output fallback
+src/publish/       platform rules, copy generation, export packages
+test/              node:test coverage for publish rules / export / store
+docs/PUBLISH-V1.md publish feature design and implementation notes
 docs/DETAIL.md     implementation notes
 ```
 
-After editing, reload the plugin: in **Plugins**, toggle **dsh-sound-picture-desk** off and on, then refresh the page.
+After editing: a `client.js`-only change needs a page refresh; a Host change (`src/*`, `index.js`) needs a dsh web restart (`systemctl --user restart dsh-web.service`). Toggling the plugin does not reload Host modules.
 
 No build step — source is deployment. Note that `dsh plugin --profile web <pnpm args>` only installs packages; there is no separate enable/disable subcommand.
 
@@ -217,4 +238,4 @@ No build step — source is deployment. Note that `dsh plugin --profile web <pnp
 
 ## License
 
-Private repository. Do not redistribute without permission.
+MIT License. See [LICENSE](LICENSE).

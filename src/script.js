@@ -35,6 +35,9 @@ export function styleLabel(id) {
   return VISUAL_STYLES[id]?.label ?? VISUAL_STYLES.cinematic.label
 }
 
+/** 原始材料写进 prompt 的上限。再长会挤占输出预算，只取前这么多字。 */
+export const RAW_TEXT_MAX = 24000
+
 /**
  * 稿子口吻：同一个题材，四种念法。每种 = 人设 + 它专属的写法要求，
  * 其余（共用写法、画面提示词、JSON 输出）四种口吻一样，见下面 COMMON/IMAGE/JSON 三段。
@@ -140,7 +143,13 @@ function userPrompt({ topic, rawText, segmentCount, perSegmentChars, style, tone
     )
   }
   if (rawText && rawText.trim()) {
-    lines.push('', '以下是原始材料，按它的内容写，不要偏离，也不要照抄原句：', '', rawText.trim().slice(0, 12000))
+    const material = rawText.trim()
+    const clipped = material.length > RAW_TEXT_MAX
+    lines.push('', '以下是原始材料，按它的内容写，不要偏离，也不要照抄原句：', '', clipped ? material.slice(0, RAW_TEXT_MAX) : material)
+    if (clipped) {
+      // 这行模型可见：直说只给了这么多，并明确要求不要抱怨、不要索要剩余材料
+      lines.push('', `（原始材料较长，只使用了前 ${RAW_TEXT_MAX} 字。请基于这部分内容把稿子写完整，不要提材料被截断，也不要向用户索要剩余部分。）`)
+    }
   } else {
     lines.push('', '没有给原始材料：按公认的史实/公开事实写；边角细节拿不准就模糊处理。')
   }
@@ -171,10 +180,13 @@ function normalizeSegments(rows) {
  * 生成说书稿。返回 { title, angle, segments }，不做落盘——调用方决定怎么存。
  */
 export async function writeScript(ctx, { topic, rawText, settings, signal, route, references, onProgress }) {
-  const requested = Math.max(3, Math.min(40, Number(settings?.segmentSeconds) > 0 ? Math.round(300 / Number(settings.segmentSeconds)) : 8))
+  // 段长口径与界面/服务端一致：12–90 秒。老项目里存过 300 时也按 90 写稿，
+  // 否则写出来的稿子会按 300 秒一段，和界面显示的段长对不上。
+  const segmentSeconds = Math.min(90, Math.max(12, Number(settings?.segmentSeconds) || 40))
+  const requested = Math.max(3, Math.min(40, Math.round(300 / segmentSeconds)))
   // 分段按目标时长算：整体先按 5 分钟基线，用户改了段长就跟着变
-  const perSegmentChars = Math.max(90, Math.min(260, Math.round((Number(settings?.segmentSeconds) || 40) * 4.2)))
-  const segmentCount = Math.max(3, Math.min(40, Math.round((Number(settings?.targetMinutes) || 5) * 60 / (Number(settings?.segmentSeconds) || 40)) || requested))
+  const perSegmentChars = Math.max(90, Math.min(260, Math.round(segmentSeconds * 4.2)))
+  const segmentCount = Math.max(3, Math.min(40, Math.round((Number(settings?.targetMinutes) || 5) * 60 / segmentSeconds) || requested))
   const tone = settings?.tone ?? 'storyteller'
   const { text } = await callModel(ctx, {
     system: buildSystem(tone),

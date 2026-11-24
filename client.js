@@ -106,9 +106,10 @@ window.__ModuleLoader__.load({
 .sd-lb-close{margin-left:auto;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;border-radius:6px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}
 .sd-lb-close:hover{background:rgba(255,255,255,.18)}
 .sd-lb-hint{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:rgba(255,255,255,.5);font-size:11px;pointer-events:none}
-.sd-tabnav{display:flex;gap:2px;border-bottom:1px solid var(--dsw-alias-border-l1);margin-top:2px}
+.sd-tabnav{display:flex;flex-wrap:wrap;gap:2px;row-gap:0;border-bottom:1px solid var(--dsw-alias-border-l1);margin-top:2px}
 .sd-tabnav-btn{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12.5px;padding:8px 13px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;line-height:1.4;white-space:nowrap}
 .sd-tabnav-btn:hover{color:var(--dsw-alias-label-primary)}
+.sd-tabnav-btn:disabled{opacity:.45;cursor:not-allowed}
 .sd-tabnav-btn[data-on="1"]{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
 .sd-tabnav-btn[data-done="1"]{color:var(--dsw-alias-state-success-primary)}
 .sd-tabnav-btn[data-on="1"][data-done="1"]{color:var(--dsw-alias-brand-primary)}
@@ -209,6 +210,93 @@ window.__ModuleLoader__.load({
 .sd-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:1.6;margin-top:8px;word-break:break-word}
 .sd-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-idle-primary);flex:0 0 auto}
 .sd-dot[data-on="1"]{background:var(--dsw-alias-state-success-primary)}
+/* ---------------- 发布页 ---------------- */
+.sd-pub-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.sd-pub-kicker{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary)}
+.sd-pub-title{font-size:15px;font-weight:650;margin-top:3px}
+.sd-pub-sub{font-size:11.5px;color:var(--dsw-alias-label-tertiary);margin-top:3px}
+.sd-pub-chip{font-size:10.5px;padding:2px 8px;border-radius:5px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.sd-pub-chip[data-tone="ok"]{color:var(--dsw-alias-state-success-primary)}
+.sd-pub-chip[data-tone="warn"]{color:var(--dsw-alias-state-warn-primary)}
+.sd-pub-chip[data-tone="error"]{color:var(--dsw-alias-state-error-primary)}
+.sd-pub-tabs{display:flex;gap:8px;margin-top:12px}
+.sd-pub-tab{flex:1;display:flex;align-items:center;gap:9px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:9px 12px;cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0}
+.sd-pub-tab[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,var(--dsw-alias-bg-layer-1))}
+.sd-pub-taberr{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 18%,transparent);color:var(--dsw-alias-state-error-primary);font-size:10.5px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.sd-pub-tabwarn{margin-left:auto;color:var(--dsw-alias-state-warn-primary);font-size:11px}
+.sd-pub-picon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:#fff;flex:0 0 auto;letter-spacing:.02em;text-align:center;line-height:1.1}
+.sd-pub-picon[data-platform="xiaohongshu"]{background:#ff2442}
+.sd-pub-picon[data-platform="x"]{background:#000;font-size:14px}
+.sd-pub-pname{font-size:12px;font-weight:600;display:block}
+.sd-pub-pmeta{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:1px;display:block}
+.sd-pub-grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;margin-top:12px;align-items:start}
+.sd-pub-col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sd-pub-card{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:11px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.sd-pub-card-head{display:flex;align-items:center;gap:8px;min-height:20px}
+.sd-pub-card-title{font-size:12.5px;font-weight:600}
+.sd-pub-counter{margin-left:auto;font-size:10.5px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sd-pub-tags{display:flex;flex-wrap:wrap;gap:5px;align-items:center;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);border-radius:6px;padding:5px 7px;min-height:32px}
+.sd-pub-tags input{border:none;outline:none;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:11px;min-width:120px;flex:1;padding:2px 0}
+.sd-pub-tagx{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font:inherit;font-size:11px;padding:0 0 0 2px;line-height:1}
+.sd-pub-coverrow{display:flex;gap:10px;align-items:flex-start}
+.sd-pub-coverbox{width:132px;height:176px;flex:0 0 132px;border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);position:relative}
+.sd-pub-coverbox img{width:100%;height:100%;object-fit:cover;display:block}
+.sd-pub-cover-empty{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:10.5px;text-align:center;padding:8px;line-height:1.5}
+.sd-pub-checkrow{display:flex;align-items:center;gap:8px;min-height:22px;font-size:11px;border-top:1px solid var(--dsw-alias-border-l1)}
+.sd-pub-checkrow:first-of-type{border-top:none}
+.sd-pub-checkmark{width:12px;flex:0 0 12px;text-align:center}
+.sd-pub-checkname{color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.sd-pub-checkval{margin-left:auto;color:var(--dsw-alias-label-tertiary);font-size:10.5px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62%}
+.sd-pub-checkval[data-state="warn"]{color:var(--dsw-alias-state-warn-primary)}
+.sd-pub-checkval[data-state="error"]{color:var(--dsw-alias-state-error-primary)}
+.sd-pub-tree{background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:7px;padding:7px 8px;display:flex;flex-direction:column;gap:1px;max-height:180px;overflow:auto}
+.sd-pub-treerow{display:flex;align-items:center;gap:8px;min-height:19px;font-size:10.5px}
+.sd-pub-treepath{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-pub-treelink{margin-left:auto;color:var(--dsw-alias-link);text-decoration:none;font-size:10px;white-space:nowrap}
+.sd-pub-records{display:flex;flex-wrap:wrap;gap:12px;margin-top:2px}
+.sd-pub-record{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.sd-pub-record .sd-btn{padding:2px 7px;font-size:10px}
+.sd-pub-foot{margin-top:12px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l1);display:flex;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);flex-wrap:wrap}
+.sd-tabnav-sep{width:1px;height:14px;background:var(--dsw-alias-border-l2);margin:0 8px;flex:0 0 auto;align-self:center}
+.sd-pub-error{color:var(--dsw-alias-state-error-primary);font-size:11.5px;line-height:1.6}
+.sd-pub-ok{color:var(--dsw-alias-state-success-primary);font-size:11.5px;line-height:1.6;word-break:break-all}
+.sd-pub-note{font-size:11px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
+.sd-pub-head-actions{margin-left:auto;padding-bottom:2px}
+.sd-pub-labelrow{display:flex;align-items:center;gap:8px}
+.sd-pub-ask{margin-left:auto;border:none;background:transparent;color:var(--dsw-alias-brand-primary);font:inherit;font-size:10.5px;cursor:pointer;padding:0;line-height:1.6}
+.sd-pub-ask:hover{text-decoration:underline}
+.sd-pub-ask:disabled{opacity:.45;cursor:not-allowed;text-decoration:none}
+.sd-rev-scopes{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 2px}
+.sd-rev-scope{font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;cursor:pointer}
+.sd-rev-scope[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent)}
+.sd-rev-quick{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.sd-rev-quick button{font-size:10.5px;padding:3px 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;cursor:pointer}
+.sd-rev-quick button:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.sd-rev-quick button[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 8%,transparent)}
+.sd-rev-old{font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-tertiary);text-decoration:line-through;white-space:pre-wrap;max-height:120px;overflow:auto}
+.sd-rev-new{font-size:11.5px;line-height:1.7;color:var(--dsw-alias-label-primary);white-space:pre-wrap;max-height:180px;overflow:auto;border-left:2px solid var(--dsw-alias-state-success-primary);padding-left:8px;margin-top:4px}
+.sd-rev-proposal{display:flex;flex-direction:column;gap:10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px 12px;background:var(--dsw-alias-bg-base)}
+.sd-rev-proposal-head{display:flex;align-items:center;gap:8px;font-size:11.5px}
+.sd-rev-proposal-head span{margin-left:auto;font-size:10px;color:var(--dsw-alias-state-warn-primary)}
+.sd-rev-row{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.7;color:var(--dsw-alias-label-secondary)}
+.sd-rev-row b{flex:0 0 38px;font-weight:400;color:var(--dsw-alias-label-tertiary)}
+.sd-rev-choice{display:flex;gap:7px;align-items:center;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;padding:6px 8px;margin-top:5px;cursor:pointer;font-size:11.5px}
+.sd-rev-choice[data-on="1"]{border-color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 6%,transparent)}
+.sd-rev-choice input{margin:0}
+.sd-rev-actions{display:flex;gap:7px;margin-top:4px}
+.sd-rev-actions .sd-btn{flex:1}
+.sd-rev-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.sd-rev-source{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);border-radius:7px;padding:3px;cursor:pointer;display:flex;flex-direction:column;gap:3px;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:9.5px;text-align:left}
+.sd-rev-source[data-on="1"]{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.sd-rev-source img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:4px;display:block;background:var(--dsw-alias-bg-layer-2)}
+.sd-rev-history{border-top:1px solid var(--dsw-alias-border-l1);padding-top:8px;margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.sd-rev-history-row{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
+.sd-rev-history-row b{font-weight:400;color:var(--dsw-alias-label-secondary);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-rev-history-row .sd-btn{margin-left:auto;padding:2px 7px;font-size:10px}
+.sd-rev-tabs{display:flex;gap:4px;border-bottom:1px solid var(--dsw-alias-border-l1);margin:2px 0 1px}
+.sd-rev-tab{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;padding:4px 9px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.sd-rev-tab[data-on="1"]{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
+
 `
 
     // ------------------------------------------------------------------ 工具
@@ -256,16 +344,16 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------ 图标
 
     function DeskIcon({ size = 18 }) {
-      // 卷轴 + 声波：旁白
+      // 场记板线稿：侧栏 16px / 页头 17px 共用；实心 currentColor，小尺寸不靠细描边
       return h('svg', {
-        width: size, height: size, viewBox: '0 0 24 24', fill: 'none',
-        stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round',
+        width: size, height: size, viewBox: '0 0 24 24', fill: 'currentColor',
         'aria-hidden': true, style: { display: 'block' },
       },
-      h('path', { d: 'M4 5.5h11a2.5 2.5 0 0 1 0 5H4z' }),
-      h('path', { d: 'M4 10.5h9v8H4z' }),
-      h('path', { d: 'M13 14.5c1.4 1.6 1.4 3.4 0 5' }),
-      h('path', { d: 'M16 13c2.6 2.6 2.6 5.4 0 8' }))
+      h('rect', { x: 2.5, y: 4.2, width: 17.6, height: 2.9, rx: 1.3, transform: 'rotate(-15 11.3 5.7)' }),
+      h('path', {
+        fillRule: 'evenodd',
+        d: 'M5.5 9.6 H18.5 C19.66 9.6 20.6 10.54 20.6 11.7 V18.3 C20.6 19.46 19.66 20.4 18.5 20.4 H5.5 C4.34 20.4 3.4 19.46 3.4 18.3 V11.7 C3.4 10.54 4.34 9.6 5.5 9.6 Z M9.3 12.3 H10.7 V16.6 H9.3 Z M11.7 11.3 H13.1 V17.6 H11.7 Z M14.1 12.3 H15.5 V16.6 H14.1 Z',
+      }))
     }
 
     function GearIcon() {
@@ -291,10 +379,14 @@ window.__ModuleLoader__.load({
       const [chatInput, setChatInput] = useState('')
       const [sending, setSending] = useState(false)
       const timer = useRef(null)
+      // 轮询和手动刷新会同时存在：只让最后一次请求的响应落到页面上，旧响应晚回来不能盖新数据
+      const loadSeq = useRef(0)
 
       const load = useCallback(async () => {
+        const seq = ++loadSeq.current
         try {
           const next = await api('state')
+          if (seq !== loadSeq.current) return null
           setData(next)
           setError(null)
           setCurrentId(prev => {
@@ -303,6 +395,7 @@ window.__ModuleLoader__.load({
           })
           return next
         } catch (err) {
+          if (seq !== loadSeq.current) return null
           setError(err.message)
           return null
         }
@@ -394,16 +487,17 @@ window.__ModuleLoader__.load({
         h('style', null, STYLE),
         h('div', { className: 'sd-root' },
           h(Rail, {
-            items: data.items, currentId, onPick: setCurrentId,
-            onCreate: () => setCreating(true),
-            onDelete: item => setPendingDelete(item),
+            items: data.items, currentId, onPick: id => { setNotice(null); setCurrentId(id) },
+            onCreate: () => { setNotice(null); setCreating(true) },
+            onDelete: item => { setNotice(null); setPendingDelete(item) },
             trashCount: data.trashCount ?? 0,
             onOpenTrash: () => setTrashOpen(true),
           }),
           h('div', { className: 'sd-pane' },
             current
               ? h(Project, {
-                  item: current, data, busy, notice,
+                  // key 用项目 id：切项目时整棵子树重挂，各页本地状态（草稿/封面大字/大图）不残留
+                  key: current.id, item: current, data, busy, notice,
                   onAction: run, onReload: load, onSettings: () => setSettingsOpen(true),
                 })
               : h(EmptyState, { onCreate: () => setCreating(true), model: data.model })),
@@ -412,6 +506,8 @@ window.__ModuleLoader__.load({
             item: pendingDelete,
             days: data.trashDays ?? 7,
             busy: deletingBusy,
+            // 失败提示就地显示：Project 头部的 notice 会被遮罩盖住
+            error: notice?.tone === 'error' ? notice.text : null,
             onCancel: () => setPendingDelete(null),
             onConfirm: async () => {
               setDeletingBusy(true)
@@ -421,7 +517,7 @@ window.__ModuleLoader__.load({
                 // 删的正好是当前打开的项目，就回到空状态
                 if (pendingDelete.id === currentId) setCurrentId(null)
                 await load()
-                setNotice('已移入回收站，7 天内可还原')
+                setNotice(`已移入回收站，${data.trashDays ?? 7} 天内可还原`)
               } catch (err) {
                 setNotice({ tone: 'error', text: err.message })
               } finally {
@@ -438,6 +534,8 @@ window.__ModuleLoader__.load({
             onSaved: async () => { await load(); setSettingsOpen(false) },
           }) : null,
           creating ? h(NewDialog, {
+            // 创建失败时就地提示，不用去头部找被遮罩盖住的 notice
+            error: notice?.tone === 'error' ? notice.text : null,
             onClose: () => setCreating(false),
             onCreate: async payload => {
               try {
@@ -558,7 +656,9 @@ window.__ModuleLoader__.load({
         h('div', { className: 'sd-head' },
           h('div', { className: 'sd-head-row' },
             h('div', { className: 'sd-head-title' },
-              h('h1', { className: 'sd-h1' }, '声画工作台'),
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 9 } },
+                h(DeskIcon, { size: 24 }),
+                h('h1', { className: 'sd-h1' }, '声画工作台')),
               h('div', { className: 'sd-sub' }, '一个主题或一本书 → 稿子 → 旁白 → 分镜图 → 竖屏成片')),
             h('button', { className: 'sd-btn', 'data-kind': 'primary', onClick: onCreate }, '新建项目'))),
         h('div', { className: 'sd-body' },
@@ -598,18 +698,19 @@ window.__ModuleLoader__.load({
     /** 按当前画面比例给一组常用出图尺寸。 */
     function resolutionPresets(settings) {
       const portrait = Number(settings.imageHeight) >= Number(settings.imageWidth)
+      // 服务端会把长边 clamp 到 2048：预设不能超，否则保存后被夹住、下拉也选不回来
       return portrait
         ? [
           { w: 720, h: 1280, note: '快' },
           { w: 1024, h: 1792, note: '标准' },
-          { w: 1152, h: 2048, note: '更清晰' },
-          { w: 1440, h: 2560, note: '高清，慢' },
+          { w: 1080, h: 1920, note: '高清' },
+          { w: 1152, h: 2048, note: '最高' },
         ]
         : [
           { w: 1280, h: 720, note: '快' },
           { w: 1792, h: 1024, note: '标准' },
-          { w: 2048, h: 1152, note: '更清晰' },
-          { w: 2560, h: 1440, note: '高清，慢' },
+          { w: 1920, h: 1080, note: '高清' },
+          { w: 2048, h: 1152, note: '最高' },
         ]
     }
 
@@ -677,7 +778,7 @@ window.__ModuleLoader__.load({
       const task = item.task
       const running = Boolean(task?.running)
       const pct = task && task.total ? Math.min(100, Math.round((task.done / task.total) * 100)) : 0
-      const pages = { item, data, busy, notice, onAction, onReload, onSettings }
+      const pages = { item, data, busy, notice, onAction, onReload, onSettings, onGoTab: setPicked }
 
       return h('div', { className: 'sd-pane' },
         h('div', { className: 'sd-head' },
@@ -689,7 +790,7 @@ window.__ModuleLoader__.load({
                 item.counts.segments ? ` · ${item.counts.segments} 段 · 约 ${formatSecs(item.totalSecs || 0)}` : '')),
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onSettings, title: '设置' }, h(GearIcon))),
 
-          // 阶段导航
+          // 阶段导航（发布是独立入口，不进六阶段派生；没成片时置灰）
           h('div', { className: 'sd-tabnav' },
             TAB_KEYS.map((key, index) => {
               const stage = data.stages.find(row => row.id === key)
@@ -702,7 +803,17 @@ window.__ModuleLoader__.load({
               },
                 h('span', { className: 'sd-tabnav-mark' }, TabMark({ key, done, index, active })),
                 h('span', null, stage?.label ?? key))
-            })),
+            }),
+            h('span', { className: 'sd-tabnav-sep' }),
+            h('button', {
+              key: 'publish', type: 'button', className: 'sd-tabnav-btn',
+              'data-on': active === 'publish' ? '1' : '0',
+              disabled: !item.render,
+              title: item.render ? '生成发布包' : '先合成成片',
+              onClick: () => setPicked('publish'),
+            },
+              h('span', { className: 'sd-tabnav-mark' }, active === 'publish' ? '●' : '⑦'),
+              h('span', null, '发布'))),
 
           // 只在跑着或出错时占位：跑完就把进度条撤掉，免得停在一句中间文案上像没结束
           task && (task.running || task.error) ? h('div', null,
@@ -746,6 +857,7 @@ window.__ModuleLoader__.load({
               : active === 'voiced' ? h(VoicePage, pages)
                 : active === 'anchors' ? h(AnchorPage, pages)
                   : active === 'imaged' ? h(ImagePage, pages)
+                  : active === 'publish' ? h(PublishPage, pages)
                   : h(RenderPage, pages)))
     }
 
@@ -988,13 +1100,43 @@ window.__ModuleLoader__.load({
       const [refs, setRefs] = useState(() => (item.references ?? []).map(row => row.url).join('\n'))
       const [modelKey, setModelKey] = useState(item.model ? `${item.model.provider}|${item.model.model}` : '')
       const [saving, setSaving] = useState(false)
+      const [error, setError] = useState(null)
+      // 原始材料可能有 20 万字，不进 /state：打开页面时单独拉；没拉到之前不能拿空串去覆盖服务端
+      const [rawLoaded, setRawLoaded] = useState(false)
+      // 原始材料拉取失败时给个提示：本次保存不带 rawText，不会拿空串冲掉服务端材料
+      const [rawLoadError, setRawLoadError] = useState(null)
+      const [rawBase, setRawBase] = useState('')
+      const savePromiseRef = useRef(null)
       const running = Boolean(item.task?.running)
+
+      // 服务端每次轮询都返回新数组/新对象：依赖它们的身份会把用户正在输入的内容重置回旧值，改成稳定字符串
+      const serverRefsKey = (item.references ?? []).map(row => row.url).join('\n')
+      const serverModelKey = item.model ? `${item.model.provider}|${item.model.model}` : ''
 
       useEffect(() => { setTopic(item.topic ?? '') }, [item.topic])
       useEffect(() => { setMinutes(item.targetMinutes ?? 5) }, [item.targetMinutes])
-      useEffect(() => { setRaw(item.rawText ?? '') }, [item.rawText])
-      useEffect(() => { setRefs((item.references ?? []).map(row => row.url).join('\n')) }, [item.references])
-      useEffect(() => { setModelKey(item.model ? `${item.model.provider}|${item.model.model}` : '') }, [item.model])
+      useEffect(() => { setRefs(serverRefsKey) }, [serverRefsKey])
+      useEffect(() => { setModelKey(serverModelKey) }, [serverModelKey])
+
+      // 原始材料不在 /state 里（材料可能有 20 万字），按项目单独拉一次
+      useEffect(() => {
+        let alive = true
+        setRawLoadError(null)
+        post('item-raw', { id: item.id })
+          .then(body => {
+            if (!alive) return
+            setRaw(body?.rawText ?? '')
+            setRawBase(body?.rawText ?? '')
+            setRawLoaded(true)
+            setRawLoadError(null)
+          })
+          .catch(() => {
+            // 拉不到就保持未加载：保存时不提交 rawText，免得用空串把服务端材料冲掉
+            if (!alive) return
+            setRawLoadError('原始材料加载失败，本次保存不会改动服务端已存材料；刷新页面重试')
+          })
+        return () => { alive = false }
+      }, [item.id])
 
       // 模型列表：第一项跟随默认，其余按提供商分组；分组标题只是标题，选不中
       const modelRows = useMemo(() => {
@@ -1013,50 +1155,75 @@ window.__ModuleLoader__.load({
       )].slice(0, 12)
 
       const saveInfo = async () => {
-        setSaving(true)
-        try {
-          const [provider, model] = modelKey ? modelKey.split('|') : [null, null]
-          const base = (item.references ?? []).map(row => row.url)
-          const urls = parseRefs()
-          // 链接没变就沿用它抓到的标题，别每次保存都重新抓
-          const references = urls.map(url => {
-            const known = (item.references ?? []).find(row => row.url === url)
-            return known ?? { url, title: '', desc: '', error: null }
-          })
-          await post('item-info', {
-            id: item.id,
-            topic,
-            targetMinutes: Number(minutes) || 5,
-            rawText: raw,
-            references,
-            model: provider && model ? { provider, model } : null,
-          })
-          // 新加的链接抓一次标题，抓到就补上
-          const fresh = references.filter(row => !row.title && !row.error)
-          for (const row of fresh) {
-            try {
-              const info = await post('reference-inspect', { url: row.url })
-              if (info?.title || info?.desc) {
-                row.title = info.title || ''
-                row.desc = info.desc || ''
-                row.error = info.error || null
-              }
-            } catch {
-              // 抓不到不影响使用
-            }
+        // 同一时刻只留一个保存请求：输入框失焦和点「生成稿件」会连着触发，后者等前者回来再按最新输入存一次
+        if (savePromiseRef.current) {
+          try {
+            await savePromiseRef.current
+          } catch {
+            // 上一次失败也继续按最新输入重试
           }
-          if (fresh.length) await post('item-info', { id: item.id, references })
-          await onReload()
+          if (savePromiseRef.current) return false
+        }
+        const run = (async () => {
+          setSaving(true)
+          setError(null)
+          try {
+            const [provider, model] = modelKey ? modelKey.split('|') : [null, null]
+            const urls = parseRefs()
+            // 链接没变就沿用它抓到的标题，别每次保存都重新抓
+            const references = urls.map(url => {
+              const known = (item.references ?? []).find(row => row.url === url)
+              return known ?? { url, title: '', desc: '', error: null }
+            })
+            const payload = {
+              id: item.id,
+              topic,
+              targetMinutes: Number(minutes) || 5,
+              references,
+              model: provider && model ? { provider, model } : null,
+            }
+            // 没拉到原始材料时不要带 rawText：空串会把服务端的长材料冲掉
+            if (rawLoaded) payload.rawText = raw
+            await post('item-info', payload)
+            // 新链接抓一次标题；抓不到也要把 error 落下来，否则每次保存都会重抓失败链接
+            const fresh = references.filter(row => !row.title && !row.error)
+            for (const row of fresh) {
+              try {
+                const info = await post('reference-inspect', { url: row.url })
+                row.title = info?.title || ''
+                row.desc = info?.desc || ''
+                row.error = info?.error || null
+              } catch (err) {
+                row.error = err.message || '抓取失败'
+              }
+            }
+            if (fresh.length) await post('item-info', { id: item.id, references })
+            setRawBase(raw)
+            await onReload()
+            return true
+          } catch (err) {
+            setError(err.message)
+            return false
+          } finally {
+            setSaving(false)
+          }
+        })()
+        savePromiseRef.current = run
+        try {
+          return await run
         } finally {
-          setSaving(false)
+          savePromiseRef.current = null
         }
       }
 
       const dirty = topic !== (item.topic ?? '')
         || Number(minutes) !== (item.targetMinutes ?? 5)
-        || raw !== (item.rawText ?? '')
-        || refs !== (item.references ?? []).map(row => row.url).join('\n')
-        || modelKey !== (item.model ? `${item.model.provider}|${item.model.model}` : '')
+        || (rawLoaded && raw !== rawBase) // 材料没拉到时不计入，免得把空串当成改动
+        || refs !== serverRefsKey
+        || modelKey !== serverModelKey
+
+      // 离开输入框就自动保存：切页/切项目时不会把这一页的改动静默丢掉
+      const autoSave = () => { if (dirty && !running) saveInfo() }
       const done = tabDone(item, 'idea')
       const refRows = item.references ?? []
 
@@ -1069,6 +1236,7 @@ window.__ModuleLoader__.load({
               className: 'sd-input', value: topic,
               placeholder: '例：九子夺嫡 / 安史之乱 / 一场暴雨是怎么形成的',
               onChange: event => setTopic(event.target.value),
+              onBlur: autoSave,
             })),
           h('div', { className: 'sd-row', style: { gap: 12 } },
             h('div', { className: 'sd-field', style: { flex: 1 } },
@@ -1076,12 +1244,24 @@ window.__ModuleLoader__.load({
               h('input', {
                 className: 'sd-input', type: 'number', min: 1, max: 30, value: minutes,
                 onChange: event => setMinutes(event.target.value),
+                onBlur: autoSave,
               })),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '写稿用哪个模型'),
               h(DropSelect, {
                 value: modelKey, rows: modelRows, label: '写稿用哪个模型',
-                onChange: setModelKey,
+                onChange: async value => {
+                  setModelKey(value)
+                  const [provider, model] = value ? value.split('|') : [null, null]
+                  setError(null)
+                  try {
+                    // 只提交 model 一个字段：item-info 是增量更新，不会碰主题/材料等其他字段
+                    await post('item-info', { id: item.id, model: provider && model ? { provider, model } : null })
+                    await onReload()
+                  } catch (err) {
+                    setError(err.message)
+                  }
+                },
               })),
             h('div', { className: 'sd-field', style: { flex: '0 0 118px' } },
               h('label', null, '稿子口吻'),
@@ -1089,8 +1269,12 @@ window.__ModuleLoader__.load({
               h('select', {
                 className: 'sd-select', value: settings.tone ?? 'storyteller',
                 onChange: async event => {
-                  await post('item-settings', { id: item.id, settings: { tone: event.target.value } })
-                  await onReload()
+                  try {
+                    await post('item-settings', { id: item.id, settings: { tone: event.target.value } })
+                    await onReload()
+                  } catch (err) {
+                    setError(err.message)
+                  }
                 },
               }, (data.tones ?? [{ id: 'storyteller', label: '说书人' }]).map(row =>
                 h('option', { key: row.id, value: row.id }, row.label)))),
@@ -1103,8 +1287,12 @@ window.__ModuleLoader__.load({
                 onBlur: async event => {
                   const value = Math.max(12, Math.min(90, Number(event.target.value) || 40))
                   if (value === segSeconds) return
-                  await post('item-settings', { id: item.id, settings: { segmentSeconds: value } })
-                  await onReload()
+                  try {
+                    await post('item-settings', { id: item.id, settings: { segmentSeconds: value } })
+                    await onReload()
+                  } catch (err) {
+                    setError('保存设置失败：' + err.message)
+                  }
                 },
               }),
               h('div', { className: 'sd-hint', style: { paddingTop: 5 } },
@@ -1116,6 +1304,7 @@ window.__ModuleLoader__.load({
               className: 'sd-input sd-textarea', value: refs, rows: 4,
               placeholder: '一行一个链接。写稿时会照着它们的选题角度、开场节奏学，不会照搬内容。\n例：https://www.douyin.com/video/xxxx',
               onChange: event => setRefs(event.target.value),
+              onBlur: autoSave,
             }),
             refRows.length
               ? h('div', { className: 'sd-refs' },
@@ -1131,7 +1320,13 @@ window.__ModuleLoader__.load({
               className: 'sd-input sd-textarea', value: raw, rows: 5,
               placeholder: '有现成的稿子、笔记或资料就贴进来，它会照着这份材料写，不照抄原句。',
               onChange: event => setRaw(event.target.value),
-            })),
+              onBlur: autoSave,
+            }),
+            rawLoadError
+              ? h('div', { className: 'sd-hint', style: { paddingTop: 5, color: 'var(--dsw-alias-state-warn-primary)' } }, rawLoadError)
+              : null),
+
+          error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, error.startsWith('保存') ? error : '保存失败：' + error) : null,
 
           h('div', { className: 'sd-row', style: { marginTop: 12, gap: 8 } },
             h('button', {
@@ -1143,7 +1338,8 @@ window.__ModuleLoader__.load({
               disabled: busy || running,
               title: running ? '这个项目正在跑任务，等它结束' : undefined,
               onClick: async () => {
-                if (dirty) await saveInfo()
+                // 保存失败就别往下跑，否则会拿服务端的旧材料写稿
+                if (dirty && !(await saveInfo())) return
                 onAction('script', { id: item.id }, null)
               },
             }, '生成稿件'))),
@@ -1228,7 +1424,15 @@ window.__ModuleLoader__.load({
         return h(NeedPrev, { text: '还没有稿子，先写稿再来配音。', label: '去写稿', onGo: () => goTab('scripted') })
       }
 
-      const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
+      const patch = async next => {
+        setError(null)
+        try {
+          await post('item-settings', { id: item.id, settings: next })
+          await onReload()
+        } catch (err) {
+          setError(err.message)
+        }
+      }
 
       // 点一个音色：没试听档就现场合成这一个，然后直接放；有就只选中
       const audition = async voice => {
@@ -1314,15 +1518,19 @@ window.__ModuleLoader__.load({
       const anchors = item.anchors ?? []
       const [busyId, setBusyId] = useState(null)
       const [viewed, setViewed] = useState(null)
+      const [error, setError] = useState(null)
       const task = item.task
       const drawing = task?.running && task.kind === 'anchor'
       const approvedCount = anchors.filter(row => row.approved).length
 
       const call = async (path, payload, id) => {
         setBusyId(id ?? 'extract')
+        setError(null)
         try {
           await post(path, payload)
           await onReload()
+        } catch (err) {
+          setError(err.message)
         } finally {
           setBusyId(null)
         }
@@ -1343,6 +1551,7 @@ window.__ModuleLoader__.load({
               ? h('span', { className: 'sd-hint' }, `已定稿 ${approvedCount}/${anchors.length}`)
               : null,
             drawing ? h('span', { className: 'sd-hint' }, `正在画 ${task.done}/${task.total}`) : null)),
+          error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, '操作失败：' + error) : null,
 
         !anchors.length
           ? h('div', { className: 'sd-empty' },
@@ -1357,15 +1566,17 @@ window.__ModuleLoader__.load({
     function AnchorCard({ item, row, busy, busyId, call, drawing, onZoom }) {
       const [desc, setDesc] = useState(row.desc)
       const [note, setNote] = useState('')
-      const [picked, setPicked] = useState(row.approved || (row.candidates ?? []).slice(-1)[0] || null)
+      const candidates = row.candidates ?? []
+      const [picked, setPicked] = useState(row.approved || candidates.slice(-1)[0] || null)
       const pending = busyId === row.id
+
+      // 候选数组每轮轮询都是新身份：用字符串键，只在内容真变时才重置选择
+      const candidatesKey = candidates.join('|')
 
       useEffect(() => { setDesc(row.desc) }, [row.desc])
       useEffect(() => {
-        setPicked(row.approved || (row.candidates ?? []).slice(-1)[0] || null)
-      }, [row.approved, row.candidates])
-
-      const candidates = row.candidates ?? []
+        setPicked(row.approved || candidates.slice(-1)[0] || null)
+      }, [row.approved, candidatesKey])
 
       return h('div', { className: 'sd-anchor', 'data-approved': row.approved ? '1' : '0' },
         h('div', { className: 'sd-anchor-head' },
@@ -1447,7 +1658,9 @@ window.__ModuleLoader__.load({
       const settings = { ...data.settings, ...(item.settings ?? {}) }
       const samples = item.samples?.style ?? {}
       const styleKeys = Object.keys(samples)
+      const presetKey = resolutionKey(settings)
       const [viewed, setViewed] = useState(null)
+      const [error, setError] = useState(null)
       const task = item.task
       const drawing = task?.running && task.kind === 'style-samples'
       const missing = item.counts.segments - item.counts.imaged
@@ -1456,7 +1669,15 @@ window.__ModuleLoader__.load({
         return h(NeedPrev, { text: '还没有稿子，先写稿再来出图。', label: '去写稿', onGo: () => goTab('scripted') })
       }
 
-      const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
+      const patch = async next => {
+        setError(null)
+        try {
+          await post('item-settings', { id: item.id, settings: next })
+          await onReload()
+        } catch (err) {
+          setError('保存设置失败：' + err.message)
+        }
+      }
 
       return h(React.Fragment, null,
         h('div', { className: 'sd-card-block' },
@@ -1490,7 +1711,7 @@ window.__ModuleLoader__.load({
               h('label', null, '出图分辨率'),
               h('select', {
                 className: 'sd-select',
-                value: resolutionKey(settings),
+                value: presetKey,
                 onChange: event => {
                   const [w, hh] = event.target.value.split('x').map(Number)
                   if (!w || !hh) return
@@ -1500,36 +1721,49 @@ window.__ModuleLoader__.load({
                 resolutionPresets(settings).map(row => h('option', {
                   key: `${row.w}x${row.h}`, value: `${row.w}x${row.h}`,
                 }, `${row.w}×${row.h}${row.note ? `（${row.note}）` : ''}`)),
-                h('option', { value: `custom`, disabled: true }, '—— 自定义 ——'))),
+                // 当前尺寸不命中预设时给一条对应项，否则下拉是空白
+                presetKey ? null : h('option', { key: 'custom', value: '' }, `自定义 ${settings.imageWidth}×${settings.imageHeight}`),
+                h('option', { key: 'custom-hint', value: 'custom', disabled: true }, '—— 自定义 ——'))),
             h('div', { className: 'sd-field', style: { flex: 1 } },
               h('label', null, '宽 × 高'),
               h('div', { className: 'sd-row', style: { gap: 6 } },
                 h('input', {
                   key: `iw-${item.id}-${settings.imageWidth}`,
-                  className: 'sd-input', type: 'number', min: 256, max: 4096, step: 8,
+                  className: 'sd-input', type: 'number', min: 256, max: 2048, step: 8,
                   defaultValue: settings.imageWidth,
                   onBlur: async event => {
-                    const w = Math.max(256, Math.min(4096, Number(event.target.value) || 1024))
+                    const w = Math.max(256, Math.min(2048, Number(event.target.value) || 1024))
                     if (w === settings.imageWidth) return
-                    await post('item-settings', { id: item.id, settings: { imageWidth: w } })
-                    await onReload()
+                    setError(null)
+                    try {
+                      await post('item-settings', { id: item.id, settings: { imageWidth: w } })
+                      await onReload()
+                    } catch (err) {
+                      setError('保存设置失败：' + err.message)
+                    }
                   },
                 }),
                 h('span', { className: 'sd-hint', style: { alignSelf: 'center' } }, '×'),
                 h('input', {
                   key: `ih-${item.id}-${settings.imageHeight}`,
-                  className: 'sd-input', type: 'number', min: 256, max: 4096, step: 8,
+                  className: 'sd-input', type: 'number', min: 256, max: 2048, step: 8,
                   defaultValue: settings.imageHeight,
                   onBlur: async event => {
-                    const hh = Math.max(256, Math.min(4096, Number(event.target.value) || 1792))
+                    const hh = Math.max(256, Math.min(2048, Number(event.target.value) || 1792))
                     if (hh === settings.imageHeight) return
-                    await post('item-settings', { id: item.id, settings: { imageHeight: hh } })
-                    await onReload()
+                    setError(null)
+                    try {
+                      await post('item-settings', { id: item.id, settings: { imageHeight: hh } })
+                      await onReload()
+                    } catch (err) {
+                      setError('保存设置失败：' + err.message)
+                    }
                   },
                 }))),
             h('div', { style: { flex: 2, paddingBottom: 6 } },
               h('div', { className: 'sd-hint' },
                 `改分辨率只影响之后出的图，已出的 ${item.counts.imaged} 张不会自动重画。`))),
+          error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, error) : null,
 
           h('div', { className: 'sd-hint', style: { marginTop: 8 } },
             '出图通道：', providerLabel(settings), ' · ',
@@ -1577,8 +1811,9 @@ window.__ModuleLoader__.load({
       const [coverTitle, setCoverTitle] = useState(item.title ?? '')
       const [makingCover, setMakingCover] = useState(false)
       const [coverError, setCoverError] = useState(null)
-      // 没手动选过就用默认：优先定稿参考图，其次第一张分镜图
-      const coverRef = obj => coverRefValue ?? (obj.anchors?.length
+      const [settingsError, setSettingsError] = useState(null)
+      // 没手动选过（或选回默认项的空串）就用默认：优先定稿参考图，其次第一张分镜图
+      const coverRef = obj => coverRefValue || (obj.anchors?.length
         ? `anchor:${(obj.anchors.find(a => a.approved) ?? obj.anchors[0]).id}`
         : (obj.segments.find(seg => seg.imagePath) ? `segment:${obj.segments.find(seg => seg.imagePath).id}` : ''))
       const settings = { ...data.settings, ...(item.settings ?? {}) }
@@ -1592,7 +1827,15 @@ window.__ModuleLoader__.load({
       const ready = item.counts.segments > 0 && missingImage === 0
       const needDub = missingAudio > 0
 
-      const patch = async next => { await post('item-settings', { id: item.id, settings: next }); await onReload() }
+      const patch = async next => {
+        setSettingsError(null)
+        try {
+          await post('item-settings', { id: item.id, settings: next })
+          await onReload()
+        } catch (err) {
+          setSettingsError('保存设置失败：' + err.message)
+        }
+      }
 
       const doExport = async () => {
         setExporting(true)
@@ -1610,6 +1853,7 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('div', { className: 'sd-card-block' },
           h('div', { className: 'sd-block-title' }, '特效'),
+          settingsError ? h('div', { className: 'sd-hint', style: { marginTop: 4, color: 'var(--dsw-alias-state-error-primary)' } }, settingsError) : null,
           h('div', { className: 'sd-row', style: { gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' } },
             h('div', { className: 'sd-field', style: { flex: 1, minWidth: 150 } },
               h('label', null, '运镜'),
@@ -1798,6 +2042,992 @@ window.__ModuleLoader__.load({
           : h('div', { className: 'sd-empty' }, ready ? '素材齐了，点「合成成片」。' : '音画还不齐，先去③④补上。'))
     }
 
+    // ------------------------------------------------------------------ 发布页
+
+    /** 与 src/publish/rules.js 同一口径；改规则时两边一起改。 */
+    function xWeightedLength(value) {
+      const text = String(value ?? '')
+      // URL 遇到空白与中日韩/全角字符就截断，否则紧跟中文的链接会把后面的字吞进 23 里
+      const urlPattern = /https?:\/\/[^\s\u3000-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]+/g
+      // 中日韩文字与全角标点按 2 计重
+      const cjkPattern = /[\u1100-\u11FF\u2E80-\u303F\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7AF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF]/
+      const weight = chunk => {
+        let sum = 0
+        for (const ch of String(chunk)) {
+          sum += ch.codePointAt(0) > 0xffff ? 2 : cjkPattern.test(ch) ? 2 : 1
+        }
+        return sum
+      }
+      let total = 0
+      let last = 0
+      for (const match of text.matchAll(urlPattern)) {
+        // 链接尾部紧贴的 ASCII 标点不属于 URL：URL 仍按 23 计，标点留给普通字符计权
+        const url = match[0].replace(/[.,;:!?'")\]]+$/, '')
+        total += weight(text.slice(last, match.index)) + 23
+        last = match.index + url.length
+      }
+      return total + weight(text.slice(last))
+    }
+
+    function formatFileSize(bytes) {
+      const size = Number(bytes) || 0
+      if (size < 1024) return size + ' B'
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+      if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + ' MB'
+      return (size / 1024 / 1024 / 1024).toFixed(2) + ' GB'
+    }
+
+    function composeVariantText(platformId, variant) {
+      if (platformId === 'xiaohongshu') {
+        const parts = []
+        const title = String(variant?.title ?? '').trim()
+        const body = String(variant?.body ?? '').trim()
+        const tags = (Array.isArray(variant?.tags) ? variant.tags : []).map(tag => '#' + String(tag).trim())
+        if (title) parts.push(title)
+        if (body) parts.push(body)
+        if (tags.length) parts.push(tags.join(' '))
+        return parts.join('\n\n')
+      }
+      return String(variant?.text ?? '').trim()
+    }
+
+    async function copyPlainText(text) {
+      try {
+        await navigator.clipboard.writeText(text)
+        return true
+      } catch {
+        // 局域网 http 不是安全上下文，clipboard 用不了，退回 execCommand
+      }
+      try {
+        const area = document.createElement('textarea')
+        area.value = text
+        area.style.position = 'fixed'
+        area.style.opacity = '0'
+        document.body.appendChild(area)
+        area.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(area)
+        return ok
+      } catch {
+        return false
+      }
+    }
+
+    function PublishPage({ item, data, busy, onAction, onReload, onGoTab }) {
+      const [view, setView] = useState(null)
+      const [loadError, setLoadError] = useState(null)
+      const [drafts, setDrafts] = useState(null)
+      const [tagInput, setTagInput] = useState('')
+      const [coverTitle, setCoverTitle] = useState('')
+      const [note, setNote] = useState(null)
+      const [saving, setSaving] = useState(false)
+      const [makingCover, setMakingCover] = useState(false)
+      const [exporting, setExporting] = useState(false)
+      const [dir, setDir] = useState('')
+      const [exportResult, setExportResult] = useState(null)
+      const [copyNote, setCopyNote] = useState('')
+      const [activePlatform, setActivePlatform] = useState('xiaohongshu')
+      const [feedbackOpen, setFeedbackOpen] = useState(false)
+      const [feedbackText, setFeedbackText] = useState('')
+      const [feedbackScopes, setFeedbackScopes] = useState([])
+      const [revisionBusy, setRevisionBusy] = useState(false)
+      const [revisionPending, setRevisionPending] = useState(false)
+      const [coverTab, setCoverTab] = useState('text')
+      const [coverBusy, setCoverBusy] = useState(false)
+      const [coverChoice, setCoverChoice] = useState(0)
+      const [historyOpen, setHistoryOpen] = useState(false)
+      const coverTouchedRef = useRef(false)
+      const dirtyRef = useRef(false)
+      const draftsRef = useRef(null)
+      // 这批草稿属于哪个项目：卸载兜底保存只能写回它，不能写进切换后的项目
+      const draftsOwnerRef = useRef(item.id)
+      const prevVariantsRef = useRef(null)
+      const generatingRef = useRef(false)
+      const task = item.task
+      const generating = Boolean(task?.running && task.kind === 'publish-copy')
+      const revising = Boolean(task?.running && task.kind === 'publish-revise')
+      generatingRef.current = generating
+      const taskRunning = Boolean(task?.running)
+      // 生成/修订期间输入会被服务端结果覆盖，先锁住，完成后再让用户确认改
+      const inputsLocked = generating || revising || taskRunning
+
+      const refresh = useCallback(async () => {
+        try {
+          const body = await post('publish/read', { id: item.id })
+          setView(body.publish)
+          if (!coverTouchedRef.current) {
+            setCoverTitle(body.publish.cover?.title || body.publish.variants?.xiaohongshu?.title || item.title || '')
+          }
+          setLoadError(null)
+        } catch (err) {
+          setLoadError(err.message)
+        }
+      }, [item.id, item.title])
+
+      useEffect(() => { refresh() }, [refresh, item.render?.at])
+
+      // 文案生成 / 封面生成这类任务跑完，刷新一次发布数据
+      const wasRunning = useRef(false)
+      useEffect(() => {
+        const running = Boolean(item.task?.running)
+        const had = wasRunning.current
+        wasRunning.current = running
+        if (!running) setRevisionPending(false)
+        if (had && !running) refresh()
+      }, [item.task?.running, item.task?.finishedAt, refresh])
+
+      // 只合并服务端真正变了的平台；单平台生成完成时，另一平台没保存的草稿要留着
+      const variantsKey = view ? JSON.stringify(view.variants ?? {}) : ''
+      useEffect(() => {
+        if (!view) return
+        const next = view.variants ?? {}
+        const prev = prevVariantsRef.current
+        prevVariantsRef.current = JSON.parse(JSON.stringify(next))
+        const current = draftsRef.current
+        if (!current || draftsOwnerRef.current !== item.id) {
+          // 还没草稿（或换了项目）：直接以这个项目的服务端数据为准，并记下草稿归属
+          draftsOwnerRef.current = item.id
+          setDrafts(JSON.parse(JSON.stringify(next)))
+          return
+        }
+        const merged = JSON.parse(JSON.stringify(current))
+        const keptLabels = []
+        for (const platformId of Object.keys(next)) {
+          const nextKey = JSON.stringify(next[platformId] ?? {})
+          const localKey = JSON.stringify(current[platformId] ?? {})
+          if (localKey === nextKey) continue // 本地和服务端一致，不用动
+          const changed = !prev || JSON.stringify(prev[platformId] ?? {}) !== nextKey
+          if (!changed) continue // 服务端没变，本地草稿保留
+          if (prev && JSON.stringify(prev[platformId] ?? {}) !== localKey) {
+            // 服务端这个平台变了、本地也还有未保存修改：保留本地并提示，不能一覆盖了之
+            const label = (view.platforms ?? []).find(row => row.id === platformId)?.label ?? platformId
+            keptLabels.push(label)
+            continue
+          }
+          merged[platformId] = JSON.parse(JSON.stringify(next[platformId]))
+        }
+        setDrafts(merged)
+        if (keptLabels.length) {
+          setNote({
+            tone: 'warn',
+            text: `生成结果已更新；本次保留你对「${keptLabels.join('、')}」的未保存修改，确认后可点「保存」覆盖服务端。`,
+          })
+        }
+      }, [variantsKey])
+
+      const draftsSafe = drafts ?? {}
+      const dirty = Boolean(view && drafts && JSON.stringify(drafts) !== JSON.stringify(view.variants ?? {}))
+      dirtyRef.current = dirty
+      draftsRef.current = drafts
+      const targets = view?.targets ?? []
+      const platformById = id => (view?.platforms ?? []).find(row => row.id === id) ?? { id, label: id, summary: '', composeUrl: '' }
+      const platformLabel = id => platformById(id).label
+      const countsOf = platformId => platformId === 'xiaohongshu'
+        ? {
+          title: [...String(draftsSafe.xiaohongshu?.title ?? '')].length,
+          body: [...String(draftsSafe.xiaohongshu?.body ?? '')].length,
+          tags: (Array.isArray(draftsSafe.xiaohongshu?.tags) ? draftsSafe.xiaohongshu.tags : []).length,
+        }
+        : { weighted: xWeightedLength(draftsSafe.x?.text ?? '') }
+
+      const patchDraft = (platformId, patch) => {
+        setDrafts(prev => {
+          const next = JSON.parse(JSON.stringify(prev ?? {}))
+          next[platformId] = { ...(next[platformId] ?? {}), ...patch }
+          return next
+        })
+      }
+
+      // 服务端已经采用/回滚了提案：本地草稿与「上一次服务端值」都对齐到新版本。
+      // 不这样做的话，合并 effect 会把旧草稿当成「本地未保存修改」保留，
+      // 切页时的卸载兜底保存又会把旧草稿写回服务端，覆盖刚采用的修订。
+      const syncDraftsFromServer = publish => {
+        const synced = JSON.parse(JSON.stringify(publish?.variants ?? {}))
+        prevVariantsRef.current = synced
+        setDrafts(synced)
+      }
+
+      const save = async () => {
+        if (saving || taskRunning) return null
+        setSaving(true)
+        setNote(null)
+        try {
+          // 两个平台都提交；服务端也固定两平台，避免旧的窄 targets 把另一平台静默丢掉
+          const body = await post('publish/save', {
+            id: item.id,
+            targets: ['xiaohongshu', 'x'],
+            variants: draftsSafe,
+          })
+          setView(body.publish)
+          setDrafts(JSON.parse(JSON.stringify(body.publish.variants ?? {})))
+          setNote({ tone: 'ok', text: '已保存' })
+          return body.publish
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+          return null
+        } finally {
+          setSaving(false)
+        }
+      }
+
+      const autoSave = () => {
+        if (dirty && !saving && !generating && !taskRunning) save()
+      }
+
+      // 切走页签/切项目时兜底保存，兜住「打了字直接切页」的常见路径。
+      // 草稿只写回它所属的项目：切项目时项目树整棵重挂，A 的草稿绝不能写进 B 的 publish.json
+      useEffect(() => () => {
+        if (draftsOwnerRef.current !== item.id) return
+        if (!dirtyRef.current || generatingRef.current) return
+        const payload = draftsRef.current
+        if (!payload) return
+        post('publish/save', { id: item.id, targets: ['xiaohongshu', 'x'], variants: payload }).catch(() => {})
+      }, [item.id])
+
+      // 换项目后旧的 dirty 标记作废，避免新项目首帧被误判成有未保存改动
+      useEffect(() => { dirtyRef.current = false }, [item.id])
+
+      const addTag = () => {
+        const tag = tagInput.trim().replace(/^#+/, '').trim()
+        if (!tag) return
+        const xhs = draftsSafe.xiaohongshu ?? { tags: [] }
+        const tags = Array.isArray(xhs.tags) ? xhs.tags : []
+        const max = platformById('xiaohongshu').tags?.max ?? 10
+        if (tags.includes(tag)) { setTagInput(''); return }
+        if (tags.length >= max) { setNote({ tone: 'error', text: '话题最多 ' + max + ' 个' }); return }
+        patchDraft('xiaohongshu', { tags: [...tags, tag] })
+        setTagInput('')
+      }
+
+      const generate = () => {
+        if (generating || taskRunning) return
+        const has = Boolean(composeVariantText(activePlatform, draftsSafe[activePlatform] ?? {}))
+        if (has && !window.confirm('会覆盖「' + platformLabel(activePlatform) + '」当前文案，继续？')) return
+        onAction('publish/generate', { id: item.id, targets: [activePlatform] }, null)
+      }
+
+      const makeCover = async () => {
+        if (makingCover || taskRunning) return
+        setMakingCover(true)
+        setNote(null)
+        try {
+          const saved = await save({})
+          if (!saved) return
+          const body = await post('publish/cover', {
+            id: item.id,
+            title: coverTouchedRef.current ? coverTitle.trim() : '',
+            textSource: coverTouchedRef.current ? 'manual' : (view.cover?.textSource || 'auto'),
+          })
+          coverTouchedRef.current = false
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '封面已生成' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setMakingCover(false)
+        }
+      }
+
+      const doExport = async () => {
+        if (exporting || taskRunning) return
+        setExporting(true)
+        setNote(null)
+        setExportResult(null)
+        try {
+          const saved = await save({})
+          if (!saved) return
+          const body = await post('publish/export', { id: item.id, dir })
+          setExportResult(body.export)
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '发布包已生成' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setExporting(false)
+        }
+      }
+
+      const markPublished = async platformId => {
+        const record = (view?.records ?? []).find(row => row.platform === platformId)
+        const url = window.prompt('作品链接（可留空）：', record?.url ?? '')
+        if (url === null) return
+        try {
+          const body = await post('publish/record', {
+            id: item.id, platform: platformId, status: 'published', url: url.trim(),
+          })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '已标记发布' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        }
+      }
+
+      const unmarkPublished = async platformId => {
+        try {
+          const body = await post('publish/record', { id: item.id, platform: platformId, status: 'pending' })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '已取消标记' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        }
+      }
+
+      const doCopy = async platformId => {
+        const ok = await copyPlainText(composeVariantText(platformId, draftsSafe[platformId] ?? {}))
+        setCopyNote(ok ? platformLabel(platformId) + '文案已复制' : '复制失败，请手动选中复制')
+        setTimeout(() => setCopyNote(''), 2500)
+      }
+
+      const head = h('div', { className: 'sd-pub-head' },
+        h('div', null,
+          h('div', { className: 'sd-pub-kicker' }, '发布准备'),
+          h('div', { className: 'sd-pub-title' }, '小红书 / X · 生成文案和发布包，自己上传'),
+          h('div', { className: 'sd-pub-sub' }, '不登录平台、不代发；文案可改，检查通过后导出。')),
+        view && (view.revisions ?? []).length
+          ? h('div', { className: 'sd-pub-head-actions' },
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: () => setHistoryOpen(true) }, '修改历史'))
+          : null)
+
+      if (!item.render) {
+        return h(React.Fragment, null,
+          head,
+          h('div', { className: 'sd-empty', style: { marginTop: 14 } },
+            h('div', null, '还没有成片，先在「⑥ 成片」合成一条，再来做发布包。'),
+            h('div', { style: { marginTop: 12 } },
+              h('button', { className: 'sd-btn', type: 'button', onClick: () => onGoTab('rendered') }, '去成片页'))))
+      }
+
+      if (loadError) {
+        return h(React.Fragment, null,
+          head,
+          h('div', { className: 'sd-empty', style: { marginTop: 14 } },
+            h('div', null, '发布数据加载失败：' + loadError),
+            h('div', { style: { marginTop: 12 } },
+              h('button', { className: 'sd-btn', type: 'button', onClick: refresh }, '重试'))))
+      }
+
+      if (!view) {
+        return h(React.Fragment, null, head, h('div', { className: 'sd-hint', style: { paddingTop: 24 } }, '正在读取发布数据…'))
+      }
+
+      const revisions = view.revisions ?? []
+      let proposed = null
+      for (let index = revisions.length - 1; index >= 0; index -= 1) {
+        if (revisions[index].status === 'proposed') { proposed = revisions[index]; break }
+      }
+      const scopeLabel = id => ({ title: '标题', body: '正文', coverText: '封面大字' }[id] ?? id)
+      const quickChips = {
+        title: ['更短', '更有冲突', '别用问句', '更口语', '突出数字'],
+        body: ['开头更抓人', '少一点史料', '多讲人物', '结尾加互动', '压缩到 400 字内'],
+        coverText: ['字再少一点', '更口语', '换一个角度', '别用问句', '更有画面感'],
+      }
+
+      const openFeedback = scope => {
+        setFeedbackScopes([scope])
+        setFeedbackText('')
+        setFeedbackOpen(true)
+      }
+      const toggleScope = scopeId => {
+        setFeedbackScopes(prev => (prev.includes(scopeId)
+          ? (prev.length > 1 ? prev.filter(row => row !== scopeId) : prev)
+          : [...prev, scopeId]))
+      }
+      const submitFeedback = async () => {
+        if (revisionBusy || taskRunning) return
+        const text = feedbackText.trim()
+        if (!feedbackScopes.length) { setNote({ tone: 'error', text: '至少选择一个要修改的字段' }); return }
+        if (text.length < 2) { setNote({ tone: 'error', text: '修改意见太短，至少写两个字' }); return }
+        setRevisionBusy(true)
+        setRevisionPending(true)
+        setNote(null)
+        try {
+          const saved = await save()
+          if (!saved) { setRevisionPending(false); return }
+          await post('publish/revise', { id: item.id, scope: feedbackScopes, feedback: text })
+          // 本地先隐藏旧提案，等新任务完成后 refresh 再显示新提案
+          setView(prev => (prev ? {
+            ...prev,
+            revisions: (prev.revisions ?? []).map(row => (row.status === 'proposed' ? { ...row, status: 'rejected' } : row)),
+          } : prev))
+          await onReload()
+          setFeedbackOpen(false)
+          setCoverChoice(0)
+          setNote({ tone: 'ok', text: '已提交意见，正在生成修改提案…' })
+        } catch (err) {
+          setRevisionPending(false)
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const applyRevision = async () => {
+        if (!proposed || revisionBusy || taskRunning) return
+        const localVariant = draftsSafe.xiaohongshu ?? {}
+        const serverVariant = view.variants?.xiaohongshu ?? {}
+        const dirtyScopes = []
+        if (proposed.scope.includes('title') && String(localVariant.title ?? '') !== String(serverVariant.title ?? '')) dirtyScopes.push('标题')
+        if (proposed.scope.includes('body') && String(localVariant.body ?? '') !== String(serverVariant.body ?? '')) dirtyScopes.push('正文')
+        if (proposed.scope.includes('coverText') && coverTouchedRef.current && coverTitle.trim() !== String(view.cover?.title ?? '')) dirtyScopes.push('封面大字')
+        if (dirtyScopes.length && !window.confirm('你在提案生成后又改过' + dirtyScopes.join('、') + '，采用会覆盖这些未保存的修改，继续？')) return
+        setRevisionBusy(true)
+        setNote(null)
+        let coverWarn = null
+        try {
+          const payload = { id: item.id, revisionId: proposed.id }
+          if (proposed.scope.includes('coverText')) payload.coverTextIndex = coverChoice
+          let body
+          try {
+            body = await post('publish/revise/apply', payload)
+          } catch (err) {
+            if (/已经改过/.test(err.message)) {
+              if (!window.confirm(err.message + '，仍要采用吗？')) return
+              // 409 后强制重试：成功同样走下面的「对齐草稿」
+              body = await post('publish/revise/apply', { ...payload, force: true })
+            } else {
+              throw err
+            }
+          }
+          let next = body.publish
+          const nextTitle = next?.variants?.xiaohongshu?.title
+          // 到这一步提案已经写回服务端了。封面同步失败不能把整个「采用」算失败：
+          // 否则弹窗还挂着旧提案，再点「采用」只会收到「已经处理过了」（死锁）
+          if (proposed.scope.includes('title') && nextTitle && next?.cover?.path && next?.cover?.textSource !== 'manual') {
+            if (window.confirm('标题已改，要把封面大字同步成新标题吗？')) {
+              try {
+                const coverBody = await post('publish/cover', { id: item.id, title: nextTitle, textSource: 'auto' })
+                next = coverBody.publish
+              } catch (err) {
+                coverWarn = '提案已采用，但封面同步失败：' + err.message
+              }
+            }
+          }
+          if (proposed.scope.includes('coverText')) {
+            coverTouchedRef.current = false
+            if (next?.cover?.title) setCoverTitle(next.cover.title)
+          } else if (next?.cover?.title && !coverTouchedRef.current) {
+            setCoverTitle(next.cover.title)
+          }
+          setView(next)
+          // 本地草稿与合并基线一起对齐到采用后的服务端版本：
+          // 否则合并 effect 会把旧草稿当「本地未保存」保留，卸载兜底保存再写回服务端覆盖修订
+          syncDraftsFromServer(next)
+          setCoverChoice(0)
+          setNote(coverWarn ? { tone: 'warn', text: coverWarn } : { tone: 'ok', text: '已采用修改提案' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const discardRevision = async () => {
+        if (!proposed || revisionBusy) return
+        setRevisionBusy(true)
+        try {
+          const body = await post('publish/revise/discard', { id: item.id, revisionId: proposed.id })
+          setView(body.publish)
+          syncDraftsFromServer(body.publish)
+          setNote({ tone: 'ok', text: '已保留原样' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const reviseAgain = () => {
+        if (!proposed) return
+        setFeedbackScopes(proposed.scope)
+        setFeedbackText(proposed.feedback)
+        setCoverChoice(0)
+        setFeedbackOpen(true)
+      }
+
+      const revertRevision = async revisionId => {
+        if (revisionBusy || !window.confirm('回滚到这次修改前的版本？')) return
+        setRevisionBusy(true)
+        try {
+          const body = await post('publish/revise/revert', { id: item.id, revisionId })
+          setView(body.publish)
+          syncDraftsFromServer(body.publish)
+          setHistoryOpen(false)
+          setNote({ tone: 'ok', text: '已回滚' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setRevisionBusy(false)
+        }
+      }
+
+      const applyCover = async patch => {
+        if (coverBusy || taskRunning || makingCover) return
+        setCoverBusy(true)
+        setNote(null)
+        try {
+          // 换底图/排版时带上正在编辑的封面大字，别用旧的 view.cover.title 把刚改的字顶回去
+          const edited = coverTitle.trim()
+          const body = await post('publish/cover', {
+            id: item.id,
+            title: coverTouchedRef.current ? edited : (view.cover?.title || edited),
+            textSource: coverTouchedRef.current ? 'manual' : (view.cover?.textSource || 'auto'),
+            ...patch,
+          })
+          setView(body.publish)
+          setNote({ tone: 'ok', text: '封面已更新' })
+        } catch (err) {
+          setNote({ tone: 'error', text: err.message })
+        } finally {
+          setCoverBusy(false)
+        }
+      }
+
+      const platformTabs = h('div', { className: 'sd-pub-tabs', role: 'tablist', 'aria-label': '发布平台' },
+        ['xiaohongshu', 'x'].map(platformId => {
+          const info = platformById(platformId)
+          const active = activePlatform === platformId
+          const errors = view.checks.filter(check => check.platform === platformId && check.state === 'error').length
+          const warns = view.checks.filter(check => check.platform === platformId && check.state === 'warn').length
+          return h('button', {
+            key: platformId, type: 'button', className: 'sd-pub-tab',
+            role: 'tab', id: 'sd-pub-tab-' + platformId, 'aria-controls': 'sd-pub-panel',
+            'aria-selected': active ? 'true' : 'false',
+            'data-on': active ? '1' : '0',
+            onClick: () => setActivePlatform(platformId),
+          },
+            h('span', { className: 'sd-pub-picon', 'data-platform': platformId },
+              platformId === 'xiaohongshu' ? '小红书' : 'X'),
+            h('span', { style: { minWidth: 0, textAlign: 'left' } },
+              h('span', { className: 'sd-pub-pname' }, info.label),
+              h('span', { className: 'sd-pub-pmeta' },
+                platformId === 'xiaohongshu' ? '标题 · 正文 · 话题 · 3:4 封面' : '单条 · 280 加权字符 · 取首帧')),
+            errors ? h('span', { className: 'sd-pub-taberr' }, errors)
+              : warns ? h('span', { className: 'sd-pub-tabwarn' }, '!') : null)
+        }))
+
+      const xhsInfo = platformById('xiaohongshu')
+      const xhs = draftsSafe.xiaohongshu ?? { title: '', body: '', tags: [] }
+      const xhsCount = countsOf('xiaohongshu')
+      const xhsCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-picon', 'data-platform': 'xiaohongshu', style: { width: 20, height: 20, fontSize: 5.5, borderRadius: 5 } }, '小红书'),
+          h('span', { className: 'sd-pub-card-title' }, '小红书文案'),
+          h('span', { className: 'sd-pub-counter' },
+            '标题 ' + xhsCount.title + '/' + (xhsInfo.title?.max ?? 20)
+            + ' · 正文 ' + xhsCount.body + '/' + (xhsInfo.body?.max ?? 1000)
+            + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10)),
+          dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, '标题'),
+            h('button', {
+              className: 'sd-pub-ask', type: 'button',
+              disabled: taskRunning || saving || revising || generating,
+              onClick: () => openFeedback('title'),
+            }, '提意见')),
+          h('input', {
+            className: 'sd-input', value: xhs.title ?? '', maxLength: 120,
+            placeholder: '20 字以内，带钩子',
+            disabled: inputsLocked,
+            style: inputsLocked ? { opacity: .6 } : undefined,
+            onChange: event => patchDraft('xiaohongshu', { title: event.target.value }),
+            onBlur: autoSave,
+          })),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, '正文'),
+            h('button', {
+              className: 'sd-pub-ask', type: 'button',
+              disabled: taskRunning || saving || revising || generating,
+              onClick: () => openFeedback('body'),
+            }, '提意见')),
+          h('textarea', {
+            className: 'sd-text', value: xhs.body ?? '', rows: 6,
+            style: { minHeight: 132, ...(inputsLocked ? { opacity: .6 } : null) },
+            placeholder: '300–600 字，分段写',
+            disabled: inputsLocked,
+            onChange: event => patchDraft('xiaohongshu', { body: event.target.value }),
+            onBlur: autoSave,
+          })),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('label', null, '话题'),
+          h('div', { className: 'sd-pub-tags' },
+            (Array.isArray(xhs.tags) ? xhs.tags : []).map((tag, index) => h('span', {
+              key: String(tag) + index, className: 'sd-tag',
+              style: { display: 'inline-flex', alignItems: 'center', gap: 3 },
+            },
+              '#' + tag,
+              h('button', {
+                type: 'button', className: 'sd-pub-tagx', title: '移除',
+                onClick: () => patchDraft('xiaohongshu', {
+                  tags: (Array.isArray(xhs.tags) ? xhs.tags : []).filter((row, i) => i !== index),
+                }),
+              }, '×'))),
+            h('input', {
+              value: tagInput,
+              placeholder: '输入话题，回车添加',
+              disabled: inputsLocked,
+              style: inputsLocked ? { opacity: .6 } : undefined,
+              onChange: event => setTagInput(event.target.value),
+              onBlur: autoSave,
+              onKeyDown: event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addTag()
+                }
+              },
+            }))),
+        h('div', { className: 'sd-card-foot' },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+            disabled: generating || saving || taskRunning, onClick: generate,
+          }, generating ? '生成中…' : '一键生成'),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
+            saving ? '保存中…' : '保存'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('xiaohongshu') },
+            '复制文案')))
+
+      const xInfo = platformById('x')
+      const xDraft = draftsSafe.x ?? { text: '' }
+      const xCount = countsOf('x')
+      const xCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-picon', 'data-platform': 'x', style: { width: 20, height: 20, fontSize: 11, borderRadius: 5 } }, 'X'),
+          h('span', { className: 'sd-pub-card-title' }, 'X 文案'),
+          h('span', { className: 'sd-pub-counter' }, '加权 ' + xCount.weighted + '/' + (xInfo.text?.maxWeighted ?? 280)),
+          dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('textarea', {
+            className: 'sd-text', value: xDraft.text ?? '', rows: 5,
+            style: { minHeight: 112, ...(inputsLocked ? { opacity: .6 } : null) },
+            placeholder: '一条 280 加权字符以内的帖子，话题内联',
+            disabled: inputsLocked,
+            onChange: event => patchDraft('x', { text: event.target.value }),
+            onBlur: autoSave,
+          })),
+        h('div', { className: 'sd-card-foot' },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+            disabled: generating || saving || taskRunning, onClick: generate,
+          }, generating ? '生成中…' : '一键生成'),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
+            saving ? '保存中…' : '保存'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('x') },
+            '复制文案')))
+
+      const guideCard = h('div', { className: 'sd-pub-card', style: { gap: 6 } },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '复制文案，自己去发'),
+          h('span', { className: 'sd-pub-counter' }, '不调用平台接口')),
+        h('div', { className: 'sd-hint' }, '打开平台投稿页 → 上传视频 → 回来勾一下「已发布」。'),
+        h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            onClick: () => window.open(platformById(activePlatform).composeUrl, '_blank', 'noopener,noreferrer'),
+          }, '打开' + platformLabel(activePlatform))))
+
+      const coverTabs = h('div', { className: 'sd-rev-tabs', role: 'tablist', 'aria-label': '封面设置' },
+        [['text', '文字'], ['source', '底图'], ['layout', '排版']].map(([id, label]) => h('button', {
+          key: id, type: 'button', role: 'tab', className: 'sd-rev-tab',
+          'aria-selected': coverTab === id ? 'true' : 'false',
+          'data-on': coverTab === id ? '1' : '0',
+          onClick: () => setCoverTab(id),
+        }, label)))
+
+      const coverBusyNow = coverBusy || makingCover || taskRunning || revising || saving
+      const coverCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '小红书封面'),
+          h('span', { className: 'sd-pub-counter' }, view.cover
+            ? view.cover.width + '×' + view.cover.height + ' · 3:4'
+            : '1080×1440 · 3:4'),
+          h('button', {
+            className: 'sd-pub-ask', type: 'button',
+            disabled: taskRunning || revising || makingCover,
+            onClick: () => openFeedback('coverText'),
+          }, '提意见')),
+        coverTabs,
+        coverTab === 'text'
+          ? h('div', { className: 'sd-pub-coverrow' },
+            h('div', { className: 'sd-pub-coverbox' },
+              view.cover?.path
+                ? h('img', {
+                  src: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
+                  alt: '封面预览',
+                })
+                : h('div', { className: 'sd-pub-cover-empty' }, '还没有封面')),
+            h('div', { style: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 } },
+              h('div', { className: 'sd-hint' }, '封面大字单独出图，导出时按 3:4 带上。'),
+              h('div', { className: 'sd-field', style: { marginTop: 0 } },
+                h('label', null, '封面大字'),
+                h('input', {
+                  className: 'sd-input', value: coverTitle, maxLength: 40,
+                  onChange: event => { coverTouchedRef.current = true; setCoverTitle(event.target.value) },
+                }),
+                coverTouchedRef.current && coverTitle.trim() !== (view.cover?.title ?? '')
+                  ? h('div', { className: 'sd-hint', style: { color: 'var(--dsw-alias-state-warn-primary)' } },
+                    '封面大字还没生成：改完要点上面的「重新生成」才会生效，预览里仍是旧大字。')
+                  : null),
+              h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                h('button', {
+                  className: 'sd-btn', 'data-kind': view.cover?.path ? undefined : 'primary', type: 'button',
+                  disabled: coverBusyNow,
+                  onClick: makeCover,
+                }, makingCover ? '生成中…' : view.cover?.path ? '重新生成' : '生成封面'),
+                view.cover?.path ? h('a', {
+                  className: 'sd-btn', 'data-kind': 'ghost',
+                  href: mediaUrl(item.id, view.cover.path, view.cover.at ? Date.parse(view.cover.at) : undefined),
+                  download: 'cover-3x4.png', target: '_blank', rel: 'noreferrer',
+                }, '下载封面') : null)))
+          : coverTab === 'source'
+            ? h('div', null,
+              h('div', { className: 'sd-hint' }, '从已有分镜图或参考图里换一张底图，文字位置不变。'),
+              (view.coverSources ?? []).length
+                ? h('div', { className: 'sd-rev-sources' }, view.coverSources.map(src => h('button', {
+                  key: src.ref, type: 'button', className: 'sd-rev-source',
+                  'data-on': view.cover?.sourceRef === src.ref ? '1' : '0',
+                  disabled: coverBusyNow,
+                  onClick: () => applyCover({ ref: src.ref }),
+                },
+                  h('img', { src: mediaUrl(item.id, src.path), alt: src.label }),
+                  h('span', null, src.label))))
+                : h('div', { className: 'sd-empty', style: { marginTop: 8 } }, '还没有可用底图，先去分镜图页出几张图。'))
+            : h('div', null,
+              h('div', { className: 'sd-hint' }, '文字位置'),
+              h('div', { className: 'sd-rev-quick' },
+                [['bottom', '底部'], ['top', '顶部']].map(([value, label]) => h('button', {
+                  key: value, type: 'button',
+                  'data-on': (view.cover?.layout || 'bottom') === value ? '1' : '0',
+                  disabled: coverBusyNow,
+                  onClick: () => applyCover({ layout: value }),
+                }, label))),
+              h('div', { className: 'sd-hint', style: { marginTop: 8 } }, '字号'),
+              h('div', { className: 'sd-rev-quick' },
+                [[0.85, '小'], [1, '中'], [1.15, '大']].map(([value, label]) => h('button', {
+                  key: String(value), type: 'button',
+                  'data-on': Math.abs((view.cover?.fontScale ?? 1) - value) < 0.01 ? '1' : '0',
+                  disabled: coverBusyNow,
+                  onClick: () => applyCover({ fontScale: value }),
+                }, label)))))
+
+      const stateColor = state => state === 'error'
+        ? 'var(--dsw-alias-state-error-primary)'
+        : state === 'warn'
+          ? 'var(--dsw-alias-state-warn-primary)'
+          : 'var(--dsw-alias-state-success-primary)'
+      const activeChecks = view.checks.filter(check => check.platform === activePlatform)
+      const activeBlocking = activeChecks.filter(check => check.state === 'error').length
+      const otherBlocking = view.blocking - activeBlocking
+      const checksCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '发布前检查 · ' + platformLabel(activePlatform)),
+          h('span', {
+            className: 'sd-pub-chip', 'data-tone': activeBlocking ? 'error' : 'ok', style: { marginLeft: 'auto' },
+          }, activeBlocking ? activeBlocking + ' 项要改' : '本页通过')),
+        activeChecks.length
+          ? activeChecks.map(check => h('div', { key: check.platform + ':' + check.id, className: 'sd-pub-checkrow' },
+            h('span', { className: 'sd-pub-checkmark', style: { color: stateColor(check.state) } },
+              check.state === 'ok' ? '✓' : check.state === 'warn' ? '!' : '×'),
+            h('span', { className: 'sd-pub-checkname' }, check.label),
+            h('span', {
+              className: 'sd-pub-checkval', 'data-state': check.state,
+              title: [check.detail, check.fix].filter(Boolean).join(' · '),
+            }, check.detail)))
+          : h('div', { className: 'sd-hint' }, '还没有检查项'),
+        otherBlocking > 0
+          ? h('div', { className: 'sd-pub-error' }, '另一个平台还有 ' + otherBlocking + ' 项要改，导出会被挡住。')
+          : null,
+        h('div', { className: 'sd-hint' }, '改了文案要点「保存」或直接导出，检查才会更新。'))
+
+      const exportCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-card-title' }, '发布包'),
+          h('span', { className: 'sd-pub-counter' }, '写到项目 exports/')),
+        h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('label', null, '复制到指定目录（可留空）'),
+          h('input', {
+            className: 'sd-input', value: dir, spellCheck: false,
+            placeholder: '留空就只生成在项目里',
+            onChange: event => setDir(event.target.value),
+          })),
+        h('button', {
+          className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+          disabled: exporting || saving || taskRunning || !view.canExport || view.blocking > 0,
+          onClick: doExport,
+        }, exporting ? '导出中…' : '导出发布包（' + targets.length + ' 个平台）'),
+        view.blocking ? h('div', { className: 'sd-pub-error' }, '先改掉 ' + view.blocking + ' 项超限才能导出。') : null,
+        exportResult ? h('div', null,
+          h('div', { className: 'sd-pub-ok' },
+            '已生成 ' + exportResult.relDir
+            + (exportResult.copied && !exportResult.copied.error ? '，并复制到 ' + exportResult.copied : '')),
+          exportResult.copied && exportResult.copied.error
+            ? h('div', { className: 'sd-pub-error' }, '复制到目录失败：' + exportResult.copied.error)
+            : null,
+          h('div', { className: 'sd-pub-tree' },
+            exportResult.files.map(file => h('div', { key: file.path, className: 'sd-pub-treerow' },
+              h('span', { className: 'sd-pub-treepath', title: file.path + ' · ' + formatFileSize(file.bytes) }, file.name),
+              h('a', {
+                className: 'sd-pub-treelink',
+                href: mediaUrl(item.id, file.path),
+                download: String(file.name || '').split('/').pop() || 'download',
+                target: '_blank', rel: 'noreferrer',
+              }, '下载')))))
+          : view.exports?.length
+            ? h('div', { className: 'sd-hint' }, '上次导出：' + view.exports[view.exports.length - 1].dir)
+            : null,
+        h('div', { className: 'sd-pub-records' },
+          targets.map(platformId => {
+            const record = (view.records ?? []).find(row => row.platform === platformId)
+            const published = record?.status === 'published'
+            return h('div', { key: platformId, className: 'sd-pub-record' },
+              h('span', null, platformLabel(platformId)),
+              h('span', { className: 'sd-pub-chip', 'data-tone': published ? 'ok' : undefined },
+                published ? '已发布' : '待发布'),
+              h('button', {
+                className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+                onClick: () => (published ? unmarkPublished(platformId) : markPublished(platformId)),
+              }, published ? '取消标记' : '标记已发布'))
+          })))
+
+      const revisionStatusLabel = status => ({
+        proposed: '待采用', accepted: '已采用', rejected: '已放弃', reverted: '已回滚',
+      }[status] ?? status)
+      const quickForScope = () => {
+        const rows = []
+        for (const scopeId of feedbackScopes) {
+          for (const chip of quickChips[scopeId] ?? []) {
+            if (!rows.includes(chip)) rows.push(chip)
+          }
+        }
+        return rows
+      }
+
+      const feedbackModal = feedbackOpen ? h('div', { className: 'sd-mask' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '按意见修改', style: { maxWidth: 580 } },
+          h('h3', null, '按意见修改'),
+          h('div', { className: 'sd-hint' }, '只改勾选的字段；生成提案后先预览，采用后才写回。'),
+          note && note.tone === 'error' ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, note.text) : null,
+          h('div', { className: 'sd-rev-scopes' },
+            ['title', 'body', 'coverText'].map(scopeId => h('button', {
+              key: scopeId, type: 'button', className: 'sd-rev-scope',
+              'data-on': feedbackScopes.includes(scopeId) ? '1' : '0',
+              onClick: () => toggleScope(scopeId),
+            }, scopeLabel(scopeId)))),
+          quickForScope().length
+            ? h('div', { className: 'sd-field', style: { marginTop: 8 } },
+              h('label', null, '快捷意见'),
+              h('div', { className: 'sd-rev-quick' },
+                quickForScope().map(chip => h('button', {
+                  key: chip, type: 'button',
+                  onClick: () => setFeedbackText(chip),
+                }, chip))))
+            : null,
+          h('div', { className: 'sd-field' },
+            h('label', null, '直接说想怎么改'),
+            h('textarea', {
+              className: 'sd-text', value: feedbackText, rows: 4,
+              placeholder: '例：标题不要用问句，改成陈述式，控制在 16 字内，突出「一杯酒」。',
+              onChange: event => setFeedbackText(event.target.value),
+            })),
+          h('div', { className: 'sd-card-foot' },
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: () => setFeedbackOpen(false) }, '取消'),
+            h('span', { style: { flex: 1 } }),
+            h('button', {
+              className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+              disabled: revisionBusy || feedbackText.trim().length < 2 || !feedbackScopes.length,
+              onClick: submitFeedback,
+            }, revisionBusy ? '提交中…' : '生成修改提案')))) : null
+
+      const proposalModal = proposed && !feedbackOpen && !revisionPending && !revising ? h('div', { className: 'sd-mask' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '修改提案', style: { maxWidth: 620 } },
+          h('h3', null, '修改提案'),
+          h('div', { className: 'sd-hint' }, '意见：' + (proposed.feedback || '（无）')),
+          note && note.tone === 'error' ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, note.text) : null,
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 } },
+            proposed.scope.includes('title') ? h('div', { className: 'sd-rev-proposal' },
+              h('div', { className: 'sd-rev-proposal-head' }, '标题', h('span', null, '提案 · 未采用')),
+              h('div', { className: 'sd-rev-old' }, proposed.before?.title || '（空）'),
+              h('div', { className: 'sd-rev-new' }, proposed.after?.title || '（空）')) : null,
+            proposed.scope.includes('body') ? h('div', { className: 'sd-rev-proposal' },
+              h('div', { className: 'sd-rev-proposal-head' }, '正文', h('span', null, '提案 · 未采用')),
+              h('div', { className: 'sd-rev-old' }, proposed.before?.body || '（空）'),
+              h('div', { className: 'sd-rev-new' }, proposed.after?.body || '（空）')) : null,
+            proposed.scope.includes('coverText') ? h('div', { className: 'sd-rev-proposal' },
+              h('div', { className: 'sd-rev-proposal-head' }, '封面大字', h('span', null, '提案 · 未采用')),
+              h('div', { className: 'sd-rev-old' }, proposed.before?.coverText || '（还没有封面大字）'),
+              (proposed.after?.coverTexts ?? []).map((text, index) => h('label', {
+                key: String(index), className: 'sd-rev-choice',
+                'data-on': coverChoice === index ? '1' : '0',
+              },
+                h('input', {
+                  type: 'radio', name: 'sd-cover-choice', checked: coverChoice === index,
+                  onChange: () => setCoverChoice(index),
+                }),
+                h('span', null, text)))) : null),
+          proposed.note ? h('div', { className: 'sd-hint', style: { marginTop: 8 } }, '模型说明：' + proposed.note) : null,
+          h('div', { className: 'sd-rev-actions' },
+            h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', disabled: revisionBusy, onClick: applyRevision }, revisionBusy ? '处理中…' : '采用'),
+            h('button', { className: 'sd-btn', type: 'button', disabled: revisionBusy, onClick: reviseAgain }, '再改一版'),
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: revisionBusy, onClick: discardRevision }, '保留原样')))) : null
+
+      const historyModal = historyOpen ? h('div', { className: 'sd-mask' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '修改历史', style: { maxWidth: 620 } },
+          h('h3', null, '修改历史'),
+          h('div', { className: 'sd-hint' }, '采用过的提案可以回滚；生成中的提案会显示在上一个弹窗。'),
+          revisions.length
+            ? h('div', { className: 'sd-rev-history' }, revisions.slice().reverse().map(row => h('div', { key: row.id, className: 'sd-rev-history-row' },
+              h('span', null, (row.scope ?? []).map(scopeLabel).join(' / ') + ' · ' + revisionStatusLabel(row.status)),
+              h('b', { title: row.feedback }, row.feedback || '（无意见）'),
+              row.status === 'accepted'
+                ? h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: revisionBusy, onClick: () => revertRevision(row.id) }, '回滚')
+                : null)))
+            : h('div', { className: 'sd-hint', style: { marginTop: 8 } }, '还没有修改记录。'),
+          h('div', { className: 'sd-card-foot', style: { marginTop: 12 } },
+            h('span', { style: { flex: 1 } }),
+            h('button', { className: 'sd-btn', type: 'button', onClick: () => setHistoryOpen(false) }, '关闭')))) : null
+
+      return h(React.Fragment, null,
+        head,
+        platformTabs,
+        note ? h('div', {
+          className: note.tone === 'error' ? 'sd-pub-error' : note.tone === 'warn' ? 'sd-pub-note' : 'sd-pub-ok',
+          style: { marginTop: 8, ...(note.tone === 'warn' ? { color: 'var(--dsw-alias-state-warn-primary)' } : null) },
+        }, note.text) : null,
+        (generating || revising) && task ? h('div', { className: 'sd-pub-note', style: { marginTop: 6 } },
+          (task.message || '正在处理…') + (task.total > 1 ? '（' + task.done + '/' + task.total + '）' : '')) : null,
+        generating ? h('div', { className: 'sd-pub-note', style: { marginTop: 4, color: 'var(--dsw-alias-state-warn-primary)' } },
+          '生成中：完成后会覆盖「' + platformLabel(activePlatform) + '」当前文案，先别改输入框。') : null,
+        revising ? h('div', { className: 'sd-pub-note', style: { marginTop: 4, color: 'var(--dsw-alias-state-warn-primary)' } },
+          '修订提案生成中：结果先预览，采用后才会写回文案。') : null,
+        taskRunning && !generating && !revising
+          ? h('div', { className: 'sd-pub-note', style: { marginTop: 4, color: 'var(--dsw-alias-state-warn-primary)' } },
+            '项目正在跑任务，发布页文案暂时只能看不能改，等任务结束再编辑。')
+          : null,
+        !task?.running && task?.error && (task.kind === 'publish-copy' || task.kind === 'publish-revise')
+          ? h('div', { className: 'sd-pub-error', style: { marginTop: 6 } }, '处理失败：' + task.error)
+          : null,
+        copyNote ? h('div', { className: 'sd-pub-ok', style: { marginTop: 6 } }, copyNote) : null,
+        h('div', {
+          className: 'sd-pub-grid', role: 'tabpanel', id: 'sd-pub-panel',
+          'aria-label': platformLabel(activePlatform) + ' 发布页',
+        },
+          h('div', { className: 'sd-pub-col' },
+            activePlatform === 'xiaohongshu' ? xhsCard : xCard,
+            guideCard),
+          h('div', { className: 'sd-pub-col' },
+            activePlatform === 'xiaohongshu' ? coverCard : null,
+            checksCard,
+            exportCard)),
+        proposalModal,
+        feedbackModal,
+        historyModal,
+        h('div', { className: 'sd-pub-foot' },
+          h('span', null, '发布包写到项目 exports/ 目录，可随时删除'),
+          h('span', null, '数据只在本机 · 不上传云端')))
+    }
+
     // ------------------------------------------------------------------ 分段卡片
 
     /** mode：script 改字、voice 听音、image 看图。只显示这一页用得上的控件。 */
@@ -1805,7 +3035,10 @@ window.__ModuleLoader__.load({
       const [text, setText] = useState(seg.text)
       const [prompt, setPrompt] = useState(seg.imagePrompt)
       const [note, setNote] = useState('')
+      const [saveError, setSaveError] = useState(null)
       const dirty = mode === 'script' && (text !== seg.text || prompt !== seg.imagePrompt)
+      // 图页没有保存按钮：输入框里的提示词和上次保存的不同，就还算未保存
+      const imageDirty = mode === 'image' && prompt !== seg.imagePrompt
 
       useEffect(() => { setText(seg.text) }, [seg.text])
       useEffect(() => { setPrompt(seg.imagePrompt) }, [seg.imagePrompt])
@@ -1815,9 +3048,11 @@ window.__ModuleLoader__.load({
         try {
           // 只提交本段，避免两段连着保存时用旧快照盖掉前一段的改动
           await post('segments', { id: item.id, segment: { id: seg.id, text, imagePrompt: prompt } })
+          setSaveError(null)
           await onReload()
-        } catch {
-          // 保存失败时保留输入，不闪回旧稿
+        } catch (err) {
+          // 保存失败时保留输入，不闪回旧稿；但错误得让用户看见
+          setSaveError('保存失败：' + err.message + '，请重试')
         }
       }, [dirty, item, seg.id, text, prompt, onReload])
 
@@ -1842,7 +3077,7 @@ window.__ModuleLoader__.load({
             voiced ? h('span', { className: 'sd-tag', 'data-tone': 'ok' }, formatSecs(seg.audioSecs)) : h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未配音'),
             // 「未出图」同样是分镜图页的事，别的页不挂这个状态
             mode === 'image' && !seg.imagePath ? h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '未出图') : null,
-            dirty ? h('span', { className: 'sd-tag' }, '未保存') : null,
+            dirty || imageDirty ? h('span', { className: 'sd-tag' }, '未保存') : null,
             seg.error ? h('span', { className: 'sd-tag', 'data-tone': 'warn', title: seg.error }, '出错了') : null),
 
           mode === 'script'
@@ -1869,8 +3104,14 @@ window.__ModuleLoader__.load({
               onChange: event => setPrompt(event.target.value),
               onBlur: async () => {
                 if (prompt === seg.imagePrompt) return
-                await post('segments', { id: item.id, segment: { id: seg.id, imagePrompt: prompt } })
-                await onReload()
+                try {
+                  await post('segments', { id: item.id, segment: { id: seg.id, imagePrompt: prompt } })
+                  setSaveError(null)
+                  await onReload()
+                } catch (err) {
+                  // 失败也保留「未保存」提示，别让用户以为已经存上了
+                  setSaveError('保存失败：' + err.message + '，请重试')
+                }
               },
             })
             : null,
@@ -1910,6 +3151,10 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-warn-primary)', wordBreak: 'break-word' } }, seg.error)
             : null,
 
+          saveError
+            ? h('div', { className: 'sd-hint', style: { marginTop: 6, color: 'var(--dsw-alias-state-error-primary)', wordBreak: 'break-word' } }, saveError)
+            : null,
+
           mode === 'image' && seg.imageSize
             ? h('div', { className: 'sd-hint', style: { marginTop: 4, opacity: .7 } }, `实际尺寸 ${seg.imageSize}`)
             : null,
@@ -1930,27 +3175,31 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ 新建
 
-    function NewDialog({ onClose, onCreate }) {
+    function NewDialog({ error, onClose, onCreate }) {
       const [topic, setTopic] = useState('')
       const [minutes, setMinutes] = useState(5)
       const [rawText, setRawText] = useState('')
       const [showRaw, setShowRaw] = useState(false)
       const [busy, setBusy] = useState(false)
-      const [error, setError] = useState(null)
+      const [formError, setFormError] = useState(null)
+      const boxRef = useRef(null)
+      useDialog(onClose, boxRef)
 
       const submit = async () => {
-        if (!topic.trim()) { setError('先写一个主题或书名'); return }
+        if (!topic.trim()) { setFormError('先写一个主题或书名'); return }
         setBusy(true)
-        setError(null)
+        setFormError(null)
         try {
           await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText })
+        } catch (err) {
+          setFormError(err.message)
         } finally {
           setBusy(false)
         }
       }
 
       return h('div', { className: 'sd-mask', ...maskHandlers(onClose) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建项目' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '新建项目', 'aria-modal': 'true', ref: boxRef },
           h('h3', null, '新建项目'),
           h('div', { className: 'sd-hint' }, '给一个主题就行。有现成材料就展开贴上，稿子会照着材料写。'),
           h('div', { className: 'sd-field' },
@@ -1975,7 +3224,7 @@ window.__ModuleLoader__.load({
               placeholder: '贴一段原文、笔记或资料。它会照着这份材料写，不照抄原句。',
               onChange: event => setRawText(event.target.value),
             }) : null),
-          error ? h('div', { className: 'sd-error' }, error) : null,
+          (error || formError) ? h('div', { className: 'sd-error' }, error || formError) : null,
           h('div', { className: 'sd-dialog-foot' },
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onClose, disabled: busy }, '取消'),
             h('button', { className: 'sd-btn', 'data-kind': 'primary', onClick: submit, disabled: busy },
@@ -2016,15 +3265,56 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * 弹窗通用交互：打开时把焦点放进第一个可操作控件，Esc 关闭，Tab 焦点圈在弹窗里。
+     * onClose 用 ref 存：父组件每轮轮询都会重渲染，不能因此把焦点重置一遍。
+     */
+    function useDialog(onClose, boxRef) {
+      const closeRef = useRef(onClose)
+      closeRef.current = onClose
+      useEffect(() => {
+        const node = boxRef.current
+        if (!node) return undefined
+        const selector = 'button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href]'
+        const first = node.querySelector(selector)
+        if (first) first.focus()
+        const onKey = event => {
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            closeRef.current?.()
+            return
+          }
+          if (event.key !== 'Tab') return
+          const rows = [...node.querySelectorAll(selector)].filter(row => row.offsetParent !== null)
+          if (!rows.length) return
+          const head = rows[0]
+          const tail = rows[rows.length - 1]
+          const active = document.activeElement
+          if (event.shiftKey && (active === head || !node.contains(active))) {
+            event.preventDefault()
+            tail.focus()
+          } else if (!event.shiftKey && (active === tail || !node.contains(active))) {
+            event.preventDefault()
+            head.focus()
+          }
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [boxRef])
+    }
+
     /** 删除前的确认。文案说清「进回收站还能找回」，免得用户以为是彻底删除。 */
-    function ConfirmDelete({ item, days, onCancel, onConfirm, busy }) {
+    function ConfirmDelete({ item, days, error, onCancel, onConfirm, busy }) {
+      const boxRef = useRef(null)
+      useDialog(onCancel, boxRef)
       return h('div', { className: 'sd-mask', ...maskHandlers(onCancel) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '删除项目', style: { width: 'min(420px,92vw)' } },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '删除项目', 'aria-modal': 'true', ref: boxRef, style: { width: 'min(420px,92vw)' } },
           h('h3', null, '删除这个项目？'),
           h('div', { className: 'sd-hint', style: { marginTop: 6, lineHeight: 1.8 } },
             '「', item.title || '未命名', '」会移进回收站，',
             h('b', null, `${days} 天内可以还原`),
             '，到期自动彻底删除。'),
+          error ? h('div', { className: 'sd-error' }, error) : null,
           h('div', { className: 'sd-dialog-foot' },
             h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: onCancel, disabled: busy }, '取消'),
             h('button', {
@@ -2039,6 +3329,8 @@ window.__ModuleLoader__.load({
       const [data, setData] = useState(null)
       const [busy, setBusy] = useState(null)
       const [error, setError] = useState(null)
+      const boxRef = useRef(null)
+      useDialog(onClose, boxRef)
 
       const load = useCallback(async () => {
         try {
@@ -2075,7 +3367,7 @@ window.__ModuleLoader__.load({
       const items = data?.items ?? []
 
       return h('div', { className: 'sd-mask', ...maskHandlers(onClose) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '回收站', style: { width: 'min(520px,94vw)' } },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '回收站', 'aria-modal': 'true', ref: boxRef, style: { width: 'min(520px,94vw)' } },
           h('h3', null, '回收站'),
           h('div', { className: 'sd-hint', style: { marginTop: 4 } },
             `保留 ${data?.days ?? 7} 天，到期自动彻底删除。天数可在设置里改。`),
@@ -2093,14 +3385,21 @@ window.__ModuleLoader__.load({
                 h('button', {
                   className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
                   style: { color: 'var(--dsw-alias-state-error-primary, #c0392b)' },
-                  onClick: () => act('trash-purge', { id: row.id }),
+                  onClick: () => {
+                    // 彻底删除不可恢复，必须先确认
+                    if (!window.confirm(`彻底删除「${row.title || '未命名'}」？文件会从磁盘删掉，不可恢复。`)) return
+                    act('trash-purge', { id: row.id })
+                  },
                 }, '彻底删除')))
               : h('div', { className: 'sd-hint', style: { padding: '14px 0' } }, '回收站是空的。')),
           h('div', { className: 'sd-dialog-foot' },
             items.length
               ? h('button', {
                 className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy !== null,
-                onClick: () => act('trash-purge', { all: true }),
+                onClick: () => {
+                  if (!window.confirm(`清空回收站？里面的 ${items.length} 个项目会被连文件一起删掉，不可恢复。`)) return
+                  act('trash-purge', { all: true })
+                },
               }, '清空回收站')
               : null,
             h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: onClose }, '关闭'))))
@@ -2129,6 +3428,8 @@ window.__ModuleLoader__.load({
       const requestClose = useCallback(() => {
         if (!dirty || window.confirm('设置有改动还没保存，确定关闭？')) onClose()
       }, [dirty, onClose])
+      const boxRef = useRef(null)
+      useDialog(requestClose, boxRef)
 
       const imageModels = test.image?.models ?? []
       // 候选 = 服务端返回 + 当前值（图像模型常常不在 /models 里，当前值必须保住）
@@ -2172,7 +3473,9 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setError(null)
         try {
-          await post('settings', { settings: form })
+          // 每段时长统一按 12–90 秒这一档走，和选题页、服务端口径一致
+          const segmentSeconds = Math.max(12, Math.min(90, Number(form.segmentSeconds) || 40))
+          await post('settings', { settings: { ...form, segmentSeconds } })
           if (ttsKey.trim()) await post('secrets', { ttsKey: ttsKey.trim() })
           if (imageKey.trim()) await post('secrets', { imageKey: imageKey.trim() })
           await onSaved()
@@ -2190,7 +3493,7 @@ window.__ModuleLoader__.load({
       ]
 
       return h('div', { className: 'sd-mask', ...maskHandlers(requestClose) },
-        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '声画工作台设置' },
+        h('div', { className: 'sd-dialog', role: 'dialog', 'aria-label': '声画工作台设置', 'aria-modal': 'true', ref: boxRef },
           h('h3', null, '设置'),
           h('div', { className: 'sd-hint' },
             data.model ? `文案模型跟随当前默认模型：${data.model.provider} · ${data.model.model}` : '当前没有默认模型，写稿会失败，先去接一个模型'),
@@ -2351,7 +3654,7 @@ window.__ModuleLoader__.load({
                 h('label', null, '每段时长（秒）'),
                 h('input', {
                   className: 'sd-input', type: 'number', min: 12, max: 90, value: form.segmentSeconds,
-                  onChange: event => set('segmentSeconds', Number(event.target.value) || 40),
+                  onChange: event => set('segmentSeconds', Math.max(12, Math.min(90, Number(event.target.value) || 40))),
                 }))),
             h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8 } },
               h('button', {

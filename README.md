@@ -1,5 +1,7 @@
 # 声画工作台 · DSH Sound & Picture Desk
 
+<p align="center"><img src="icon.svg" width="88" alt="声画工作台"></p>
+
 **中文** | [English](README.en.md)
 
 把一个主题、一段历史、一本书，做成一条竖屏旁白成片：写稿 → 定人物 → 配音 → 出图 → 合成，全部在一个面板里完成。
@@ -19,7 +21,7 @@
 - 声音不确定？九个音色点着听，选定再往下。
 - 图不满意？逐张重出，不用整批重来。
 
-**产出**：竖屏 mp4（1080×1920，可烧字幕）+ 同名 `.srt`。
+**产出**：竖屏 mp4（1080×1920，可烧字幕）+ 同名 `.srt`；成片后可生成小红书 / X 的发布包（文案、封面、清单）。
 
 ---
 
@@ -44,8 +46,9 @@ MiniMax 有两条通道，插件按模型名自动分流：`image-01` / `image-0
 ### 1. 拿到代码
 
 ```bash
-git clone git@github.com:huihui308/dsh-sound-picture-desk.git
-cd dsh-sound-picture-desk
+mkdir -p ~/src
+git clone https://github.com/huihui308/dsh-sound-picture-desk.git ~/src/dsh-sound-picture-desk
+cd ~/src/dsh-sound-picture-desk
 ```
 
 ### 2. 装进 profile
@@ -54,7 +57,7 @@ DSH 从 profile 的 `node_modules` 里加载插件。用 `dsh plugin` 安装本�
 
 ```bash
 # <profile> 是本机实际的 profile 名，默认 web
-dsh plugin --profile web add /绝对路径/dsh-sound-picture-desk
+dsh plugin --profile web add ~/src/dsh-sound-picture-desk
 ```
 
 也可以手动软链接：
@@ -94,13 +97,13 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-sound-picture-desk
 
 ## 快速开始
 
-面板分成六个页签，从上到下走一遍即可。每一步都会在页签上显示进度（`✓` 完成 / `●` 当前）。
+面板分成六个创作页签，从上到下走一遍即可；成片之后多一个独立的「发布」入口。每一步都会在页签上显示进度（`✓` 完成 / `●` 当前）。
 
 ### ① 选题
 
 填**主题**（例：玄武门之变 / 安史之乱 / 一场暴雨是怎么形成的），设**目标时长**和**每段多长**，然后点「生成稿件」。
 
-- 有现成的资料就贴进「原始材料」，稿子会照着材料写，不照抄原句。
+- 有现成的资料就贴进「原始材料」，稿子会照着材料写，不照抄原句。一次最多 24000 字进 prompt，超出的部分不参与写稿（全书不必手删，先给最重要的前 24000 字）。
 - 有中意的同类视频就粘进「参考视频」，写稿时会学它的选题角度和节奏。
 - 写稿用的模型可以在这里换（默认跟随 DSH 当前模型）。
 
@@ -143,7 +146,7 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-sound-picture-desk
 | 项 | 可选 | 说明 |
 |---|---|---|
 | 运镜 | 缓慢推近 / 缓慢拉远 / 固定不动 | 靠 zoompan 实现，先放大 2 倍再推，画面不抖 |
-| 调色 | 原色 / 暖调 / 冷调 / 胶片 | ffmpeg colorbalance + eq；胶片档带暗角 |
+| 调色 | 原色 / 暖调 / 冷调 / 胶片 | ffmpeg eq（分通道 gamma 调色温）；胶片档带暗角 |
 | 转场 | 硬切 / 淡入淡出 / 经过黑场 / 溶解 / 向左擦除 / 圆形展开 | 用 xfade + acrossfade；开了就要逐段重编码 |
 | 片头 | 不加 / 标题卡 | 用 HyperFrames 把 HTML 渲染成 3 秒标题卡，金色标题 + 分隔线 + 副标题 |
 | 并行渲染 | 自动 / 1 / 2 / 4 / 8 路 | 多个镜头同时渲染。自动档按逻辑核数推算（每 4 核算 1 路，夹在 1–8 之间）；段数多时收益明显 |
@@ -158,6 +161,19 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-sound-picture-desk
 
 成片出来后可以在页面上预览，也可以「导出」到指定目录（留空则导到 `~/Downloads`），文件名用项目标题。
 
+### ⑦ 发布（小红书 / X）
+
+成片之后点顶部「发布」。这一版只做**发布包 + 引导**，不登录任何平台、不代点发布：
+
+- 顶部点「小红书 / X」切换平台页；每页的「一键生成」只生成当前平台的标题 / 正文 / 话题（X 是合并的一条，280 加权字符、中文按 2 计），生成后可改、可复制。两平台都进发布包。
+- 自动出小红书 3:4 封面（1080×1440），大字压在画面底部；X 不需要独立封面，取视频首帧。封面是可选文件：没生成时导出只提示，不阻断。
+- **发布前检查**逐项过规则：标题 / 正文 / 话题字数、X 加权长度、视频时长与大小、封面。文案超限会挡住导出；视频超平台上限只提醒，不挡（Premium 账号可以忽略）。
+- 点「导出发布包」，会在项目目录 `exports/<时间戳>/` 下生成 `xiaohongshu/`、`x/` 两个子目录（视频、`copy.md`，封面有则带），外加 `README.md`、`checklist.md`、`manifest.json`。桌面版可填「复制到指定目录」；远程访问时直接点每条后面的「下载」。导出是快照：之后重新合成成片不会改写旧包。
+- 对标题 / 正文 / 封面不满意：点卡片右上角「提意见」，可选快捷标签或直接写。网络/模型通道抖动时自动重试两次；仍超时会提示换模型或稍后再试。插件只改勾选的字段，先生成「修改提案」，对比旧/新后选 采用 / 再改一版 / 保留原样；采用后才写回，历史里可回滚。封面另拆「文字 / 底图 / 排版」三栏。
+- 复制文案、打开投稿页、上传视频都由你完成；发完回来点「标记已发布」，作品链接可填可不填。
+
+平台规则集中在 `src/publish/rules.js`，改上限不用翻业务代码。发布包不包含任何账号登录信息。
+
 ---
 
 ## 数据存在哪
@@ -169,7 +185,10 @@ $DSH_HOME/sound-picture-desk/
 └── projects/<id>/
     ├── audio/              每段旁白 mp3
     ├── anchors/            参考图候选与定稿
+    ├── covers/             成片首帧封面 + 小红书 3:4 封面
+    ├── exports/            发布包（按时间戳分目录）
     ├── images/             每段分镜图
+    ├── publish.json        发布文案 / 封面 / 导出与标记记录
     ├── renders/            成片 mp4 / srt / ass
     ├── samples/            音色试听样本
     └── work/               合成中间文件
@@ -211,7 +230,7 @@ src/llm.js         调模型、流式进度、空输出兜底
 docs/DETAIL.md     实现细节
 ```
 
-改完代码要重新加载插件：「Plugins」页面把 **dsh-sound-picture-desk** 关掉再打开，然后刷新页面。
+改完代码要重新加载：只改 `client.js` 时刷新页面即可；改到 Host（`src/*`、`index.js`）必须重启 dsh web（`systemctl --user restart dsh-web.service`），只关开插件不会重新加载 Host 模块。
 
 没有构建步骤——源码即部署。命令行里 `dsh plugin --profile web <pnpm 参数>` 只用来装包，没有单独的启停子命令。
 
@@ -219,4 +238,4 @@ docs/DETAIL.md     实现细节
 
 ## 许可
 
-私有仓库，未经作者许可请勿分发。
+MIT License，见 [LICENSE](LICENSE)。

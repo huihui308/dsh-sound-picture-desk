@@ -12,6 +12,27 @@ export function buildPrompt(content, styleId) {
   return `${body}. ${style.suffix}`
 }
 
+/** MiniMax 原生接口的 prompt 上限（官方 1500 字符，超了整个请求直接 400）。 */
+const MINIMAX_PROMPT_MAX = 1500
+
+/**
+ * MiniMax 原生通道的 prompt 截断。以前从尾部盲截 1500 字，正文一长就先丢风格后缀
+ * （后缀里带着竖屏 9:16、no text、no watermark），画面就丢了风格约束。
+ * 这里保头保尾：前面留内容描述，后面完整保留风格后缀，只截内容的中后段。
+ */
+export function truncatePrompt(prompt, suffix, max = MINIMAX_PROMPT_MAX) {
+  const text = String(prompt ?? '')
+  if (text.length <= max) return text
+  const tail = String(suffix ?? '').trim()
+  if (!tail) return text.slice(0, max)
+  const suffixPart = `. ${tail}`
+  const budget = max - suffixPart.length
+  // 极端配置下（后缀本身接近上限）退化成只保后缀，至少风格不丢
+  if (budget <= 0) return suffixPart.slice(-max)
+  const head = text.slice(0, budget).replace(/[.。；;，,\s]+$/, '')
+  return `${head}${suffixPart}`
+}
+
 /**
  * 带超时的请求。外层传进来的 signal（用户点「停止」）也要能立刻中断，
  * 否则出图要等满 300 秒，界面上的停止按钮等于没用。
@@ -121,7 +142,7 @@ export function isMinimaxNativeModel(model) {
  * 只有这条能吃 image-01，也正是它便宜的原因：固定 ¥0.025/张，与分辨率无关。
  * 请求体认 width/height（512–2048，8 的倍数），响应在 data.image_base64[] 里。
  */
-async function generateMinimaxNative({ endpoint, key, model, prompt, width, height, signal }) {
+async function generateMinimaxNative({ endpoint, key, model, prompt, suffix, width, height, signal }) {
   if (!key) throw new Error('还没有配置平台生图密钥')
   const { response, raw } = await withTimeout(
     async signal => {
@@ -130,8 +151,8 @@ async function generateMinimaxNative({ endpoint, key, model, prompt, width, heig
         headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
-          // 官方上限 1500 字符，超了整个请求直接 400
-          prompt: String(prompt ?? '').slice(0, 1500),
+          // 官方上限 1500 字符，超了整个请求直接 400；截断时要保住完整风格后缀
+          prompt: truncatePrompt(prompt, suffix),
           // 官方范围 512–2048、8 的倍数；越界会直接 400
           width: Math.round(clampImageSize(width, 1024) / 8) * 8,
           height: Math.round(clampImageSize(height, 1792) / 8) * 8,
@@ -171,9 +192,10 @@ export async function generateImage(settings, secrets, { content, width, height,
   const endpoint = settings.imageEndpoint
   const model = settings.imageModel
   const key = secrets?.imageKey
+  const style = VISUAL_STYLES[settings.visualStyle] ?? VISUAL_STYLES.cinematic
   const prompt = buildPrompt(content, settings.visualStyle)
   return isMinimaxNativeModel(model)
-    ? generateMinimaxNative({ endpoint, key, model, prompt, width, height, signal })
+    ? generateMinimaxNative({ endpoint, key, model, prompt, suffix: style.suffix, width, height, signal })
     : generatePlatform({ endpoint, key, model, prompt, width, height, signal })
 }
 

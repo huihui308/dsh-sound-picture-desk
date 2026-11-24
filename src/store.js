@@ -2,8 +2,9 @@
 // 所以「读—改—写」全程持锁（state.json.lock），避免两个 Host 进程互相覆盖。
 import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { normalizePublish } from './publish/rules.js'
 
 export function dshHome(env = process.env) {
   return env.DSH_HOME || join(homedir(), '.dsh')
@@ -99,6 +100,45 @@ export function migrateState(raw) {
   return state
 }
 
+const LOCK_STALE_MS = 10_000
+const LOCK_TIMEOUT_MS = 15_000
+
+/**
+ * 跨进程写锁。O_EXCL 建锁；陈旧锁用 rename 抢走再删，避免两个进程同时 rm + open 都拿到锁。
+ * 超时留得比 stale 阈值长，进程崩了最多等一轮接管，不会第一个请求就 503。
+ */
+async function acquireFileLock(lockFile, label) {
+  await mkdir(dirname(lockFile), { recursive: true })
+  const started = Date.now()
+  for (;;) {
+    try {
+      const handle = await open(lockFile, 'wx')
+      await handle.writeFile(process.pid + ' ' + new Date().toISOString())
+      await handle.close()
+      return
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err
+      const info = await stat(lockFile).catch(() => null)
+      if (info && Date.now() - info.mtimeMs > LOCK_STALE_MS) {
+        const stale = lockFile + '.stale-' + process.pid + '-' + Math.random().toString(36).slice(2)
+        try {
+          await rename(lockFile, stale)
+          await rm(stale, { force: true })
+        } catch {}
+        continue
+      }
+      if (Date.now() - started > LOCK_TIMEOUT_MS) {
+        throw Object.assign(new Error(label + ' 正被另一个进程写入，请稍后重试'), { status: 503 })
+      }
+      await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
+    }
+  }
+}
+
+async function releaseFileLock(lockFile) {
+  await rm(lockFile, { force: true }).catch(() => {})
+}
+
 export class Store {
   constructor(root = join(dshHome(), 'sound-picture-desk')) {
     this.root = root
@@ -110,6 +150,8 @@ export class Store {
     /** 读到的文件版本（mtime+size），写回前用来判断有没有被别人改过。 */
     this.stamp = null
     this.queue = Promise.resolve()
+    /** publish.json 的写入队列，和 state.json 分开排队。 */
+    this.publishQueue = Promise.resolve()
   }
 
   async refresh(force = false) {
@@ -145,37 +187,13 @@ export class Store {
     return this.refresh()
   }
 
-  /**
-   * 跨进程写锁：两个 Host（桌面端 + Web）可能同时改同一份 state.json。
-   * 用 O_EXCL 建锁文件，拿到锁才「读—改—写」；进程崩了留下的锁超过 10 秒视为陈旧。
-   */
-  async acquireLock(timeoutMs = 8000) {
-    await mkdir(this.root, { recursive: true })
-    const lockFile = `${this.file}.lock`
-    const started = Date.now()
-    for (;;) {
-      try {
-        const handle = await open(lockFile, 'wx')
-        await handle.writeFile(String(process.pid))
-        await handle.close()
-        return
-      } catch (err) {
-        if (err.code !== 'EEXIST') throw err
-        const info = await stat(lockFile).catch(() => null)
-        if (info && Date.now() - info.mtimeMs > 10_000) {
-          await rm(lockFile, { force: true }).catch(() => {})
-          continue
-        }
-        if (Date.now() - started > timeoutMs) {
-          throw Object.assign(new Error('state.json 正被另一个进程写入，请稍后重试'), { status: 503 })
-        }
-        await new Promise(resolve => setTimeout(resolve, 15 + Math.random() * 25))
-      }
-    }
+  /** 状态文件写锁；与 publish.json 共用同一个原子接管实现。 */
+  async acquireLock() {
+    await acquireFileLock(`${this.file}.lock`, 'state.json')
   }
 
   async releaseLock() {
-    await rm(`${this.file}.lock`, { force: true }).catch(() => {})
+    await releaseFileLock(`${this.file}.lock`)
   }
 
   /** 写回 state.json。调用方必须已经持有写锁（mutate 会保证）。 */
@@ -215,6 +233,56 @@ export class Store {
     return next
   }
 
+  // ---------------------------------------------------------------- 发布数据
+  publishFile(itemId) {
+    return join(this.itemDir(itemId), 'publish.json')
+  }
+
+  /** 读发布数据；没有文件就返回完整空结构，老项目不用迁移。 */
+  async readPublish(itemId) {
+    let raw
+    try {
+      raw = await readFile(this.publishFile(itemId), 'utf8')
+    } catch (err) {
+      if (err.code === 'ENOENT') return normalizePublish(null)
+      throw err
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      throw Object.assign(new Error('publish.json 不是有效的 JSON，已停止写入以免覆盖'), { status: 500 })
+    }
+    return normalizePublish(parsed)
+  }
+
+  /** 读-改-写 publish.json；锁和 state.json 同纪律，防止桌面端/Web 端双 Host 覆盖。 */
+  async mutatePublish(itemId, mutator) {
+    const run = async () => {
+      await mkdir(this.itemDir(itemId), { recursive: true })
+      const file = this.publishFile(itemId)
+      const lockFile = file + '.lock'
+      await acquireFileLock(lockFile, 'publish.json')
+      try {
+        const current = await this.readPublish(itemId)
+        const draft = structuredClone(current)
+        const result = await mutator(draft)
+        draft.schemaVersion = 1
+        draft.updatedAt = new Date().toISOString()
+        const normalized = normalizePublish(draft)
+        const tmp = file + '.' + process.pid + '.tmp'
+        await writeFile(tmp, JSON.stringify(normalized, null, 2))
+        await rename(tmp, file)
+        return { result, publish: normalized }
+      } finally {
+        await releaseFileLock(lockFile)
+      }
+    }
+    const next = this.publishQueue.then(run, run)
+    this.publishQueue = next.then(() => undefined, () => undefined)
+    return next
+  }
+
   itemDir(itemId) {
     return join(this.projectsDir, itemId)
   }
@@ -227,6 +295,7 @@ export class Store {
       audio: join(base, 'audio'),
       renders: join(base, 'renders'),
       work: join(base, 'work'),
+      exports: join(base, 'exports'),
     }
     for (const dir of Object.values(dirs)) await mkdir(dir, { recursive: true })
     return dirs

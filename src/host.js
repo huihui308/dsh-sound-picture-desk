@@ -2,8 +2,8 @@
 // 文案走 DSH 当前模型，旁白走 MiMo TTS，画面走本机/平台生图，成片走 ffmpeg。
 import { createReadStream } from 'node:fs'
 import { execFile } from 'node:child_process'
-import { appendFile, copyFile, open, rename, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
-import { dirname, extname, join, normalize, sep } from 'node:path'
+import { appendFile, copyFile, cp, open, rename, stat, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
+import { dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { cpus, homedir } from 'node:os'
 
@@ -15,12 +15,20 @@ import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { chatTurn } from './chat.js'
-import { cancelTask, isBusy, publicTask, startTask } from './jobs.js'
+import { cancelTask, isBusy, isTaskLocked, publicTask, startTask } from './jobs.js'
+import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, composeCopy, countVariant, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
+import { generateCopyVariants } from './publish/copy.js'
+import { reviseCopy } from './publish/revise.js'
+import { buildExport } from './publish/export.js'
 
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_JSON = 8_000_000
-const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.json': 'application/json' }
-const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers'])
+const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.json': 'application/json', '.md': 'text/markdown; charset=utf-8', '.txt': 'text/plain; charset=utf-8' }
+const MEDIA_DIRS = new Set(['images', 'audio', 'renders', 'work', 'samples', 'anchors', 'covers', 'exports'])
+
+/** ffmpeg/ffprobe 的口径与 encoders.js / render.js 一致：环境变量优先，旧名仍认。 */
+const FFMPEG = process.env.PICTURE_DESK_FFMPEG || process.env.STORY_DESK_FFMPEG || 'ffmpeg'
+const FFPROBE = process.env.PICTURE_DESK_FFPROBE || process.env.STORY_DESK_FFPROBE || 'ffprobe'
 
 function json(res, status, body) {
   res.statusCode = status
@@ -40,14 +48,28 @@ async function readBuffer(req, limit) {
   return Buffer.concat(chunks)
 }
 
-async function readJson(req) {
-  const raw = await readBuffer(req, MAX_JSON)
-  if (!raw.length) return {}
+/**
+ * 解析请求体：空体按空对象处理；null / 数组 / 标量一律 400。
+ * 直接返回 JSON.parse 的结果时，body 是字面 null 会让各分支 TypeError 变成 500。
+ */
+export function parseJsonBody(text) {
+  const raw = String(text ?? '')
+  if (!raw.trim()) return {}
+  let parsed
   try {
-    return JSON.parse(raw.toString('utf8'))
+    parsed = JSON.parse(raw)
   } catch {
     throw Object.assign(new Error('请求不是有效的 JSON'), { status: 400 })
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw Object.assign(new Error('请求体必须是 JSON 对象'), { status: 400 })
+  }
+  return parsed
+}
+
+async function readJson(req) {
+  const raw = await readBuffer(req, MAX_JSON)
+  return parseJsonBody(raw.toString('utf8'))
 }
 
 /** 支持 Range，成片才能在页面里拖动进度条。 */
@@ -72,6 +94,54 @@ async function sniffType(file, fallback) {
     // 读不到就用扩展名
   }
   return fallback
+}
+
+/**
+ * 媒体名解码：客户端对路径每一段做 encodeURIComponent，服务端不解码的话中文文件名（如音色试听）必 404。
+ * 解码之后再拦 '..'、斜杠、反斜杠——%2e%2e 只有先解码才会现形。
+ * 任何一段解出来不合法就返回 null。
+ */
+export function decodeMediaName(parts) {
+  const list = Array.isArray(parts) ? parts : String(parts ?? '').split('/')
+  const names = []
+  for (const part of list) {
+    let name = String(part ?? '')
+    try {
+      name = decodeURIComponent(name)
+    } catch {
+      // 非法转义按原值走，交给下面的字符校验
+    }
+    if (!name || name === '.' || name.includes('..') || name.includes('/') || name.includes('\\') || name.includes('\0')) return null
+    names.push(name)
+  }
+  return names.join('/')
+}
+
+/**
+ * 把文件流接到响应上。stat 成功之后文件仍可能被删（回收站清理、重写稿、并发任务），
+ * 或 fd 被用尽——流上的 error 没人监听会变成未捕获异常，整个 Host 进程都会被拖垮。
+ */
+function pipeFile(res, stream) {
+  stream.on('error', () => {
+    if (res.headersSent) {
+      res.destroy()
+      return
+    }
+    // 前面按 stat 设过 content-length/etag，回 JSON 前要清掉，否则响应长度对不上客户端
+    res.removeHeader('content-length')
+    res.removeHeader('content-range')
+    res.removeHeader('etag')
+    json(res, 500, { error: '读取文件失败' })
+  })
+  // 客户端中止 / 拖动进度条会提前断开：把流销毁，别把 fd 挂在已断开的连接上
+  res.on('close', () => stream.destroy())
+  // 连接已经断了就别再往里写，否则响应的 error 事件没人接会变成进程级异常
+  res.on('error', () => stream.destroy())
+  if (res.destroyed || res.writableEnded) {
+    stream.destroy()
+    return
+  }
+  stream.pipe(res)
 }
 
 async function sendFile(req, res, file) {
@@ -107,12 +177,12 @@ async function sendFile(req, res, file) {
     res.statusCode = 206
     res.setHeader('content-range', `bytes ${start}-${end}/${info.size}`)
     res.setHeader('content-length', end - start + 1)
-    return createReadStream(file, { start, end }).pipe(res)
+    return pipeFile(res, createReadStream(file, { start, end }))
   }
   res.statusCode = 200
   res.setHeader('content-length', info.size)
   if (req.method === 'HEAD') return res.end()
-  return createReadStream(file).pipe(res)
+  return pipeFile(res, createReadStream(file))
 }
 
 // ------------------------------------------------------------------ 状态视图
@@ -121,6 +191,27 @@ function findItem(state, id) {
   const item = state.items.find(row => row.id === id)
   if (!item) throw Object.assign(new Error('找不到这个项目'), { status: 404 })
   return item
+}
+
+/** 本进程或另一个 Host 进程正在跑这个项目：写操作要一起让路。 */
+function taskBusy(itemId) {
+  return isBusy(itemId) || isTaskLocked(itemId)
+}
+
+/**
+ * 任务占用时的 409 错误：本窗口在跑 → 可以点「停止」；另一个 Host 持锁 → 本窗口停不了，
+ * 只能去那个窗口完成或停止。两种情况的文案不能混，否则用户照提示点了「停止」却没反应。
+ */
+function busyConflictError(itemId, localMessage) {
+  if (!taskBusy(itemId)) return null
+  if (isBusy(itemId)) return Object.assign(new Error(localMessage), { status: 409 })
+  return Object.assign(new Error('另一个窗口正在跑这个任务，请到那个窗口完成或停止（同一项目同时只能跑一个）'), { status: 409 })
+}
+
+/** 写路由统一拦截：任务跑着的时候改状态会和后台任务互相覆盖。 */
+function assertNotBusy(itemId) {
+  const conflict = busyConflictError(itemId, '项目正在跑任务，等结束再改；卡住就点「停止」')
+  if (conflict) throw conflict
 }
 
 function segmentSummary(row, index) {
@@ -179,7 +270,7 @@ const SETTING_LIMITS = {
   height: [240, 4320],
   imageWidth: [512, 2048],
   imageHeight: [512, 2048],
-  segmentSeconds: [10, 300],
+  segmentSeconds: [12, 90],
   trashDays: [1, 365],
   renderWorkers: [0, 16],
 }
@@ -216,16 +307,216 @@ function effectiveSettings(state, item) {
  * 参考视频只抓得到标题和简介——视频内容模型看不见。
  * 抓不到也不算错，链接本身照样进写稿上下文。
  */
+// ------------------------------------------------------------------ 发布
+
+/** 成片信息：时长、大小、画面尺寸。没有成片返回 null。 */
+async function videoInfo(store, state, item) {
+  if (!item.render?.path) return null
+  const file = join(store.itemDir(item.id), item.render.path)
+  const info = await stat(file).catch(() => null)
+  if (!info) return null
+  const settings = effectiveSettings(state, item)
+  // 渲染时 probe 失败会把 secs 存成 0；发布检查时补 probe 一次，别让视频检查整体消失
+  let secs = Number(item.render.secs) || 0
+  if (!secs) secs = Math.max(0, Math.round(await probeDuration(file)))
+  return {
+    path: item.render.path,
+    secs,
+    bytes: info.size,
+    width: Number(settings.width) || 1080,
+    height: Number(settings.height) || 1920,
+    at: item.render.at ?? null,
+  }
+}
+
+/** 把平台规则跑成界面上的检查列表；error 会挡住导出，warn 只提示。 */
+export function publishChecks(publish, targets, video, coverExists) {
+  const checks = []
+  for (const id of targets) {
+    const platform = PLATFORMS[id]
+    if (!platform) continue
+    for (const check of validateCopy(id, publish.variants?.[id] ?? {})) {
+      checks.push({ ...check, platform: id, platformLabel: platform.label })
+    }
+    if (video) {
+      for (const check of validateVideo(id, video)) {
+        checks.push({ ...check, platform: id, platformLabel: platform.label, label: platform.label + ' · ' + check.label })
+      }
+    }
+  }
+  if (targets.includes('xiaohongshu')) {
+    const cover = publish.cover
+    checks.push({
+      id: 'cover',
+      platform: 'xiaohongshu',
+      platformLabel: PLATFORMS.xiaohongshu.label,
+      label: '小红书 · 封面',
+      state: coverExists ? 'ok' : 'warn',
+      detail: coverExists
+        ? cover.width + '×' + cover.height
+        : cover?.path ? '封面文件不见了，重新生成' : '还没有 3:4 封面',
+      fix: coverExists ? '' : '点「生成封面」',
+    })
+  }
+  return checks
+}
+
+/** 给「发布」页的完整视图。导出前先看 blocking 项。 */
+async function publishView(store, state, itemId) {
+  const item = findItem(state, itemId)
+  const publish = await store.readPublish(itemId)
+  const targets = normalizeTargets(publish.targets)
+  const video = await videoInfo(store, state, item)
+  const coverPath = publish.cover?.path ? join(store.itemDir(itemId), publish.cover.path) : ''
+  const coverExists = coverPath ? Boolean(await stat(coverPath).catch(() => null)) : false
+  const checks = publishChecks(publish, targets, video, coverExists)
+  const blocking = checks.filter(check => check.state === 'error').length
+  return {
+    id: item.id,
+    schemaVersion: publish.schemaVersion,
+    ruleVersion: RULE_VERSION,
+    updatedAt: publish.updatedAt,
+    targets,
+    platforms: PLATFORM_ORDER.map(id => {
+      const platform = PLATFORMS[id]
+      return {
+        id,
+        label: platform.label,
+        summary: platform.summary,
+        composeUrl: platform.composeUrl,
+        cover: platform.cover ?? null,
+        video: platform.video,
+        title: platform.title ?? null,
+        body: platform.body ?? null,
+        tags: platform.tags ?? null,
+        text: platform.text ?? null,
+      }
+    }),
+    variants: publish.variants,
+    counts: { xiaohongshu: countVariant('xiaohongshu', publish.variants.xiaohongshu), x: countVariant('x', publish.variants.x) },
+    copyTexts: {
+      xiaohongshu: composeCopy('xiaohongshu', publish.variants.xiaohongshu),
+      x: composeCopy('x', publish.variants.x),
+    },
+    cover: publish.cover,
+    coverSources: coverSourceList(item),
+    exports: publish.exports,
+    records: publish.records,
+    revisions: publish.revisions ?? [],
+    checks,
+    blocking,
+    video,
+    canExport: Boolean(video) && targets.length > 0 && blocking === 0,
+    renderAt: item.render?.at ?? null,
+  }
+}
+
+/** 参考链接抓取上限：网页正文用不到这么多，防止被超大响应拖住。 */
+const REFERENCE_MAX_BYTES = 1_500_000
+const REFERENCE_MAX_REDIRECTS = 3
+
+/**
+ * 本机 / 内网 / 链路本地 / 云元数据地址判断。参考链接是用户手填的，
+ * 服务端直接去抓就等于把宿主所在网络暴露给页面，必须先挡掉。
+ */
+export function isPrivateAddress(host) {
+  const raw = String(host ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+  if (!raw) return true
+  if (raw === 'localhost' || raw.endsWith('.localhost') || raw.endsWith('.local')) return true
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(raw)
+  if (v4) {
+    const parts = v4.slice(1).map(Number)
+    if (parts.some(n => n > 255)) return true
+    const [a, b] = parts
+    if (a === 0 || a === 10 || a === 127) return true
+    if (a === 169 && b === 254) return true // 链路本地，含云厂商元数据 169.254.169.254
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 100 && b >= 64 && b <= 127) return true // 运营商级 NAT
+    return false
+  }
+  if (raw.includes(':')) {
+    // IPv6 只判断本机、ULA、链路本地三类，不展开整段网段
+    if (raw === '::1' || raw === '::') return true
+    if (raw.startsWith('fc') || raw.startsWith('fd')) return true
+    if (/^fe[89ab]/.test(raw)) return true
+    const mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(raw)
+    if (mapped) return isPrivateAddress(mapped[1])
+    return false
+  }
+  return false
+}
+
+/** 只允许抓公网 http(s)；跳转的每一跳都要重新过一遍这个校验。 */
+function allowedReferenceUrl(raw) {
+  let parsed
+  try {
+    parsed = new URL(String(raw ?? '').trim())
+  } catch {
+    return { ok: false, error: '链接格式不对' }
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { ok: false, error: '不是 http 链接' }
+  if (isPrivateAddress(parsed.hostname)) return { ok: false, error: '不支持抓取本机或内网地址' }
+  return { ok: true, url: parsed.toString() }
+}
+
+/** 按字节预算读正文：先看 content-length，再边读边累计，超了立刻断开并只留已读部分。 */
+async function readReferenceText(response, limit) {
+  const declared = Number(response.headers.get('content-length') || 0)
+  if (declared > limit) return ''
+  if (!response.body) return String(await response.text()).slice(0, limit)
+  const reader = response.body.getReader()
+  const chunks = []
+  let size = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = Buffer.from(value)
+      size += chunk.length
+      if (size > limit) {
+        chunks.push(chunk.subarray(0, chunk.length - (size - limit)))
+        await reader.cancel().catch(() => {})
+        break
+      }
+      chunks.push(chunk)
+    }
+  } finally {
+    reader.releaseLock?.()
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 async function inspectReference(url) {
   const clean = String(url ?? '').trim()
-  if (!/^https?:\/\//i.test(clean)) return { url: clean, title: '', error: '不是 http 链接' }
+  const start = allowedReferenceUrl(clean)
+  if (!start.ok) return { url: clean, title: '', error: start.error }
   try {
-    const response = await fetch(clean, {
-      headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-sound-picture-desk/0.1)', accept: 'text/html' },
-      signal: AbortSignal.timeout(8000),
-      redirect: 'follow',
-    })
-    const html = (await response.text()).slice(0, 400_000)
+    const signal = AbortSignal.timeout(8000)
+    let current = start.url
+    let response = null
+    // 跳转一律手动跟：'follow' 会绕过内网校验，第二跳就能跳进 127.0.0.1
+    for (let hop = 0; hop <= REFERENCE_MAX_REDIRECTS; hop += 1) {
+      const check = allowedReferenceUrl(current)
+      if (!check.ok) throw new Error(check.error)
+      response = await fetch(check.url, {
+        headers: { 'user-agent': 'Mozilla/5.0 (compatible; dsh-sound-picture-desk/0.1)', accept: 'text/html' },
+        signal,
+        redirect: 'manual',
+      })
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location')
+        await response.body?.cancel?.().catch(() => {})
+        if (!location) throw new Error('跳转地址缺失')
+        if (hop === REFERENCE_MAX_REDIRECTS) throw new Error('跳转次数太多')
+        current = new URL(location, check.url).toString()
+        response = null
+        continue
+      }
+      break
+    }
+    if (!response) throw new Error('跳转次数太多')
+    const html = (await readReferenceText(response, REFERENCE_MAX_BYTES)).slice(0, 400_000)
     const pick = pattern => {
       const match = pattern.exec(html)
       return match ? match[1].replace(/\s+/g, ' ').trim().slice(0, 120) : ''
@@ -286,9 +577,8 @@ async function startScript(ctx, store, secrets, itemId) {
       },
     })
     const dirs = await store.ensureItemDirs(itemId)
-    // 旧图属于上一版稿子，换稿后一律作废；目录留着，别让后续写图踩 ENOENT
-    await rm(dirs.images, { recursive: true, force: true }).catch(() => {})
-    await mkdir(dirs.images, { recursive: true })
+    // 先把新稿原子落盘，成功后再清旧图：反过来做的话落盘失败时旧图已经被删，
+    // 数据就真的没了。旧图换稿后不再被引用，清掉腾位置给同名新图。
     await store.mutate(draft => {
       const target = findItem(draft, itemId)
       target.title = result.title
@@ -299,6 +589,12 @@ async function startScript(ctx, store, secrets, itemId) {
       target.log.push({ at: new Date().toISOString(), text: `写稿：${result.segments.length} 段` })
       return result.segments.length
     })
+    await rm(dirs.images, { recursive: true, force: true })
+      .then(() => mkdir(dirs.images, { recursive: true }))
+      .catch(err => {
+        // 清旧图失败只记日志：新稿已经落盘，别把一次成功的写稿判成失败
+        console.warn(`[sound-picture-desk] 清理旧分镜图失败：${String(err?.message ?? err).slice(0, 160)}`)
+      })
     report(1, '稿件写好了')
     return { segments: result.segments.length, title: result.title }
   })
@@ -309,6 +605,8 @@ async function runVoiceBody(store, secrets, itemId, onlyIds, report, signal) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
+  // 启动时记下每段文字：合成期间用户可能改稿，改过的段音频不能用
+  const snapshot = new Map(item.segments.map(row => [row.id, row.text]))
   const targets = item.segments.filter(row => !onlyIds?.length || onlyIds.includes(row.id))
   const pending = onlyIds?.length ? targets : targets.filter(row => !row.audioPath)
   if (!targets.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
@@ -336,11 +634,16 @@ async function runVoiceBody(store, secrets, itemId, onlyIds, report, signal) {
     await store.mutate(draft => {
       const target = findItem(draft, itemId)
       const seg = target.segments.find(s2 => s2.id === row.id)
-      if (seg) {
-        seg.audioPath = `audio/${name}`
-        seg.audioSecs = Math.round(secs * 100) / 100
-        seg.error = null
+      if (!seg) return null
+      // 合成期间文字被改过：这段音频对新文字是错位的，丢弃并标出来，别覆盖用户改动
+      if (seg.text !== snapshot.get(row.id)) {
+        seg.error = '文字已改，音频作废'
+        target.updatedAt = new Date().toISOString()
+        return null
       }
+      seg.audioPath = `audio/${name}`
+      seg.audioSecs = Math.round(secs * 100) / 100
+      seg.error = null
       target.updatedAt = new Date().toISOString()
       return null
     })
@@ -363,7 +666,9 @@ async function startVoice(store, secrets, itemId, onlyIds) {
   const item = findItem(state, itemId)
   const targets = item.segments.filter(row => (!onlyIds?.length || onlyIds.includes(row.id)))
   if (!targets.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
-  return startTask(itemId, 'tts', targets.length, async ({ report, signal }) =>
+  // 进度分母只算真正要合成的段：已配好的段不会重跑，不算进去
+  const pending = onlyIds?.length ? targets.length : targets.filter(row => !row.audioPath).length
+  return startTask(itemId, 'tts', pending, async ({ report, signal }) =>
     runVoiceBody(store, secrets, itemId, onlyIds, report, signal))
 }
 
@@ -559,7 +864,7 @@ async function normalizeImageBuffer(buffer, dirs, wantW, wantH, signal) {
   try {
     await writeFile(raw, buffer)
     await new Promise((resolve, reject) => {
-      execFile('ffmpeg', ['-y', '-v', 'error', '-i', raw, '-map_metadata', '-1', '-frames:v', '1', out],
+      execFile(FFMPEG, ['-y', '-v', 'error', '-i', raw, '-map_metadata', '-1', '-frames:v', '1', out],
         { timeout: 60_000, signal }, err => (err ? reject(err) : resolve()))
     })
     const png = await readFile(out)
@@ -567,7 +872,7 @@ async function normalizeImageBuffer(buffer, dirs, wantW, wantH, signal) {
     let height = 0
     try {
       const dict = await new Promise((resolve, reject) => {
-        execFile('ffprobe', ['-v', 'error', '-select_streams', 'v:0',
+        execFile(FFPROBE, ['-v', 'error', '-select_streams', 'v:0',
           '-show_entries', 'stream=width,height', '-of', 'csv=p=0', out],
           { timeout: 20_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout).trim())))
       })
@@ -707,6 +1012,8 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const settings = effectiveSettings(state, item)
+  // 启动快照：合成期间稿子若被改过，这一版就和当前稿子对不上，不能写回成片
+  const snapshot = item.segments.map(row => ({ id: row.id, text: row.text }))
   const missingAudio = item.segments.filter(row => !row.audioPath)
   const missingImage = item.segments.filter(row => !row.imagePath)
   if (!item.segments.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
@@ -729,42 +1036,67 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   }
   let done = 0
   let cursor = 0
+  // 本次渲染内是否发生过硬件→CPU 降级。不能只靠 encoders.js 的 30 分钟 TTL：
+  // 长渲染跑到 TTL 过期后全局标记会变回 false，这一版镜头却真的混了两种编码。
+  let encoderFallback = false
   report(offset, `合成 ${item.segments.length} 个镜头（${workers} 路并行）`)
 
-  // 并发池：N 路同时跑，谁空谁领下一个；结果按下标放回 shots，拼接顺序不变
+  // 并发池：N 路同时跑，谁空谁领下一个；结果按下标放回 shots，拼接顺序不变。
+  // 任何一路失败都要让其它路立刻停：Promise.all 会先 reject，但失败的那路并不会
+  // 停掉别人，它们会继续往同一批 work 文件里写。所以任务内自建 AbortController。
+  const inner = new AbortController()
+  const onOuterAbort = () => inner.abort()
+  if (signal.aborted) inner.abort()
+  else signal.addEventListener('abort', onOuterAbort, { once: true })
+  let firstError = null
   const runOne = async () => {
     for (;;) {
-      if (signal.aborted) throw new Error('已停止')
+      if (inner.signal.aborted) throw new Error('已停止')
       const index = cursor
       cursor += 1
       if (index >= item.segments.length) return
       const row = item.segments[index]
       const output = join(dirs.work, `shot-${String(row.idx + 1).padStart(3, '0')}.mp4`)
-      await renderShot({
-        image: join(dirs.base, row.imagePath),
-        audio: join(dirs.base, row.audioPath),
-        output,
-        seconds: row.audioSecs,
-        width: settings.width,
-        height: settings.height,
-        kenBurns: settings.kenBurns !== false,
-        motion: settings.motion || 'zoom-in',
-        grade: settings.grade || 'none',
-        signal,
-      })
+      try {
+        await renderShot({
+          image: join(dirs.base, row.imagePath),
+          audio: join(dirs.base, row.audioPath),
+          output,
+          seconds: row.audioSecs,
+          width: settings.width,
+          height: settings.height,
+          kenBurns: settings.kenBurns !== false,
+          motion: settings.motion || 'zoom-in',
+          grade: settings.grade || 'none',
+          signal: inner.signal,
+          onHardwareFallback: () => { encoderFallback = true },
+        })
+      } catch (err) {
+        // 记下首个错误并让其它 worker 一起停
+        if (!firstError) firstError = err
+        inner.abort()
+        throw err
+      }
       shots[index] = output
       done += 1
       report(offset + done, `已完成 ${done}/${item.segments.length} 个镜头`)
     }
   }
-  await Promise.all(Array.from({ length: workers }, runOne))
+  try {
+    await Promise.allSettled(Array.from({ length: workers }, runOne))
+  } finally {
+    signal.removeEventListener('abort', onOuterAbort)
+  }
+  if (firstError) throw firstError
+  if (signal.aborted) throw new Error('已停止')
 
   report(offset + done, '正在拼接整片…')
   const plain = join(dirs.renders, 'video.mp4')
   const trans = settings.transition && settings.transition !== 'none' ? settings.transition : null
   const tmpPlain = join(dirs.work, 'plain.mp4')
+  // 硬切拼接走 -c copy；但本轮降级过就不能 copy（混合编码流），强制统一重编码
   if (trans) await concatWithFade(shots, dirs.work, tmpPlain, { transition: trans, signal })
-  else await concatShots(shots, dirs.work, tmpPlain, { signal })
+  else await concatShots(shots, dirs.work, tmpPlain, { signal, forceReencode: encoderFallback })
   await rename(tmpPlain, plain)
   done += 1
 
@@ -788,12 +1120,14 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
         signal,
       })
       const withIntro = join(dirs.renders, 'video-with-intro.mp4')
-      await concatShots([introFile, plain], dirs.work, withIntro, { signal })
+      await concatShots([introFile, plain], dirs.work, withIntro, { signal, forceReencode: encoderFallback })
       await rm(plain, { force: true }).catch(() => {})
       await copyFile(withIntro, plain)
       await rm(withIntro, { force: true }).catch(() => {})
       introApplied = true
     } catch (err) {
+      // 用户点了停止就真的停：别把「取消」当成「片头失败」跳过继续往下跑
+      if (signal.aborted) throw err
       // 片头是锦上添花，装不上就跳过，别让整片失败
       await store.mutate(draft => {
         const target = findItem(draft, itemId)
@@ -814,12 +1148,14 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
         width: settings.width, height: settings.height, seconds: COVER_SECONDS, signal,
       })
       const withCover = join(dirs.renders, 'video-with-cover.mp4')
-      await concatShots([coverClip, plain], dirs.work, withCover, { signal })
+      await concatShots([coverClip, plain], dirs.work, withCover, { signal, forceReencode: encoderFallback })
       await rm(plain, { force: true }).catch(() => {})
       await copyFile(withCover, plain)
       await rm(withCover, { force: true }).catch(() => {})
       coverApplied = true
     } catch (err) {
+      // 同上：取消不能被「封面跳过」吞掉
+      if (signal.aborted) throw err
       await store.mutate(draft => {
         const target = findItem(draft, itemId)
         target.log.push({ at: new Date().toISOString(), text: `封面跳过：${String(err.message).slice(0, 80)}` })
@@ -862,8 +1198,16 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
   // finalPath 已经是绝对路径，不能再按项目目录拼一次
   const secs = await probeDuration(finalPath)
   const rel = finalPath.startsWith(dirs.base) ? finalPath.slice(dirs.base.length + 1) : finalPath
+  // 写回前最后确认一次：用户可能刚点「停止」，别把半成品记成当前成片
+  if (signal.aborted) throw new Error('已停止')
   await store.mutate(draft => {
     const target = findItem(draft, itemId)
+    // 启动快照和当前分段不一致（合成期间改过稿）：这版作废，别把旧结果写成「当前成片」
+    const then = snapshot.map(row => row.id + '\u0000' + row.text)
+    const now = target.segments.map(row => row.id + '\u0000' + row.text)
+    if (now.length !== then.length || now.some((key, index) => key !== then[index])) {
+      throw new Error('合成期间稿子被改过，这一版作废，请重新点「合成」')
+    }
     target.render = {
       path: rel,
       secs: secs ? Math.round(secs * 10) / 10 : 0,
@@ -883,11 +1227,11 @@ async function runRenderBody(store, itemId, report, signal, offset = 0) {
  * 生成视频封面：底图（分镜图 / 参考图）+ 标题文字，输出平台竖版尺寸。
  * 标题走 textfile 传，避免中文和特殊符号在 drawtext 里转义出错。
  */
-async function makeCover(store, itemId, { ref, title, width = 1206, height = 2160 }) {
+async function renderCoverImage(store, itemId, { ref, title, width = 1206, height = 2160, maxText = 40, layout = 'bottom', fontScale = 1 } = {}) {
   const state = await store.read()
   const item = findItem(state, itemId)
   const dirs = await store.ensureItemDirs(itemId)
-  const text = String(title ?? item.title ?? '').trim().slice(0, 40)
+  const text = String(title ?? item.title ?? '').trim().slice(0, maxText)
   if (!text) throw Object.assign(new Error('封面标题不能为空'), { status: 400 })
 
   // 解析底图：允许 segment:<id> / anchor:<id> / 直接给相对路径
@@ -898,9 +1242,22 @@ async function makeCover(store, itemId, { ref, title, width = 1206, height = 216
   } else if (typeof ref === 'string' && ref.startsWith('anchor:')) {
     const anchorId = ref.slice(7)
     const row = (item.anchors ?? []).find(a => a.id === anchorId)
-    if (row) basePath = join(dirs.base, row.approved || row.candidates?.[0] || '')
+    // 没定稿也没候选图时保持 null，走下面的 400 提示：join(base, '') 会得到项目目录本身
+    const picked = row ? (row.approved || row.candidates?.[0] || '') : ''
+    if (picked) basePath = join(dirs.base, picked)
   } else if (typeof ref === 'string' && ref && !ref.includes('..')) {
     basePath = join(dirs.base, ref)
+  }
+  if (basePath) {
+    // ref 可能来自旧数据或被手改过的 state：只允许读项目目录里的文件，
+    // 否则 ffmpeg 会把项目外的任意本地图片/视频当底图复制进 covers/
+    const relBase = relative(resolve(dirs.base), resolve(basePath))
+    if (!relBase || isAbsolute(relBase) || relBase === '..' || relBase.startsWith('..' + sep)) {
+      throw Object.assign(new Error('底图路径无效'), { status: 400 })
+    }
+    const info = await stat(basePath).catch(() => null)
+    // 目录（包括解析到项目根目录的情况）等于没有底图
+    if (!info || info.isDirectory()) basePath = null
   }
   if (!basePath) throw Object.assign(new Error('没有可用的底图，先出图或定一张参考图'), { status: 400 })
 
@@ -909,36 +1266,170 @@ async function makeCover(store, itemId, { ref, title, width = 1206, height = 216
   const outName = `covers/cover-${stamp}.png`
   const outPath = join(dirs.base, outName)
   const textFile = join(dirs.work, `cover-title-${stamp}.txt`)
-  await writeFile(textFile, text, 'utf8')
+  // 宽高/字号在 try 里算，finally 之后还得用，所以先声明
+  let w = 0
+  let h = 0
+  let scale = 1
+  try {
+    await writeFile(textFile, text, 'utf8')
 
-  // 编码器要求宽高为偶数
-  const w = Math.round(width / 2) * 2
-  const h = Math.round(height / 2) * 2
-  const fontSize = Math.round(w * 0.085)
-  const margin = Math.round(w * 0.08)
-  const vf = [
-    `scale=${w}:${h}:force_original_aspect_ratio=increase`,
-    `crop=${w}:${h}`,
-    // 底部压一层渐变压暗，保证白字在亮画面上也看得清
-    `drawbox=x=0:y=${h - Math.round(h * 0.42)}:w=${w}:h=${Math.round(h * 0.42)}:color=black@0.45:t=fill`,
-    `drawtext=fontfile=${escapeFilterPath(COVER_FONT)}:textfile=${escapeFilterPath(textFile)}:` +
-      `fontsize=${fontSize}:fontcolor=white:borderw=${Math.max(2, Math.round(fontSize * 0.06))}:` +
-      `bordercolor=black@0.85:x=(w-text_w)/2:y=h-${Math.round(h * 0.2)}-text_h/2`,
-  ].join(',')
+    // 编码器要求宽高为偶数
+    w = Math.round(width / 2) * 2
+    h = Math.round(height / 2) * 2
+    // 标题越长字号越小：20 字标题也要能压在 1080 宽的封面上
+    const textLength = [...text].length
+    scale = Math.min(1.6, Math.max(0.6, Number(fontScale) || 1))
+    const fontSize = Math.max(24, Math.min(Math.round(w * 0.085 * scale), Math.floor((w * 0.78) / Math.max(4, textLength))))
+    const band = Math.round(h * 0.42)
+    const boxY = layout === 'top' ? 0 : h - band
+    const textY = layout === 'top' ? String(Math.round(h * 0.14)) : `h-${Math.round(h * 0.2)}-text_h/2`
+    const vf = [
+      `scale=${w}:${h}:force_original_aspect_ratio=increase`,
+      `crop=${w}:${h}`,
+      // 文字区压一层暗带，保证白字在亮画面上也看得清
+      `drawbox=x=0:y=${boxY}:w=${w}:h=${band}:color=black@0.45:t=fill`,
+      `drawtext=fontfile=${escapeFilterPath(COVER_FONT)}:textfile=${escapeFilterPath(textFile)}:` +
+        `fontsize=${fontSize}:fontcolor=white:borderw=${Math.max(2, Math.round(fontSize * 0.06))}:` +
+        `bordercolor=black@0.85:x=(w-text_w)/2:y=${textY}`,
+    ].join(',')
 
-  await new Promise((resolve, reject) => {
-    execFile('ffmpeg', ['-y', '-v', 'error', '-i', basePath, '-vf', vf, '-frames:v', '1', outPath],
-      { timeout: 60_000 }, err => (err ? reject(new Error(`封面生成失败：${String(err.message).slice(0, 160)}`)) : resolve()))
-  })
-  await rm(textFile, { force: true }).catch(() => {})
+    await new Promise((resolve, reject) => {
+      execFile(FFMPEG, ['-y', '-v', 'error', '-i', basePath, '-vf', vf, '-frames:v', '1', outPath],
+        { timeout: 60_000 }, err => (err ? reject(new Error(`封面生成失败：${String(err.message).slice(0, 160)}`)) : resolve()))
+    })
+  } finally {
+    // ffmpeg 失败（如底图是坏文件）时也要删掉临时标题文件，别在 work/ 里越积越多
+    await rm(textFile, { force: true }).catch(() => {})
+  }
 
+  return { path: outName, title: text, width: w, height: h, layout: layout === 'top' ? 'top' : 'bottom', fontScale: scale, sourceRef: String(ref ?? '') }
+}
+
+/** 成片首帧用的封面：沿用原来的 9:16 竖版封面，存到 item.cover。 */
+async function makeCover(store, itemId, { ref, title, width = 1206, height = 2160 } = {}) {
+  const cover = await renderCoverImage(store, itemId, { ref, title, width, height })
   await store.mutate(draft => {
     const target = findItem(draft, itemId)
-    target.cover = { path: outName, title: text, source: String(ref || ''), width: w, height: h, at: new Date().toISOString() }
+    target.cover = { ...cover, source: String(ref || ''), at: new Date().toISOString() }
     target.updatedAt = new Date().toISOString()
     return null
   })
-  return { cover: { path: outName, title: text, width: w, height: h } }
+  return { cover }
+}
+
+/**
+ * 封面底图引用还能不能用：重写稿后旧 segment id 会失效，
+ * 复用旧 sourceRef 前必须按当前项目状态重新解析一遍，否则生成封面直接 400。
+ */
+async function coverRefUsable(store, item, ref) {
+  const value = typeof ref === 'string' ? ref.trim() : ''
+  if (!value) return false
+  let rel = ''
+  if (value.startsWith('segment:')) {
+    const seg = item.segments.find(row => row.id === value.slice(8))
+    if (!seg?.imagePath) return false
+    rel = seg.imagePath
+  } else if (value.startsWith('anchor:')) {
+    const row = (item.anchors ?? []).find(a => a.id === value.slice(7))
+    const picked = row ? (row.approved || row.candidates?.[0] || '') : ''
+    if (!picked) return false
+    rel = picked
+  } else {
+    if (value.includes('..')) return false
+    rel = value
+  }
+  const info = await stat(join(store.itemDir(item.id), rel)).catch(() => null)
+  return Boolean(info?.isFile())
+}
+
+/** 小红书发布封面：3:4，单独存 publish.cover，不覆盖成片首帧那张。 */
+async function makePublishCover(store, itemId, { title, ref, layout, fontScale, textSource } = {}) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const publish = await store.readPublish(itemId)
+  const existing = publish.cover ?? null
+  const fallbackTitle = String(publish.variants?.xiaohongshu?.title ?? item.title ?? '').trim()
+  const typedTitle = typeof title === 'string' ? title.trim() : ''
+  const useTitle = typedTitle || String(existing?.title ?? '').trim() || fallbackTitle || item.title
+  // 复用上次的底图前先确认它还有效（重写稿后旧 segment id 已失效），不行就回落到当前分镜/参考图
+  let sourceRef = typeof ref === 'string' && ref.trim() ? ref.trim() : String(existing?.sourceRef ?? '').trim()
+  if (sourceRef && !(await coverRefUsable(store, item, sourceRef))) sourceRef = ''
+  if (!sourceRef) sourceRef = defaultPublishCoverRef(item)
+  const cover = await renderCoverImage(store, itemId, {
+    ref: sourceRef,
+    title: useTitle,
+    width: PLATFORMS.xiaohongshu.cover.width,
+    height: PLATFORMS.xiaohongshu.cover.height,
+    maxText: 20,
+    layout: layout || existing?.layout || 'bottom',
+    fontScale: fontScale || existing?.fontScale || 1,
+  })
+  const source = textSource || (typedTitle ? 'manual' : (existing?.textSource || 'auto'))
+  await store.mutatePublish(itemId, draft => {
+    draft.cover = {
+      path: cover.path,
+      title: cover.title,
+      width: cover.width,
+      height: cover.height,
+      at: new Date().toISOString(),
+      sourceRef: cover.sourceRef,
+      layout: cover.layout,
+      fontScale: cover.fontScale,
+      textSource: source,
+    }
+    return null
+  })
+  return cover
+}
+
+/** 封面底图候选：分镜图、已定稿参考图、已有成片封面。 */
+function coverSourceList(item) {
+  const list = []
+  let index = 0
+  for (const seg of item?.segments ?? []) {
+    if (!seg?.imagePath) continue
+    index += 1
+    list.push({ ref: 'segment:' + seg.id, label: '分镜 ' + index, path: seg.imagePath })
+  }
+  for (const row of item?.anchors ?? []) {
+    const imagePath = row?.approved || row?.candidates?.[0]
+    if (!imagePath) continue
+    list.push({ ref: 'anchor:' + row.id, label: '参考 ' + String(row.name || '场景'), path: imagePath })
+  }
+  if (item?.cover?.path) list.push({ ref: item.cover.path, label: '成片封面', path: item.cover.path })
+  return list.slice(0, 24)
+}
+
+/** 生成提案时的旧值快照，只取本次 scope 的字段。 */
+function revisionBefore(publish, scope) {
+  const variant = publish.variants?.xiaohongshu ?? {}
+  const out = {}
+  if (scope.includes('title')) out.title = String(variant.title ?? '')
+  if (scope.includes('body')) out.body = String(variant.body ?? '')
+  if (scope.includes('coverText')) out.coverText = String(publish.cover?.title ?? '')
+  return out
+}
+
+/** 采用前检查用户有没有在提案生成后又改过这些字段。 */
+function revisionMismatch(publish, revision) {
+  const variant = publish.variants?.xiaohongshu ?? {}
+  const before = revision.before ?? {}
+  const hit = []
+  if (revision.scope.includes('title') && String(variant.title ?? '') !== String(before.title ?? '')) hit.push('标题')
+  if (revision.scope.includes('body') && String(variant.body ?? '') !== String(before.body ?? '')) hit.push('正文')
+  if (revision.scope.includes('coverText') && String(publish.cover?.title ?? '') !== String(before.coverText ?? '')) hit.push('封面大字')
+  return hit
+}
+
+/** 发布封面默认用第一张分镜图，其次定稿参考图，最后才退回已有封面。 */
+function defaultPublishCoverRef(item) {
+  const segment = (item.segments ?? []).find(row => row.imagePath)
+  if (segment) return 'segment:' + segment.id
+  const list = item.anchors ?? []
+  const anchor = list.find(row => row.approved) ?? list[0]
+  if (anchor) return 'anchor:' + anchor.id
+  if (item.cover?.path) return item.cover.path
+  return ''
 }
 
 /**
@@ -949,7 +1440,7 @@ async function renderCoverClip(coverPath, output, { width, height, seconds = 0.8
   const w = Math.round(width / 2) * 2
   const h = Math.round(height / 2) * 2
   await new Promise((resolve, reject) => {
-    execFile('ffmpeg', ['-y', '-v', 'error',
+    execFile(FFMPEG, ['-y', '-v', 'error',
       '-loop', '1', '-framerate', '30', '-i', coverPath,
       '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
       '-t', seconds.toFixed(2),
@@ -980,7 +1471,10 @@ async function startRender(store, itemId) {
   if (!item.segments.length) throw Object.assign(new Error('还没有分段，先写稿'), { status: 400 })
   if (missingAudio.length) throw Object.assign(new Error(`还有 ${missingAudio.length} 段没配音，先配音再合成`), { status: 400 })
   if (missingImage.length) throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先出图再合成`), { status: 400 })
-  return startTask(itemId, 'render', item.segments.length + 2, async ({ report, signal }) =>
+  const settings = effectiveSettings(state, item)
+  // 分母 = 每个镜头 + 拼接 + 可选的字幕压制
+  const total = item.segments.length + 1 + (settings.burnSubtitles ? 1 : 0)
+  return startTask(itemId, 'render', total, async ({ report, signal }) =>
     runRenderBody(store, itemId, report, signal))
 }
 
@@ -994,7 +1488,9 @@ async function startFinish(store, secrets, itemId) {
     throw Object.assign(new Error(`还有 ${missingImage.length} 段没出图，先去「分镜图」出图`), { status: 400 })
   }
   const pending = item.segments.filter(row => !row.audioPath)
-  const total = pending.length + item.segments.length + 2
+  const settings = effectiveSettings(state, item)
+  // 分母 = 待配段数 + 每个镜头 + 拼接 + 可选的字幕压制
+  const total = pending.length + item.segments.length + 1 + (settings.burnSubtitles ? 1 : 0)
   return startTask(itemId, 'finish', total, async ({ report, signal }) => {
     if (pending.length) {
       report(0, `先配音 ${pending.length} 段…`, total)
@@ -1016,9 +1512,10 @@ async function route(ctx, store, req, res) {
     const parts = rest.split('/')
     if (parts.length < 3) return json(res, 404, { error: '路径不完整' })
     const [itemId, dir, ...nameParts] = parts
-    const name = nameParts.join('/')
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(itemId) || !MEDIA_DIRS.has(dir)) return json(res, 404, { error: '路径无效' })
-    if (name.includes('..') || name.includes('\\') || name.startsWith('/')) return json(res, 404, { error: '路径无效' })
+    // 客户端是逐段 encodeURIComponent 的：先解码再校验，中文文件名才能对上
+    const name = decodeMediaName(nameParts)
+    if (!name) return json(res, 404, { error: '路径无效' })
     const file = normalize(join(store.itemDir(itemId), dir, name))
     const base = normalize(store.itemDir(itemId))
     if (!file.startsWith(`${base}${sep}`)) return json(res, 404, { error: '路径无效' })
@@ -1149,6 +1646,7 @@ async function route(ctx, store, req, res) {
       return json(res, 200, { voice, path: rel })
     }
     case 'anchors/extract': {
+      assertNotBusy(String(body.id ?? ''))
       const result = await extractAnchors(ctx, store, String(body.id ?? ''))
       return json(res, 200, result)
     }
@@ -1162,19 +1660,24 @@ async function route(ctx, store, req, res) {
       const id = String(body.id ?? '')
       const anchorId = String(body.anchorId ?? '')
       const candidate = String(body.candidate ?? '')
+      assertNotBusy(id)
       const { state } = await store.mutate(draft => {
         const row = findItem(draft, id)
         const hit = (row.anchors ?? []).find(a => a.id === anchorId)
-        if (hit) {
-          hit.approved = candidate || (hit.candidates ?? []).slice(-1)[0] || null
-          hit.at = new Date().toISOString()
+        if (!hit) throw Object.assign(new Error('找不到这个参考条目'), { status: 404 })
+        // 只能从这条已生成的候选里选：approved 会被封面渲染当文件路径用，不能收任意值
+        if (candidate && !(hit.candidates ?? []).includes(candidate)) {
+          throw Object.assign(new Error('只能选这个参考条目已生成的候选图'), { status: 400 })
         }
+        hit.approved = candidate || (hit.candidates ?? []).slice(-1)[0] || null
+        hit.at = new Date().toISOString()
         return null
       })
       return json(res, 200, { anchors: findItem(state, id).anchors ?? [] })
     }
     case 'anchors/remove': {
       const id = String(body.id ?? '')
+      assertNotBusy(id)
       const { state } = await store.mutate(draft => {
         const row = findItem(draft, id)
         row.anchors = (row.anchors ?? []).filter(a => a.id !== String(body.anchorId ?? ''))
@@ -1185,6 +1688,7 @@ async function route(ctx, store, req, res) {
     case 'anchors/save': {
       // 直接改名字/描述
       const id = String(body.id ?? '')
+      assertNotBusy(id)
       const { state } = await store.mutate(draft => {
         const row = findItem(draft, id)
         const hit = (row.anchors ?? []).find(a => a.id === String(body.anchorId ?? ''))
@@ -1199,9 +1703,17 @@ async function route(ctx, store, req, res) {
     case 'reference-inspect': {
       return json(res, 200, await inspectReference(String(body.url ?? '')))
     }
+    case 'item-raw': {
+      // 原始材料可能有 20 万字，不能塞进每 1.5 秒轮询的 /state，单独按项目拉一次
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      return json(res, 200, { rawText: item.rawText ?? '' })
+    }
     case 'item-info': {
       // 选题页要能改题材与材料，否则「选题」这一页只是个摆设
       const id = String(body.id ?? '')
+      assertNotBusy(id)
       const { state } = await store.mutate(draft => {
         const target = findItem(draft, id)
         if (typeof body.topic === 'string' && body.topic.trim()) target.topic = body.topic.trim().slice(0, 200)
@@ -1221,6 +1733,7 @@ async function route(ctx, store, req, res) {
     case 'item-settings': {
       // 只存创作相关的那几项，连接类配置仍走全局设置
       const id = String(body.id ?? '')
+      assertNotBusy(id)
       const patch = body.settings && typeof body.settings === 'object' ? body.settings : {}
       const allowed = ['visualStyle', 'voice', 'tone', 'width', 'height', 'segmentSeconds', 'imageWidth', 'imageHeight', 'kenBurns', 'burnSubtitles', 'motion', 'grade', 'transition', 'intro', 'renderWorkers', 'coverInVideo']
       const clean = {}
@@ -1256,14 +1769,16 @@ async function route(ctx, store, req, res) {
       return json(res, 200, { task: publicTask(String(body.id ?? '')) })
     }
     case 'chat': {
+      const itemId = typeof body.itemId === 'string' ? body.itemId : undefined
+      if (itemId) assertNotBusy(itemId)
       const result = await chatTurn(ctx, store, {
-        itemId: typeof body.itemId === 'string' ? body.itemId : undefined,
+        itemId,
         message: body.message,
       })
       return json(res, 200, result)
     }
     case 'chat/clear': {
-      const { state } = await store.mutate(draft => { draft.chat = []; return null }, { undoable: false })
+      const { state } = await store.mutate(draft => { draft.chat = []; return null })
       return json(res, 200, { chat: state.chat ?? [] })
     }
     case 'test': {
@@ -1299,7 +1814,8 @@ async function route(ctx, store, req, res) {
     case 'remove': {
       // 软删除：只打时间戳，文件和记录都留着，方便回收站恢复
       const id = String(body.id ?? '')
-      if (isBusy(id)) throw Object.assign(new Error('这个项目正在跑任务，等它结束或先点「停止」再删'), { status: 409 })
+      const conflict = busyConflictError(id, '这个项目正在跑任务，等它结束或先点「停止」再删')
+      if (conflict) throw conflict
       const state = await store.read()
       findItem(state, id)
       await store.mutate(draft => {
@@ -1311,6 +1827,8 @@ async function route(ctx, store, req, res) {
     }
     case 'cover': {
       const id = String(body.id ?? '')
+      // 出封面会读写项目文件，和后台任务并发会互相覆盖
+      assertNotBusy(id)
       const result = await makeCover(store, id, {
         ref: body.ref,
         title: body.title,
@@ -1318,6 +1836,322 @@ async function route(ctx, store, req, res) {
         height: body.height,
       })
       return json(res, 200, result)
+    }
+    case 'publish/read': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/generate': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      if (!item.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
+      const existing = await store.readPublish(id)
+      const targets = normalizeTargets(body.targets ?? existing.targets)
+      const needCover = targets.includes('xiaohongshu') && !existing.cover?.path
+      const task = startTask(id, 'publish-copy', needCover ? 2 : 1, async ({ report, signal }) => {
+        report(0, '正在写' + targets.map(platformId => PLATFORMS[platformId].label).join(' / ') + '文案…')
+        const result = await generateCopyVariants(ctx, {
+          item,
+          targets,
+          route: item.model ?? null,
+          signal,
+          onProgress: progress => {
+            const written = Number(progress?.text) || 0
+            const thought = Number(progress?.reasoning) || 0
+            report(0, '正在写文案（已写 ' + written + ' 字' + (thought ? '，思考 ' + thought + ' 字' : '') + '）')
+          },
+        })
+        const generated = result.variants ?? {}
+        const generatedEmpty = targets.filter(platformId => variantIsEmpty(platformId, generated[platformId] ?? {}))
+        if (generatedEmpty.length === targets.length) {
+          throw new Error('模型没有返回可用的文案，点「一键生成」再试一次')
+        }
+        await store.mutatePublish(id, draft => {
+          // 单平台重新生成只覆盖这个平台，不改发布范围；模型漏掉的平台保留旧文案
+          draft.targets = [...PLATFORM_ORDER]
+          for (const platformId of targets) {
+            const next = generated[platformId] ?? {}
+            if (!variantIsEmpty(platformId, next)) {
+              draft.variants[platformId] = sanitizeVariant(platformId, next)
+            }
+          }
+          return null
+        })
+        if (needCover) {
+          report(1, '正在生成小红书封面…')
+          await makePublishCover(store, id, {}).catch(() => null)
+        }
+        const keptLabel = generatedEmpty.map(platformId => PLATFORMS[platformId].label).join(' / ')
+        const baseText = result.issues?.length
+          ? '文案有 ' + result.issues.length + ' 处超限，请在页面上改'
+          : '完成'
+        report(needCover ? 2 : 1, baseText + (keptLabel ? '；' + keptLabel + ' 没生成，保留原文案' : ''))
+        return { model: result.model, issues: result.issues ?? [], keptPlatforms: generatedEmpty }
+      })
+      return json(res, 200, { task: publicTask(id) })
+    }
+    case 'publish/save': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      // V1 界面固定两平台都进发布包，忽略客户端传来的 targets，避免旧数据/旧 bundle 把它改窄
+      const variants = body.variants && typeof body.variants === 'object' ? body.variants : null
+      await store.mutatePublish(id, draft => {
+        draft.targets = [...PLATFORM_ORDER]
+        if (variants) {
+          for (const platformId of PLATFORM_ORDER) {
+            if (!(platformId in variants)) continue
+            draft.variants[platformId] = sanitizeVariant(platformId, { ...draft.variants[platformId], ...variants[platformId] })
+          }
+        }
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/revise': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      const publish = await store.readPublish(id)
+      const allowed = ['title', 'body', 'coverText']
+      const scope = [...new Set((Array.isArray(body.scope) ? body.scope : []).map(String).filter(id => allowed.includes(id)))]
+      if (!scope.length) throw Object.assign(new Error('至少选择一个要修改的字段'), { status: 400 })
+      const feedback = String(body.feedback ?? '').trim().slice(0, 500)
+      if (feedback.length < 2) throw Object.assign(new Error('修改意见太短，至少写两个字'), { status: 400 })
+      const conflict = busyConflictError(id, '正在跑任务，等结束再改')
+      if (conflict) throw conflict
+      // 新意见一提交就作废旧提案，避免旧提案弹窗和新任务同时存在
+      await store.mutatePublish(id, draft => {
+        draft.revisions = (draft.revisions ?? []).map(row => (row.status === 'proposed' ? { ...row, status: 'rejected' } : row))
+        return null
+      })
+      const task = startTask(id, 'publish-revise', 1, async ({ report, signal }) => {
+        report(0, '正在按意见修改' + scope.map(id => ({ title: '标题', body: '正文', coverText: '封面大字' }[id])).join(' / ') + '…')
+        const result = await reviseCopy(ctx, {
+          item,
+          publish,
+          scope,
+          feedback,
+          route: item.model ?? null,
+          signal,
+        }).catch(err => {
+          const raw = String(err?.message ?? '') + ' ' + String(err?.cause?.code ?? '')
+          if (/ETIMEDOUT|ECONNRESET|ECONNREFUSED|fetch failed|Request timed out|network/i.test(raw)) {
+            throw new Error('模型请求超时（网络或模型通道不稳），已自动重试仍失败。稍后再点一次「提意见」；如果一直超时，去设置里换一个模型。')
+          }
+          throw err
+        })
+        const revision = {
+          id: newId('rev'),
+          at: new Date().toISOString(),
+          scope,
+          feedback,
+          status: 'proposed',
+          before: revisionBefore(publish, scope),
+          after: result.after,
+          model: result.model,
+          note: result.note,
+          appliedAt: null,
+        }
+        await store.mutatePublish(id, draft => {
+          draft.revisions.push(revision)
+          draft.revisions = draft.revisions.slice(-30)
+          return null
+        })
+        report(1, '改好了，等你采用')
+        return { revisionId: revision.id }
+      })
+      return json(res, 200, { task: publicTask(id) })
+    }
+    case 'publish/revise/apply': {
+      const id = String(body.id ?? '')
+      const revisionId = String(body.revisionId ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      const conflict = busyConflictError(id, '正在跑任务，等结束再采用')
+      if (conflict) throw conflict
+      const publish = await store.readPublish(id)
+      const revision = (publish.revisions ?? []).find(row => row.id === revisionId)
+      if (!revision) throw Object.assign(new Error('找不到这份修改提案'), { status: 404 })
+      if (revision.status !== 'proposed') throw Object.assign(new Error('这份提案已经处理过了'), { status: 409 })
+      const changed = revisionMismatch(publish, revision)
+      if (changed.length && !body.force) {
+        throw Object.assign(new Error('当前' + changed.join('、') + '已经改过，先确认是否仍采用这份提案'), { status: 409, code: 'changed' })
+      }
+      let renderedCover = null
+      if (revision.scope.includes('coverText')) {
+        const candidates = revision.after.coverTexts ?? []
+        const index = Math.max(0, Math.min(candidates.length - 1, Number(body.coverTextIndex) || 0))
+        const text = String(candidates[index] ?? '').trim()
+        if (!text) throw Object.assign(new Error('没有可用的封面大字候选'), { status: 400 })
+        renderedCover = await makePublishCover(store, id, { title: text, textSource: 'manual' })
+      }
+      await store.mutatePublish(id, draft => {
+        if (revision.scope.includes('title') || revision.scope.includes('body')) {
+          const next = { ...draft.variants.xiaohongshu }
+          if (revision.scope.includes('title')) next.title = revision.after.title ?? ''
+          if (revision.scope.includes('body')) next.body = revision.after.body ?? ''
+          draft.variants.xiaohongshu = sanitizeVariant('xiaohongshu', next)
+        }
+        const target = (draft.revisions ?? []).find(row => row.id === revisionId)
+        if (target) {
+          target.status = 'accepted'
+          target.appliedAt = new Date().toISOString()
+          if (renderedCover) target.appliedCoverText = renderedCover.title
+        }
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/revise/discard': {
+      const id = String(body.id ?? '')
+      const revisionId = String(body.revisionId ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      await store.mutatePublish(id, draft => {
+        const target = (draft.revisions ?? []).find(row => row.id === revisionId)
+        if (target && target.status === 'proposed') target.status = 'rejected'
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/revise/revert': {
+      const id = String(body.id ?? '')
+      const revisionId = String(body.revisionId ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      const conflict = busyConflictError(id, '正在跑任务，等结束再回滚')
+      if (conflict) throw conflict
+      const publish = await store.readPublish(id)
+      const revision = (publish.revisions ?? []).find(row => row.id === revisionId)
+      if (!revision) throw Object.assign(new Error('找不到这份历史提案'), { status: 404 })
+      if (revision.status !== 'accepted') throw Object.assign(new Error('只有已采用的提案可以回滚'), { status: 409 })
+      if (revision.scope.includes('coverText') && revision.before.coverText) {
+        await makePublishCover(store, id, { title: revision.before.coverText, textSource: 'manual' })
+      }
+      await store.mutatePublish(id, draft => {
+        const next = { ...draft.variants.xiaohongshu }
+        if (revision.scope.includes('title')) next.title = revision.before.title ?? ''
+        if (revision.scope.includes('body')) next.body = revision.before.body ?? ''
+        draft.variants.xiaohongshu = sanitizeVariant('xiaohongshu', next)
+        const target = (draft.revisions ?? []).find(row => row.id === revisionId)
+        if (target) target.status = 'reverted'
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/cover': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      findItem(state, id)
+      const conflict = busyConflictError(id, '正在跑任务，等结束再生成封面')
+      if (conflict) throw conflict
+      await makePublishCover(store, id, {
+        title: body.title,
+        ref: body.ref,
+        layout: body.layout,
+        fontScale: body.fontScale,
+        textSource: body.textSource,
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
+    }
+    case 'publish/export': {
+      const id = String(body.id ?? '')
+      const state = await store.read()
+      const item = findItem(state, id)
+      if (!item.render?.path) throw Object.assign(new Error('还没有成片，先合成'), { status: 400 })
+      const conflict = busyConflictError(id, '正在跑任务，等结束再导出')
+      if (conflict) throw conflict
+      const targets = [...PLATFORM_ORDER]
+      await store.mutatePublish(id, draft => { draft.targets = targets; return null })
+      let fresh = await store.readPublish(id)
+      // 小红书封面在发布包里是独立文件；没有就顺手补一张，补不出来再交给检查项提示
+      let coverAbs = fresh.cover?.path ? join(store.itemDir(id), fresh.cover.path) : ''
+      if (targets.includes('xiaohongshu') && !(coverAbs && await stat(coverAbs).catch(() => null))) {
+        await makePublishCover(store, id, {}).catch(() => null)
+        fresh = await store.readPublish(id)
+        coverAbs = fresh.cover?.path ? join(store.itemDir(id), fresh.cover.path) : ''
+      }
+      const video = await videoInfo(store, state, item)
+      const checks = publishChecks(fresh, targets, video, Boolean(coverAbs && await stat(coverAbs).catch(() => null)))
+      const blocking = checks.filter(check => check.state === 'error')
+      if (!video) throw Object.assign(new Error('成片文件不见了，重新合成一次'), { status: 400 })
+      if (blocking.length) {
+        const first = blocking[0]
+        throw Object.assign(new Error('还有 ' + blocking.length + ' 项超过平台限制，先改文案：' + first.label + ' ' + first.detail), { status: 400 })
+      }
+      const exportItem = video.secs && video.secs !== item.render?.secs
+        ? { ...item, render: { ...item.render, secs: video.secs } }
+        : item
+      const result = await buildExport({
+        baseDir: store.itemDir(id),
+        item: exportItem,
+        publish: fresh,
+        targets,
+        ruleVersion: RULE_VERSION,
+      })
+      await store.mutatePublish(id, draft => {
+        draft.exports = [...(draft.exports ?? []), {
+          at: new Date().toISOString(),
+          stamp: result.stamp,
+          dir: result.relDir,
+          targets,
+        }].slice(-20)
+        return null
+      })
+      let copied = null
+      const dir = String(body.dir ?? '').trim()
+      if (dir) {
+        try {
+          await mkdir(dir, { recursive: true })
+          const dest = join(dir, result.folderName)
+          const relToSource = relative(resolve(result.absDir), resolve(dest))
+          if (!relToSource.startsWith('..')) {
+            throw Object.assign(new Error('导出目录不能放在发布包自己里面'), { status: 400 })
+          }
+          await cp(result.absDir, dest, { recursive: true })
+          copied = dest
+        } catch (err) {
+          copied = { error: String(err.message || err).slice(0, 200) }
+        }
+      }
+      return json(res, 200, {
+        export: {
+          stamp: result.stamp,
+          relDir: result.relDir,
+          folderName: result.folderName,
+          files: result.files.map(file => ({ path: file.path, name: file.name, bytes: file.bytes })),
+          copied,
+        },
+        publish: await publishView(store, state, id),
+      })
+    }
+    case 'publish/record': {
+      const id = String(body.id ?? '')
+      const platformId = String(body.platform ?? '')
+      if (!PLATFORMS[platformId]) throw Object.assign(new Error('不支持的平台'), { status: 400 })
+      const state = await store.read()
+      findItem(state, id)
+      const status = body.status === 'published' ? 'published' : 'pending'
+      await store.mutatePublish(id, draft => {
+        const rest = (draft.records ?? []).filter(row => row.platform !== platformId)
+        if (status === 'published' || body.url || body.note) {
+          rest.push({
+            platform: platformId,
+            status,
+            url: String(body.url ?? ''),
+            note: String(body.note ?? ''),
+            at: new Date().toISOString(),
+            metrics: body.metrics && typeof body.metrics === 'object' ? body.metrics : {},
+          })
+        }
+        draft.records = rest
+        return null
+      })
+      return json(res, 200, { publish: await publishView(store, state, id) })
     }
     case 'trash-list': {
       const state = await store.read()
@@ -1373,6 +2207,7 @@ async function route(ctx, store, req, res) {
     case 'segments': {
       // 手改稿：只动文字和画面提示词，已有音画保留（改了文字会提示重新配音）
       const id = String(body.id ?? '')
+      assertNotBusy(id)
 
       // 单段更新：客户端只提交自己这一段。两段连着改时不会用旧快照覆盖前一段。
       if (body.segment && typeof body.segment === 'object') {
@@ -1449,7 +2284,8 @@ async function route(ctx, store, req, res) {
     case 'finish': {
       // 最后一步：缺的音补上、然后合成，一次点完
       const id = String(body.id ?? '')
-      if (isBusy(id)) throw Object.assign(new Error('这个项目正在跑任务，等它结束'), { status: 409 })
+      const conflict = busyConflictError(id, '这个项目正在跑任务，等它结束')
+      if (conflict) throw conflict
       const secrets = await store.readSecrets()
       await startFinish(store, secrets, id)
       return json(res, 200, { task: publicTask(id) })
@@ -1461,7 +2297,13 @@ async function route(ctx, store, req, res) {
     }
     case 'cancel': {
       const id = String(body.id ?? '')
-      return json(res, 200, { cancelled: cancelTask(id) })
+      const cancelled = cancelTask(id)
+      if (cancelled) return json(res, 200, { cancelled })
+      // 任务在另一个 Host 进程里跑：本窗口没有它的句柄，只能去那个窗口停
+      if (isTaskLocked(id)) {
+        return json(res, 200, { cancelled: false, lockedByOther: true, message: '任务在另一个窗口里跑，本窗口停不了；去那个窗口点停止' })
+      }
+      return json(res, 200, { cancelled: false })
     }
     case 'settings': {
       const patch = body.settings && typeof body.settings === 'object' ? body.settings : {}
@@ -1514,7 +2356,7 @@ async function listEngines(ctx) {
 
 async function probeFfmpeg() {
   return new Promise(resolve => {
-    execFile(process.env.PICTURE_DESK_FFMPEG || process.env.STORY_DESK_FFMPEG || 'ffmpeg', ['-version'], { timeout: 5000 }, (err, stdout) => {
+    execFile(FFMPEG, ['-version'], { timeout: 5000 }, (err, stdout) => {
       if (err) return resolve({ ok: false, detail: '找不到 ffmpeg' })
       const line = String(stdout).split('\n')[0] ?? ''
       resolve({ ok: true, detail: line.replace('ffmpeg version ', 'ffmpeg ') })

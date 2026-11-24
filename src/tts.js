@@ -36,6 +36,25 @@ export const TTS_PRESETS = [
 
 const INSTRUCTION = '请朗读下面这段旁白。语气平稳克制，像在给朋友讲一件旧事，句与句之间留一点停顿，不要播音腔。'
 
+/** 合成请求自己的超时：调用方没给 signal 时（如试听路由）也不能无限挂着。 */
+const REQUEST_TIMEOUT_MS = 120_000
+
+/**
+ * 合并调用方的 signal 与合成本身的超时信号。
+ * 用户点「停止」要能立刻中断，超时也要能自己收口——两者取先到的那个。
+ */
+function combineSignals(outer, timeout) {
+  if (!outer) return timeout
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([outer, timeout])
+  // 老一点的 Node 没有 AbortSignal.any：手动跟随任一信号
+  const controller = new AbortController()
+  for (const source of [outer, timeout]) {
+    if (source.aborted) { controller.abort(); break }
+    source.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+  return controller.signal
+}
+
 function describeFailure(status, body) {
   let message = ''
   try {
@@ -68,19 +87,28 @@ export async function synthesize({ endpoint, model, key, voice, text, signal }) 
     audio: { voice: VOICES.some(row => row.id === voice) ? voice : 'mimo_default', format: 'mp3' },
     stream: false,
   }
+  // 调用方可能没给 signal（例如试听路由），这里自己兜 120 秒：
+  // 不兜的话要等 undici 默认的 300 秒，用户会以为界面卡死，而且报错还是「连不上」
+  const requestSignal = combineSignals(signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS))
   let response
+  let raw
   try {
     response = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify(body),
-      signal,
+      signal: requestSignal,
     })
+    // 读 body 也要算在超时里：音频有几 MB，卡在读取阶段和卡在连接阶段一样会挂住
+    raw = await response.text()
   } catch (err) {
-    if (err?.name === 'AbortError') throw err
+    // 调用方主动停止 / 自己设的超时：原样抛出，由上层翻译
+    if (signal?.aborted) throw err
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+      throw new Error(`音频服务超时（${REQUEST_TIMEOUT_MS / 1000} 秒），地址可达但没返回结果`)
+    }
     throw new Error(`连不上音频服务（${url}）：${err?.message ?? err}`)
   }
-  const raw = await response.text()
   if (!response.ok) throw new Error(describeFailure(response.status, raw))
   let parsed
   try {
@@ -111,6 +139,10 @@ export async function testTtsChannel({ endpoint, model, key, voice }) {
     const kb = Math.max(1, Math.round(buffer.length / 1024))
     return { ok: true, detail: `合成成功，返回 ${kb} KB 音频（${Date.now() - started} ms）` }
   } catch (err) {
-    return { ok: false, detail: err?.message ?? String(err) }
+    // 检测自带 60 秒上限（比合成默认的 120 秒短），超时单独说清楚，别说成「连不上」
+    const detail = err?.name === 'TimeoutError'
+      ? '检测超时（60 秒），地址可达但没返回结果'
+      : err?.message ?? String(err)
+    return { ok: false, detail }
   }
 }

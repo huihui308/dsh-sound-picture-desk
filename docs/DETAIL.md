@@ -1,18 +1,22 @@
 # 声画工作台（dsh-sound-picture-desk）
 
+<p align="center"><img src="assets/icon.svg" width="112" alt="声画工作台"></p>
+
 ## 它解决什么
 
 成片的制作顺序是固定的：稿子 → 配音 → 画面 → 装配。每一步都依赖上一步的产物，手工做的时候要在多个工具之间来回搬文件。这个插件把顺序固定下来，每步的产物落在项目目录里，下一步直接读。
 
-## 五步与各自的判定
+## 六步与发布
 
 | 步骤 | 做什么 | 什么时候算完成 |
 |---|---|---|
 | 选题 | 建项目，收题材与可选原文 | 有项目 |
 | 稿子 | 模型写分段旁白，每段配画面描述 | 分段 ≥ 2 |
+| 参考图 | 抽人物/场景锚点，逐张确认 | 锚点全部定稿或没建过 |
 | 旁白 | 逐段 TTS，落 mp3 并读时长 | 每段都有音频 |
 | 分镜图 | 逐段生图，落 png | 每段都有图 |
 | 成片 | 每段「图 + 音」成一个镜头，再拼接 | 有 mp4 |
+| 发布 | 生成小红书 / X 文案、封面与导出包，用户自己上传 | 可导出发布包（文案合规） |
 
 阶段不是另存的状态，是按分段字段算出来的：一段缺音频就还在「稿子」，全部有音没图是「旁白」，音图都齐是「分镜图」，有 mp4 是「成片」。这样改稿、重配、重出图之后阶段会自动往回退，不会出现「显示成片但其实少了一段音频」。
 
@@ -27,20 +31,22 @@
 
 画面提示词只写内容（主体、动作、环境、前景遮挡、光源方向、气氛、人数），风格后缀由插件按所选风格统一追加——所以换风格不需要重写稿。
 
+原始材料（选题页的「原文」）最多 24000 字进 prompt（`RAW_TEXT_MAX`）：超出的部分不参与写稿，提示词里会告诉模型只用前 24000 字把稿子写完整、不要向用户索要剩余材料。
+
 ## 通道
 
 - **文案**：DSH 当前默认模型。没有可用模型时写稿会直接报错，不静默降级。
 - **旁白**：MiMo TTS，走 `chat/completions`，旁白放在 assistant 消息里，音频从 `message.audio.data` 以 base64 取回。
-- **画面**：默认本机 Qwen-Image（`/generate`，9 秒一张左右）；平台通道是 OpenAI 兼容的 `/images/generations`。
-- **装配**：本机 ffmpeg，每镜头 libx264 + aac，拼接用 concat demuxer 直接 copy 不重编码。
+- **画面**：默认本机 Qwen-Image，走 OpenAI 兼容协议（`POST {endpoint}/images/generations`），本机默认 endpoint 是 `http://127.0.0.1:30021/v1`，9 秒一张左右；平台通道同协议（MiniMax `image-01` 例外，走它自己的原生接口，见下）。
+- **装配**：本机 ffmpeg，每镜头优先用检测到的硬件编码器（NVENC / QSV / VideoToolbox / AMF），不可用时回退 libx264；音轨 aac 并补齐到镜头时长（`apad` + `atrim`），否则硬切拼接时音轨首尾相接、画面切点却多出 `SEGMENT_TAIL`，旁白会逐段提前。拼接用 concat demuxer 直接 copy 不重编码；本轮若发生过硬件→CPU 降级，则改为统一重编码拼接，避免混合编码流。
 - **字幕**：按句末标点切成短句，一句话一条 cue，时间按字数占该段音频的比例分配。烧录用 ASS 并在文件头写死 `PlayResX/PlayResY`——不写的话 libass 按默认 384×288 排版，字号会被放大数倍、位置跑到画面外。
 
 ## 服务商预设
 
-生成图片：本机 Qwen-Image（`/generate`，免密钥）、阿里云 MaaS、MiniMax（`api.minimax.cn/v1`，国际站换 `api.minimax.io/v1`）、OpenAI 兼容。
+生成图片：本机 Qwen-Image（OpenAI 兼容入口，默认 `http://127.0.0.1:30021/v1`，免密钥）、阿里云 MaaS、MiniMax（`api.minimaxi.com/v1`；国际站为 `api.minimax.io/v1`）、OpenAI 兼容。
 生成声音：小米 MiMo（token-plan 入口）、小米 MiMo 公众版。
 
-MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax-H3-Image`），所以不需要单独协议分支。
+MiniMax 按模型名自动分两条协议：`image-01` / `image-01-live` 走原生 `POST /v1/image_generation`（下划线，固定 ¥0.025/张），`MiniMax-H3-Image` 系列走 OpenAI 兼容的 `POST /v1/images/generations`。原生接口的 prompt 上限 1500 字符，超限时只截内容、完整保留风格后缀。
 
 ## 通道配置与检测
 
@@ -48,15 +54,14 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 
 检测走真实请求，因为「配了错的 key」和「没配 key」在界面上长得一样：
 
-- 生图·本机：`GET /health`
-- 生图·OpenAI 兼容：`GET /models`，不花钱且同时验地址与密钥；服务不支持该路径时明确说明「只能靠出图验证」，不假装通过
-- 旁白：实际合成一句「测试。」，返回字节数与时延
+- 生图：`GET {endpoint}/models`，不花钱且同时验地址与密钥；本机与平台同一套（本机默认 `http://127.0.0.1:30021/v1`，免密钥也照样请求）。`image-01` 不在 `/models` 列表里，改发一个空请求体到 `/image_generation`（空请求不生成图、不计费），按返回的 `base_resp` 判密钥。服务不支持 `/models` 时明确说明「只能靠出图验证」，不假装通过。
+- 旁白：实际合成一句「测试。」，返回字节数与时延；检测自带 60 秒上限，超时单独报。
 
 失败按原因分类：401/403 是密钥问题，连接失败是地址或网络问题，404/405 是路径问题，超时单独报。
 
 ## 阶段页
 
-六个页签对应六个阶段（参考图可选），一次只渲染一个。完成判定只认产物：①有分段、②每段有文字、③参考图全定稿（没建过算完成）、④每段有音频、⑤每段有图、⑥有成片。默认落在第一个未完成的页。配置按项目存（`item.settings`），覆盖全局设置。
+六个制作页签对应六个阶段（参考图可选），一次只渲染一个；成片之后另有独立「发布」入口，不占六阶段。完成判定只认产物：①有分段、②每段有文字、③参考图全定稿（没建过算完成）、④每段有音频、⑤每段有图、⑥有成片。默认落在第一个未完成的页。配置按项目存（`item.settings`），覆盖全局设置。
 
 「听 9 种」为每个音色合成同一句话（取第一段前 40 字）写进 `samples/`，界面给每行一个播放器。「看 5 种」用项目立意把五种风格各画一张写进 `samples/`，并排点选。两者都是后台任务，读 `item.samples`。
 
@@ -68,27 +73,46 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 
 这个下拉是自绘的（`DropSelect`），不用原生 `<select>`：原生弹层由浏览器自己画，深色主题下常常是浅底，`option/optgroup` 只认一部分样式，模型提供商那行分组标题会亮得刺眼，各家浏览器还不一致。自绘版把弹层挂在面板自己的菜单底板上（`--dsw-specific-menu` + 背景模糊），分组标题压成三级文字色，选中项带勾，键盘 ↑↓/Home/End/Enter/Esc 全通。
 
-## 写稿即配图
+## 写稿与配图（两个独立任务）
 
-`startScript` 在稿子落盘后紧接着逐段出图：清空旧 `images/`（并立刻重建目录，否则写图会 ENOENT），依次生成 `s001.png…`，单段失败只记 `segment.error` 不中断。任务总数在写稿完成后由 `report(done, msg, total)` 补成 `1 + 段数`，进度条才准。
+写稿和出图不是一件事，分属「稿子」和「分镜图」两个页签，各自一个后台任务：
+
+- `startScript`（任务 kind `script`）只做三件事：调模型写稿、把新稿原子落盘、清掉旧 `images/` 并立刻重建目录（换稿后旧图不再被引用；先落盘再清图，落盘失败不会把旧图先删掉）。任务总数固定 1，进度条只反映写稿这一步，出图不在这个任务里。
+- 出图是「分镜图」页的独立任务 `startImages`（kind `image`），任务总数 = 本次要出的段数：按分段逐张生成 `s001.png…`，每次写回 `segment.imagePath` 与 `imageAt`。整页出图会重出当前全部段；单段「重出这张」只传该段的 `only`。单段失败（生图请求报错、图片归一化失败）会让整个出图任务停下并报错，已经落盘的图保留、不会丢；模型返回横图不算失败，只写 `segment.error` 提示重出，任务继续。
 
 ## 参考图（人物锚点）
 
 `item.anchors`：`{id, name, kind: person|scene, desc, candidates[], approved}`。提取一次模型调用，只抽反复出现的角色与主场景，描述用形状写清服制与特征（避免只写朝代名导致画面漂移）。
 
-画图走当前生图通道的纯文生图；定稿后 `anchorHint(item)` 把每个已定稿条目的 `name（desc）` 拼进分镜 prompt——**这是文字层一致性，不是图像层**。真图像一致性要 img2img：本机 `gen_api.py` 的 `/generate` 接受 multipart 文件字段作参考图，OpenAI 兼容的 `/images/generations` 不接受，接它需要新增一条 multipart 分支。
+画图走当前生图通道的纯文生图；定稿后 `anchorHint(item)` 把每个已定稿条目的 `name（desc）` 拼进分镜 prompt——**这是文字层一致性，不是图像层**。真图像一致性要 img2img：本机服务自己的原生 `/generate` 接受 multipart 文件字段作参考图，但插件统一走 OpenAI 兼容的 `{endpoint}/images/generations`（不接受参考图），接它需要新增一条 multipart 分支。
 
 ## 导出
 
 成片页可以把 mp4 和 srt 复制到指定目录（留空则 `~/Downloads`），文件名取项目标题并清掉路径非法字符。
 
-## 助手
+## 发布（V1）
 
-右侧 300px 常驻对话栏，模型跟随 DSH 当前默认模型。每次对话把当前项目的分段（含 id、旁白、画面描述、配音状态）和最近六条对话一起给模型，要求它返回 `{reply, segments}`。
+成片之后有独立的「发布」入口，只做发布包，不登录平台：小红书 / X 两个平台。
 
+- 文案：顶部两个平台页签切换，每页「一键生成」只生成当前平台版本；小红书标题 ≤20 字、正文 ≤1000、话题 ≤10，X 单条 ≤280 加权字符（CJK 2、URL 23）。超限自动带反馈重试一次，仍超限在页面标红并挡住导出；模型漏掉某平台时保留该平台旧文案。
+- 按意见修改：标题 / 正文 / 封面大字可单独提意见，模型只改勾选字段并返回提案，界面对比后采用才写回；已采用的版本可回滚。封面另支持换底图和底部/顶部、字号。
+- 修订记录：`publish.json` 的 `revisions` 保存 before/after、意见、状态（proposed / accepted / rejected / reverted），最多 30 条。
+- 封面：复用 `renderCoverImage()` 出 1080×1440，单独存 `publish.cover`，不覆盖成片首帧的 `item.cover`。
+- 发布包：`projects/<id>/exports/<stamp>/`，每平台一个子目录（video / copy.md，封面有则带），外加 README / checklist / manifest（含 sha256）。先写临时目录再 rename，导出文件用 copy 而不是硬链接，旧包不会随后续重渲染变化。
+- 数据：`projects/<id>/publish.json`（独立原子写锁），不写 `state.json`。
+- 导出走媒体路由（`MEDIA_DIRS` 含 `exports`），远程 Web 不依赖本机目录。
+- 任务：文案生成用现有 jobs 队列，kind `publish-copy`，可停止。
+- 已知：不做自动填表 / 自动发布 / 打 zip；平台规则以 `src/publish/rules.js` 的 `RULE_VERSION` 为准。
+
+## 助手（界面暂无入口）
+
+右侧 300px 常驻对话栏已按需求从界面移除（`client.js` 里 `ChatPanel` 保留但不再渲染）；Host 的 `chat` / `chat/clear` 接口和 `chat.js` 逻辑仍在，接口仍可达。每次对话把当前项目的分段（含 id、旁白、画面描述、配音状态）和最近六条**同一项目**的对话一起给模型，要求它返回 `{reply, segments}`。
+
+- 对话记录写入时带 `itemId`，读历史按项目过滤；没有 `itemId` 的旧记录按兼容保留。
 - `reply` 直接显示。
 - `segments` 只按 id 命中已有段落；文字变了清 `audioPath`/`audioSecs`，画面描述变了清 `imagePath`，并清空 `render`、阶段自动回退。没提到的段落不动。
 - 模型返回不了 JSON 时退化成纯文本回复，不报错。
+- `chat/clear` 仍清空全部对话（不按项目区分）——界面没有入口，这条限制暂时不影响使用。
 
 ## 密钥
 
@@ -99,8 +123,9 @@ MiniMax 的 `POST /v1/images/generations` 是 OpenAI 兼容的（模型 `MiniMax
 - 不做口型、不做多轨配乐、不做多角色对白。
 - 一次一个任务；同一项目并发请求返回 409。
 - 画面比例可以在项目里改，但已有图片不会自动重出。
-- 字幕烧录需要系统中文字体；缺字体时只落 SRT，不压画面。
+- 字幕烧录需要系统中文字体；缺字体时压字幕这一步会失败（整次合成报错，上一版成片保留）。只想拿 SRT 就把「字幕压进画面」关掉再合成。
 - 没有逐字时间戳，字幕时间按字数比例估算，不是 TTS 返回的真实对齐。
+- 发布只生成发布包，不登录平台、不代发。
 
 ## 字幕时间轴
 
