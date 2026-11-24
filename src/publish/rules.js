@@ -1,7 +1,7 @@
 // 发布规则：小红书 / X。
 // 数值是 2026-11-23 的口径，平台会变；集中放这里，改规则不用翻业务代码。
 // 加权长度按 X 官方口径：CJK 2、URL 23、其余 1。
-export const RULE_VERSION = '2026-11-23'
+export const RULE_VERSION = '2026-11-24'
 
 export const PLATFORM_ORDER = ['xiaohongshu', 'x']
 
@@ -10,20 +10,22 @@ export const PLATFORMS = {
     id: 'xiaohongshu',
     label: '小红书',
     composeUrl: 'https://creator.xiaohongshu.com/publish/publish',
-    summary: '视频 9:16 · 封面 3:4 · 标题 ≤20 字 · 正文 ≤1000 字',
+    summary: '视频 9:16 · 封面 3:4 · 标题 ≤20 字 · 正文 ≤1000 字 · 置顶评论 ≤1000 字',
     video: { width: 1080, height: 1920, ratio: '9:16', maxSecs: 15 * 60, maxBytes: 2 * 1024 ** 3 },
     cover: { width: 1080, height: 1440, ratio: '3:4' },
     title: { max: 20 },
     body: { max: 1000 },
     tags: { max: 10, recommended: '建议 3–5 个' },
+    comment: { max: 1000 },
   },
   x: {
     id: 'x',
     label: 'X（Twitter）',
     composeUrl: 'https://x.com/compose/post',
-    summary: '单条 ≤280 加权字符 · 视频 ≤2:20 · 取首帧',
+    summary: '2–4 条 thread · 每条 ≤280 加权字符 · 视频 ≤2:20 · 取首帧',
     video: { width: 1080, height: 1920, ratio: '9:16', maxSecs: 140, maxBytes: 512 * 1024 * 1024 },
     text: { maxWeighted: 280 },
+    thread: { maxPosts: 5 },
   },
 }
 
@@ -58,15 +60,30 @@ export function weightedLength(value) {
   return total
 }
 
+/** X 的帖子序列：新数据用 posts；老数据只有 text，读的时候当成一条。 */
+export function xPosts(variant = {}) {
+  const list = Array.isArray(variant.posts) ? variant.posts.map(text => String(text ?? '')) : []
+  if (list.length) return list
+  const text = String(variant.text ?? '')
+  return text.trim() ? [text] : []
+}
+
 export function countVariant(platformId, variant = {}) {
   if (platformId === 'xiaohongshu') {
     return {
       title: [...String(variant.title ?? '')].length,
       body: [...String(variant.body ?? '')].length,
       tags: Array.isArray(variant.tags) ? variant.tags.length : 0,
+      comment: [...String(variant.comment ?? '')].length,
     }
   }
-  return { weighted: weightedLength(variant.text) }
+  const weights = xPosts(variant).map(part => weightedLength(part))
+  return {
+    weighted: weights.length ? Math.max(...weights) : 0,
+    total: weights.reduce((sum, value) => sum + value, 0),
+    posts: weights,
+    count: weights.length,
+  }
 }
 
 export function formatDuration(value) {
@@ -117,15 +134,42 @@ export function validateCopy(platformId, variant = {}) {
     checks.push(row('tags', '小红书话题', tags.length > platform.tags.max ? 'error' : 'ok',
       tags.length + '/' + platform.tags.max + ' 个',
       tags.length > platform.tags.max ? '留 ' + platform.tags.max + ' 个以内' : ''))
+
+    const comment = String(variant.comment ?? '').trim()
+    const commentLen = [...comment].length
+    if (commentLen > platform.comment.max) {
+      checks.push(row('comment', '小红书置顶评论', 'error',
+        commentLen + '/' + platform.comment.max + ' 字',
+        '删掉 ' + (commentLen - platform.comment.max) + ' 个字'))
+    } else if (comment) {
+      checks.push(row('comment', '小红书置顶评论', 'ok', commentLen + '/' + platform.comment.max + ' 字'))
+    } else if (/置顶评论|置顶留言/.test(body)) {
+      checks.push(row('comment', '小红书置顶评论', 'warn',
+        '正文提到置顶评论，但评论还没写', '把装法/仓库地址写进置顶评论，发布后再贴'))
+    }
   } else {
-    const text = String(variant.text ?? '')
-    const weighted = weightedLength(text)
-    if (!text.trim()) checks.push(row('text', 'X 正文', 'error', '还没填', '写一条 280 加权字符以内的帖子'))
-    else if (weighted > platform.text.maxWeighted) {
-      checks.push(row('text', 'X 正文', 'error',
-        weighted + '/' + platform.text.maxWeighted + '（加权）',
-        '中文按 2 计重，得再删一些'))
-    } else checks.push(row('text', 'X 正文', 'ok', weighted + '/' + platform.text.maxWeighted + '（加权）'))
+    const posts = xPosts(variant)
+    if (!posts.length || !posts.some(post => post.trim())) {
+      checks.push(row('text', 'X 正文', 'error', '还没填', '写一条 280 加权字符以内的帖子'))
+    } else {
+      if (posts.length > (platform.thread?.maxPosts ?? 5)) {
+        checks.push(row('thread', 'X thread 条数', 'error',
+          posts.length + '/' + (platform.thread?.maxPosts ?? 5) + ' 条', '拆成主页长文或删掉多余回复'))
+      }
+      posts.forEach((post, index) => {
+        const label = posts.length === 1 ? 'X 正文' : index === 0 ? 'X 主帖' : 'X 回复 ' + index
+        const weighted = weightedLength(post)
+        if (!post.trim()) {
+          checks.push(row('post-' + index, label, 'error', '还没填', '补上这条内容'))
+        } else if (weighted > platform.text.maxWeighted) {
+          checks.push(row('post-' + index, label, 'error',
+            weighted + '/' + platform.text.maxWeighted + '（加权）',
+            '中文按 2 计重，得再删一些'))
+        } else {
+          checks.push(row('post-' + index, label, 'ok', weighted + '/' + platform.text.maxWeighted + '（加权）'))
+        }
+      })
+    }
   }
   return checks
 }
@@ -171,12 +215,14 @@ export function normalizeTargets(value) {
 }
 
 export function emptyVariant(platformId) {
-  return platformId === 'xiaohongshu' ? { title: '', body: '', tags: [] } : { text: '' }
+  return platformId === 'xiaohongshu'
+    ? { title: '', body: '', tags: [], comment: '' }
+    : { text: '', posts: [] }
 }
 
 /** 某个平台的文案是否为空。多平台生成时用来判断“模型漏了哪个平台”，避免拿空串覆盖旧文案。 */
 export function variantIsEmpty(platformId, variant = {}) {
-  if (platformId === 'x') return !String(variant.text ?? '').trim()
+  if (platformId === 'x') return xPosts(variant).every(post => !String(post).trim())
   return !String(variant.title ?? '').trim() && !String(variant.body ?? '').trim()
 }
 
@@ -193,9 +239,20 @@ export function sanitizeVariant(platformId, input = {}) {
       const text = String(tag ?? '').replace(/^#+/, '').trim().slice(0, 30)
       if (text && !cleanTags.includes(text)) cleanTags.push(text)
     }
-    return { title: textOf(input.title, 200), body: textOf(input.body, 5000), tags: cleanTags.slice(0, 20) }
+    return {
+      title: textOf(input.title, 200),
+      body: textOf(input.body, 5000),
+      tags: cleanTags.slice(0, 20),
+      comment: textOf(input.comment, 5000),
+    }
   }
-  return { text: textOf(input.text, 5000) }
+  const text = textOf(input.text, 5000)
+  const posts = (Array.isArray(input.posts) ? input.posts : [])
+    .map(post => textOf(post, 5000))
+    .filter(Boolean)
+    .slice(0, PLATFORMS.x.thread?.maxPosts ?? 5)
+  const finalPosts = posts.length ? posts : (text ? [text] : [])
+  return { text: finalPosts[0] ?? '', posts: finalPosts }
 }
 
 export function composeCopy(platformId, variant = {}) {
@@ -211,7 +268,9 @@ export function composeCopy(platformId, variant = {}) {
     if (tags.length) parts.push(tags.join(' '))
     return parts.join('\n\n')
   }
-  return String(variant.text ?? '').trim()
+  const posts = xPosts(variant).map(post => String(post).trim())
+  if (posts.length <= 1) return posts[0] ?? ''
+  return posts.map((post, index) => (index === 0 ? '【主帖】\n' : '【回复 ' + index + '】\n') + post).join('\n\n')
 }
 
 export function emptyPublish() {

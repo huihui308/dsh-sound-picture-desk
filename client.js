@@ -2088,7 +2088,11 @@ window.__ModuleLoader__.load({
         if (tags.length) parts.push(tags.join(' '))
         return parts.join('\n\n')
       }
-      return String(variant?.text ?? '').trim()
+      const posts = Array.isArray(variant?.posts) && variant.posts.length
+        ? variant.posts.map(post => String(post ?? ''))
+        : (String(variant?.text ?? '').trim() ? [String(variant.text)] : [])
+      if (posts.length <= 1) return String(posts[0] ?? '').trim()
+      return posts.map((post, index) => (index === 0 ? '【主帖】\n' : '【回复 ' + index + '】\n') + String(post ?? '').trim()).join('\n\n')
     }
 
     async function copyPlainText(text) {
@@ -2227,8 +2231,15 @@ window.__ModuleLoader__.load({
           title: [...String(draftsSafe.xiaohongshu?.title ?? '')].length,
           body: [...String(draftsSafe.xiaohongshu?.body ?? '')].length,
           tags: (Array.isArray(draftsSafe.xiaohongshu?.tags) ? draftsSafe.xiaohongshu.tags : []).length,
+          comment: [...String(draftsSafe.xiaohongshu?.comment ?? '')].length,
         }
-        : { weighted: xWeightedLength(draftsSafe.x?.text ?? '') }
+        : (() => {
+          const posts = Array.isArray(draftsSafe.x?.posts) && draftsSafe.x.posts.length
+            ? draftsSafe.x.posts.map(post => String(post ?? ''))
+            : (String(draftsSafe.x?.text ?? '').trim() ? [String(draftsSafe.x.text)] : [])
+          const weights = posts.map(post => xWeightedLength(post))
+          return { weighted: weights.length ? Math.max(...weights) : 0, posts: weights, count: posts.length }
+        })()
 
       const patchDraft = (platformId, patch) => {
         setDrafts(prev => {
@@ -2375,6 +2386,14 @@ window.__ModuleLoader__.load({
       const doCopy = async platformId => {
         const ok = await copyPlainText(composeVariantText(platformId, draftsSafe[platformId] ?? {}))
         setCopyNote(ok ? platformLabel(platformId) + '文案已复制' : '复制失败，请手动选中复制')
+        setTimeout(() => setCopyNote(''), 2500)
+      }
+
+      const copyComment = async () => {
+        const text = String(draftsSafe.xiaohongshu?.comment ?? '').trim()
+        if (!text) { setNote({ tone: 'warn', text: '先写置顶评论，发布后再贴' }); return }
+        const ok = await copyPlainText(text)
+        setCopyNote(ok ? '置顶评论已复制' : '复制失败，请手动选中复制')
         setTimeout(() => setCopyNote(''), 2500)
       }
 
@@ -2600,7 +2619,7 @@ window.__ModuleLoader__.load({
             h('span', { style: { minWidth: 0, textAlign: 'left' } },
               h('span', { className: 'sd-pub-pname' }, info.label),
               h('span', { className: 'sd-pub-pmeta' },
-                platformId === 'xiaohongshu' ? '标题 · 正文 · 话题 · 3:4 封面' : '单条 · 280 加权字符 · 取首帧')),
+                platformId === 'xiaohongshu' ? '标题 · 正文 · 置顶评论 · 3:4 封面' : '2–4 条 thread · 每条 ≤280 加权')),
             errors ? h('span', { className: 'sd-pub-taberr' }, errors)
               : warns ? h('span', { className: 'sd-pub-tabwarn' }, '!') : null)
         }))
@@ -2615,7 +2634,8 @@ window.__ModuleLoader__.load({
           h('span', { className: 'sd-pub-counter' },
             '标题 ' + xhsCount.title + '/' + (xhsInfo.title?.max ?? 20)
             + ' · 正文 ' + xhsCount.body + '/' + (xhsInfo.body?.max ?? 1000)
-            + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10)),
+            + ' · 话题 ' + xhsCount.tags + '/' + (xhsInfo.tags?.max ?? 10)
+            + ' · 评论 ' + xhsCount.comment + '/' + (xhsInfo.comment?.max ?? 1000)),
           dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
           h('div', { className: 'sd-pub-labelrow' },
@@ -2677,33 +2697,16 @@ window.__ModuleLoader__.load({
                 }
               },
             }))),
-        h('div', { className: 'sd-card-foot' },
-          h('button', {
-            className: 'sd-btn', 'data-kind': 'primary', type: 'button',
-            disabled: generating || saving || taskRunning, onClick: generate,
-          }, generating ? '生成中…' : '一键生成'),
-          h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
-            saving ? '保存中…' : '保存'),
-          h('span', { style: { flex: 1 } }),
-          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('xiaohongshu') },
-            '复制文案')))
-
-      const xInfo = platformById('x')
-      const xDraft = draftsSafe.x ?? { text: '' }
-      const xCount = countsOf('x')
-      const xCard = h('div', { className: 'sd-pub-card' },
-        h('div', { className: 'sd-pub-card-head' },
-          h('span', { className: 'sd-pub-picon', 'data-platform': 'x', style: { width: 20, height: 20, fontSize: 11, borderRadius: 5 } }, 'X'),
-          h('span', { className: 'sd-pub-card-title' }, 'X 文案'),
-          h('span', { className: 'sd-pub-counter' }, '加权 ' + xCount.weighted + '/' + (xInfo.text?.maxWeighted ?? 280)),
-          dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
         h('div', { className: 'sd-field', style: { marginTop: 0 } },
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, '置顶评论'),
+            h('span', { className: 'sd-pub-counter' }, xhsCount.comment + '/' + (xhsInfo.comment?.max ?? 1000))),
           h('textarea', {
-            className: 'sd-text', value: xDraft.text ?? '', rows: 5,
-            style: { minHeight: 112, ...(inputsLocked ? { opacity: .6 } : null) },
-            placeholder: '一条 280 加权字符以内的帖子，话题内联',
+            className: 'sd-text', value: xhs.comment ?? '', rows: 4,
+            style: { minHeight: 92, ...(inputsLocked ? { opacity: .6 } : null) },
+            placeholder: '发布后贴到第一条评论并置顶；定时发布时评论入口要等发布后才开',
             disabled: inputsLocked,
-            onChange: event => patchDraft('x', { text: event.target.value }),
+            onChange: event => patchDraft('xiaohongshu', { comment: event.target.value }),
             onBlur: autoSave,
           })),
         h('div', { className: 'sd-card-foot' },
@@ -2714,8 +2717,86 @@ window.__ModuleLoader__.load({
           h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
             saving ? '保存中…' : '保存'),
           h('span', { style: { flex: 1 } }),
-          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('x') },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            disabled: saving || !String(xhs.comment ?? '').trim(), onClick: copyComment,
+          }, '复制置顶评论'),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('xiaohongshu') },
             '复制文案')))
+
+      const xInfo = platformById('x')
+      const xDraft = draftsSafe.x ?? { text: '', posts: [] }
+      const xMaxWeighted = xInfo.text?.maxWeighted ?? 280
+      const xMaxPosts = xInfo.thread?.maxPosts ?? 5
+      const xPostsSafe = Array.isArray(xDraft.posts) && xDraft.posts.length
+        ? xDraft.posts.map(post => String(post ?? ''))
+        : (String(xDraft.text ?? '').trim() ? [String(xDraft.text)] : [''])
+      const xWeights = xPostsSafe.map(post => xWeightedLength(post))
+      const patchXPost = (index, value) => {
+        const next = [...xPostsSafe]
+        while (next.length <= index) next.push('')
+        next[index] = value
+        patchDraft('x', { posts: next, text: next[0] ?? '' })
+      }
+      const addXPost = () => {
+        if (xPostsSafe.length >= xMaxPosts) return
+        const next = [...xPostsSafe, '']
+        patchDraft('x', { posts: next, text: next[0] ?? '' })
+      }
+      const removeXPost = index => {
+        if (xPostsSafe.length <= 1) return
+        const next = xPostsSafe.filter((_, i) => i !== index)
+        patchDraft('x', { posts: next, text: next[0] ?? '' })
+      }
+      const xCard = h('div', { className: 'sd-pub-card' },
+        h('div', { className: 'sd-pub-card-head' },
+          h('span', { className: 'sd-pub-picon', 'data-platform': 'x', style: { width: 20, height: 20, fontSize: 11, borderRadius: 5 } }, 'X'),
+          h('span', { className: 'sd-pub-card-title' }, 'X thread'),
+          h('span', { className: 'sd-pub-counter' }, '主帖 ' + (xWeights[0] ?? 0) + '/' + xMaxWeighted + ' · ' + xPostsSafe.length + ' 条'),
+          dirty ? h('span', { className: 'sd-pub-chip', 'data-tone': 'warn' }, '未保存') : null),
+        h('div', { className: 'sd-hint' }, '主帖先发，回复按顺序挂在前一条下；每条都按 280 加权字符检查。'),
+        xPostsSafe.map((post, index) => h('div', { key: 'x-post-' + index, className: 'sd-field', style: { marginTop: 0 } },
+          h('div', { className: 'sd-pub-labelrow' },
+            h('label', null, index === 0 ? '主帖' : '回复 ' + index),
+            h('span', { className: 'sd-pub-counter' }, (xWeights[index] ?? 0) + '/' + xMaxWeighted),
+            xPostsSafe.length > 1
+              ? h('button', {
+                className: 'sd-pub-tagx', type: 'button', title: '删除这条',
+                onClick: () => removeXPost(index),
+              }, '×')
+              : null),
+          h('textarea', {
+            className: 'sd-text', value: post, rows: index === 0 ? 4 : 3,
+            style: { minHeight: index === 0 ? 92 : 72, ...(inputsLocked ? { opacity: .6 } : null) },
+            placeholder: index === 0 ? '主帖：钩子 + 结果 + 关键数字' : '回复：补全片、装法或口径',
+            disabled: inputsLocked,
+            onChange: event => patchXPost(index, event.target.value),
+            onBlur: autoSave,
+          }),
+          h('div', { style: { display: 'flex', justifyContent: 'flex-end' } },
+            h('button', {
+              className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+              disabled: !String(post).trim(),
+              onClick: async () => {
+                const ok = await copyPlainText(String(post).trim())
+                setCopyNote(ok ? (index === 0 ? '主帖已复制' : '回复 ' + index + ' 已复制') : '复制失败，请手动选中复制')
+                setTimeout(() => setCopyNote(''), 2500)
+              },
+            }, index === 0 ? '复制主帖' : '复制这条')))),
+        h('div', { className: 'sd-card-foot' },
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+            disabled: generating || saving || taskRunning, onClick: generate,
+          }, generating ? '生成中…' : '一键生成'),
+          h('button', { className: 'sd-btn', type: 'button', disabled: saving || taskRunning, onClick: () => save() },
+            saving ? '保存中…' : '保存'),
+          h('button', {
+            className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+            disabled: saving || xPostsSafe.length >= xMaxPosts, onClick: addXPost,
+          }, '加一条回复'),
+          h('span', { style: { flex: 1 } }),
+          h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: saving, onClick: () => doCopy('x') },
+            '复制全部')))
 
       const guideCard = h('div', { className: 'sd-pub-card', style: { gap: 6 } },
         h('div', { className: 'sd-pub-card-head' },

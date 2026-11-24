@@ -165,10 +165,10 @@ Preview the result in place, or **Export** to a chosen folder (defaults to `~/Do
 
 After the final cut, open the separate **Publish** entry. It never logs into a platform and never posts for you:
 
-- Two clickable platform tabs. Each page has its own **Generate** action, so it only rewrites the current platform's title / body / topics (X is one weighted post).
-- Xiaohongshu gets a 1080×1440 cover; X uses the video's first frame. Copy is editable and copyable.
-- **Pre-flight checks** cover copy length, X weighted length, video duration / size and cover. Copy errors block export; video over-limit is a warning only.
-- **Export package** writes `exports/<timestamp>/` with `xiaohongshu/`, `x/` subfolders (video, copy.md, optional cover) plus `README.md`, `checklist.md`, `manifest.json`. The package is an immutable snapshot: re-rendering the source video later does not rewrite an old package.
+- Two clickable platform tabs. Each page has its own **Generate** action. X generates a **main post + reply thread** with 280 weighted characters per post; each post can be edited, copied, or added/removed. Xiaohongshu generates title / body / topics.
+- Xiaohongshu gets a 1080×1440 cover and an optional **pinned comment** (up to 1000 characters) to post after publishing; X uses the video's first frame.
+- **Pre-flight checks** cover copy length, per-post X weighted length, video duration / size and cover. Copy errors block export; video over-limit is a warning only.
+- **Export package** writes `exports/<timestamp>/` with `xiaohongshu/`, `x/` subfolders (video, copy.md, optional comment.md for Xiaohongshu, optional cover) plus `README.md`, `checklist.md`, `manifest.json`. The package is an immutable snapshot: re-rendering the source video later does not rewrite an old package.
 - **Revise by feedback**: click Ask on the title, body or cover; pick a quick chip or write your own note. The plugin proposes a change first (only the checked fields), shows old vs new, and writes back only after you choose Adopt; every accepted revision can be reverted. Cover has separate Text / Base image / Layout tabs.
 - Upload, paste and publish yourself, then mark each platform as published in the page.
 

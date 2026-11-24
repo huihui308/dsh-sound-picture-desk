@@ -114,8 +114,32 @@ test('复制文案按平台拼接', () => {
 })
 
 test('计数与格式化', () => {
-  assert.deepEqual(countVariant('xiaohongshu', { title: '标题', body: '正文', tags: ['a'] }), { title: 2, body: 2, tags: 1 })
+  assert.deepEqual(countVariant('xiaohongshu', { title: '标题', body: '正文', tags: ['a'] }), { title: 2, body: 2, tags: 1, comment: 0 })
   assert.equal(countVariant('x', { text: '中' }).weighted, 2)
+  assert.deepEqual(countVariant('x', { posts: ['中', 'abc'] }), { weighted: 3, total: 5, posts: [2, 3], count: 2 })
   assert.equal(formatDuration(141), '2:21')
   assert.equal(formatBytes(12.4 * 1024 * 1024), '12.4 MB')
+})
+
+test('X thread：老 text 归一成一条，新 posts 逐条校验', () => {
+  assert.deepEqual(sanitizeVariant('x', { text: '旧单条' }), { text: '旧单条', posts: ['旧单条'] })
+  assert.deepEqual(sanitizeVariant('x', { posts: ['主帖', '回复 1'] }), { text: '主帖', posts: ['主帖', '回复 1'] })
+  const legacy = normalizePublish({ variants: { x: { text: '旧单条' } } })
+  assert.deepEqual(legacy.variants.x.posts, ['旧单条'])
+  const rows = validateCopy('x', { posts: ['中'.repeat(140), '中'.repeat(141)] })
+  assert.equal(rows.find(row => row.id === 'post-0').state, 'ok')
+  assert.equal(rows.find(row => row.id === 'post-1').state, 'error')
+  assert.match(composeCopy('x', { posts: ['主帖', '回复'] }), /【主帖】[\s\S]*【回复 1】/)
+})
+
+test('小红书置顶评论：长度校验，正文提到但没写时给 warn', () => {
+  assert.equal(sanitizeVariant('xiaohongshu', { title: 't', body: 'b', comment: '  装法  ' }).comment, '装法')
+  const warn = validateCopy('xiaohongshu', {
+    title: '题目', body: '装法见置顶评论', tags: [], comment: '',
+  })
+  assert.equal(warn.find(row => row.id === 'comment').state, 'warn')
+  const over = validateCopy('xiaohongshu', {
+    title: '题目', body: '正文', tags: [], comment: '字'.repeat(1001),
+  })
+  assert.equal(over.find(row => row.id === 'comment').state, 'error')
 })

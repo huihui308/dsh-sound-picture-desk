@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { join } from 'node:path'
-import { PLATFORMS, formatBytes, formatDuration } from './rules.js'
+import { PLATFORMS, formatBytes, formatDuration, xPosts } from './rules.js'
 
 function pad(value) { return String(value).padStart(2, '0') }
 
@@ -28,14 +28,20 @@ function xhsCopyMarkdown(variant) {
   const title = String(variant.title ?? '').trim()
   const body = String(variant.body ?? '').trim()
   const tags = (Array.isArray(variant.tags) ? variant.tags : []).map(tag => '#' + String(tag).trim())
-  return ['【标题】', title, '', '【正文】', body, '', '【话题】', tags.join(' ')].join('\n') + '\n'
+  const comment = String(variant.comment ?? '').trim()
+  const lines = ['【标题】', title, '', '【正文】', body, '', '【话题】', tags.join(' ')]
+  if (comment) lines.push('', '【置顶评论】', comment)
+  return lines.join('\n') + '\n'
 }
 
 function xCopyMarkdown(variant) {
-  return ['【正文】', String(variant.text ?? '').trim()].join('\n') + '\n'
+  const posts = xPosts(variant).map(post => String(post).trim()).filter(Boolean)
+  if (!posts.length) return '【正文】\n\n'
+  if (posts.length === 1) return '【正文】\n' + posts[0] + '\n'
+  return posts.map((post, index) => (index === 0 ? '【主帖】\n' : '【回复 ' + index + '】\n') + post).join('\n\n') + '\n'
 }
 
-function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover }) {
+function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover, hasComment }) {
   const lines = []
   lines.push('# ' + (item.title || '未命名') + ' · 发布包')
   lines.push('')
@@ -54,8 +60,9 @@ function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover }) {
         steps.push('上传 ' + id + '/cover-' + size.width + 'x' + size.height + '.png 作为封面')
       }
       steps.push('打开 ' + id + '/copy.md，复制标题、正文和话题')
+      if (hasComment) steps.push('发布后打开 ' + id + '/comment.md，把置顶评论贴到第一条评论并置顶（定时笔记发布前不能评论）')
     } else {
-      steps.push('打开 ' + id + '/copy.md，复制正文（含话题）')
+      steps.push('打开 ' + id + '/copy.md，按主帖、回复 1…的顺序逐条发；主帖先发，回复挂在前一条下')
     }
     lines.push('')
     lines.push('### ' + platform.label)
@@ -64,12 +71,13 @@ function readmeMarkdown({ item, targets, stamp, ruleVersion, video, cover }) {
   lines.push('')
   lines.push('## 说明')
   lines.push('- 这个包由声画工作台生成，不包含账号登录信息，也不会替你在平台上点发布。')
+  lines.push('- 小红书置顶评论要等笔记发布后才有入口；定时发布时提前补不了。')
   lines.push('- 平台规则会变，当前口径见上面的规则版本；以平台后台提示为准。')
   lines.push('- 发布后回到工作台「发布」页标记已发布，方便下一版对照数据。')
   return lines.join('\n') + '\n'
 }
 
-function checklistMarkdown({ item, targets }) {
+function checklistMarkdown({ item, targets, hasComment }) {
   const lines = [
     '# 发布清单 · ' + (item.title || '未命名'),
     '',
@@ -77,6 +85,14 @@ function checklistMarkdown({ item, targets }) {
     '|---|---|---|---|',
   ]
   for (const id of targets) lines.push('| ' + PLATFORMS[id].label + ' |  | 待发布 |  |')
+  lines.push('')
+  lines.push('## 发布后')
+  if (targets.includes('xiaohongshu') && hasComment) {
+    lines.push('- 小红书：发布后把 comment.md 贴到第一条评论并置顶；定时笔记发布前不能评论。')
+  }
+  if (targets.includes('x')) {
+    lines.push('- X：按 copy.md 的主帖/回复顺序逐条发，回复挂在前一条下，主帖置顶。')
+  }
   return lines.join('\n') + '\n'
 }
 
@@ -159,17 +175,27 @@ export async function buildExport({ baseDir, item, publish, targets, ruleVersion
         : xCopyMarkdown(publish?.variants?.x ?? {})
       await writeFile(join(platformDir, 'copy.md'), markdown, 'utf8')
       await record(copyRel)
+
+      if (id === 'xiaohongshu' && String(publish?.variants?.xiaohongshu?.comment ?? '').trim()) {
+        const commentRel = relDir + '/' + id + '/comment.md'
+        await writeFile(join(platformDir, 'comment.md'), String(publish.variants.xiaohongshu.comment).trim() + '\n', 'utf8')
+        await record(commentRel)
+      }
     }
 
     const readmeRel = relDir + '/README.md'
     await writeFile(join(tmpDir, 'README.md'), readmeMarkdown({
       item, targets, stamp, ruleVersion, cover: coverIncluded,
+      hasComment: Boolean(String(publish?.variants?.xiaohongshu?.comment ?? '').trim()),
       video: { secs: item.render.secs, bytes: videoBytes },
     }), 'utf8')
     await record(readmeRel)
 
     const checklistRel = relDir + '/checklist.md'
-    await writeFile(join(tmpDir, 'checklist.md'), checklistMarkdown({ item, targets }), 'utf8')
+    await writeFile(join(tmpDir, 'checklist.md'), checklistMarkdown({
+      item, targets,
+      hasComment: Boolean(String(publish?.variants?.xiaohongshu?.comment ?? '').trim()),
+    }), 'utf8')
     await record(checklistRel)
 
     const manifest = {

@@ -389,7 +389,9 @@ async function publishView(store, state, itemId) {
         title: platform.title ?? null,
         body: platform.body ?? null,
         tags: platform.tags ?? null,
+        comment: platform.comment ?? null,
         text: platform.text ?? null,
+        thread: platform.thread ?? null,
       }
     }),
     variants: publish.variants,

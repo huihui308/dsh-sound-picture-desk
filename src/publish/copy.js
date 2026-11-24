@@ -28,7 +28,7 @@ function userPrompt({ item, targets }) {
     if (id === 'xiaohongshu') {
       lines.push('- 小红书：标题 ≤20 个字符（含标点），正文 300–600 字、分 3–5 段、口语化、结尾留一句互动；话题 3–5 个，不带 # 号。输出字段 title / body / tags。')
     } else if (id === 'x') {
-      lines.push('- X：单条 ≤280 加权字符（中文按 2 计重），更紧凑，保留最关键的冲突、数字与因果；最多 2 个话题，话题用 # 号内联在正文里；不要外链。输出字段 text。')
+      lines.push('- X：写 2–4 条 thread（主帖 + 回复），每条都 ≤280 加权字符（中文按 2 计重）。主帖保留最关键的冲突、数字与因果；回复 1 放完整教程/时长，回复 2 放仓库和装法（不知道仓库地址时写「仓库见主页/置顶」，不要编 URL），回复 3 放 MIT 边界或正片提示。最多 2 个话题，话题用 # 号内联；不要外链。输出字段 posts（字符串数组，主帖在前，2–4 条）。')
     }
   }
   lines.push('')
@@ -39,7 +39,7 @@ function userPrompt({ item, targets }) {
   lines.push('4. 只输出 JSON，键名严格为下面这些：')
   const shape = {}
   for (const id of targets) {
-    shape[id] = id === 'xiaohongshu' ? { title: '', body: '', tags: [''] } : { text: '' }
+    shape[id] = id === 'xiaohongshu' ? { title: '', body: '', tags: [''] } : { posts: ['', ''] }
   }
   lines.push(JSON.stringify(shape, null, 2))
   return lines.join('\n')
