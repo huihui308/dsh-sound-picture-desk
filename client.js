@@ -344,6 +344,18 @@ window.__ModuleLoader__.load({
 .sd-nav .sd-step[data-state="now"]{border:1.2px solid var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary);background:transparent}
 .sd-nav[data-state="now"] b{font-weight:600;color:var(--dsw-alias-label-primary)}
 
+
+/* ---- 选题池 ---- */
+.sd-ideaform{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sd-ideaform .sd-input{flex:1;min-width:180px}
+.sd-ideas{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.sd-idea{display:flex;align-items:center;gap:14px;padding:11px 13px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-layer-1)}
+.sd-idea-x{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.sd-idea-x b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-idea-x s{font-size:11px;color:var(--dsw-alias-label-secondary);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-idea-x em{font-size:10px;color:var(--dsw-alias-label-tertiary);font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-idea-ops{display:flex;gap:6px;flex:0 0 auto}
+
 /* ---- 主页项目墙 ---- */
 .sd-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:18px}
 .sd-pcard{display:flex;flex-direction:column;padding:0;border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font:inherit;color:inherit;text-align:left;cursor:pointer}
@@ -541,6 +553,8 @@ window.__ModuleLoader__.load({
       const [deletingBusy, setDeletingBusy] = useState(false)
       const [trashOpen, setTrashOpen] = useState(false)
       const [view, setView] = useState('home')
+      // 从选题池点「用它开项目」时，把标题带进新建弹窗
+      const [newTopic, setNewTopic] = useState('')
       const [chatOpen, setChatOpen] = useState(true)
       const [chatInput, setChatInput] = useState('')
       const [sending, setSending] = useState(false)
@@ -687,6 +701,9 @@ window.__ModuleLoader__.load({
                 items: data.items, onOpen: openItem,
                 onCreate: () => { setNotice(null); setCreating(true) },
               })
+              : view === 'ideas' ? h(IdeasView, {
+                onUse: title => { setNotice(null); setNewTopic(title); setCreating(true) },
+              })
               : view === 'anchors' ? h(AnchorLibrary, { items: data.items, onOpen: openItem })
                 : view === 'assets' ? h(AssetLibrary, null)
                   : view === 'publish' ? h(PublishOverview, { items: data.items, onOpen: openItem })
@@ -734,7 +751,8 @@ window.__ModuleLoader__.load({
           creating ? h(NewDialog, {
             // 创建失败时就地提示，不用去头部找被遮罩盖住的 notice
             error: notice?.tone === 'error' ? notice.text : null,
-            onClose: () => setCreating(false),
+            initialTopic: newTopic,
+            onClose: () => { setCreating(false); setNewTopic('') },
             onCreate: async payload => {
               try {
                 const result = await post('create', payload)
@@ -820,6 +838,7 @@ window.__ModuleLoader__.load({
       send: ['M10 16.5V4', 'M5.2 8.8 10 4l4.8 4.8'],
       chart: ['M3 16.5V9', 'M8 16.5V4', 'M13 16.5v-6', 'M18 16.5H2'],
       trash: ['M3.5 5.5h13', 'M8 5.5V3.8h4v1.7', 'M5.5 5.5l.8 11h7.4l.8-11'],
+      idea: ['M4.5 3.5h11v13l-5.5-3.6-5.5 3.6z'],
     }
 
     function NavIcon({ name }) {
@@ -856,6 +875,7 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'sd-group' }, '管理工作台'),
         navRow('home', '主页', null, 'home'),
+        navRow('ideas', '选题池', null, 'idea'),
         navRow('anchors', '人物库', anchors, 'people'),
         navRow('assets', '素材库', null, 'audio'),
 
@@ -868,6 +888,125 @@ window.__ModuleLoader__.load({
             '回收站',
             trashCount ? h('span', { className: 'sd-trash-count' }, String(trashCount)) : null),
           h('button', { className: 'sd-trash-link', type: 'button', onClick: onSettings }, '设置')))
+    }
+
+    // ------------------------------------------------------------------ 选题池
+
+    /** 选题池：攒题、挑题、标记用过。数据落在 state.json 的 ideas 里。 */
+    function IdeasView({ onUse }) {
+      const [ideas, setIdeas] = useState(null)
+      const [error, setError] = useState(null)
+      const [tab, setTab] = useState('new')
+      const [form, setForm] = useState({ title: '', angle: '', source: '' })
+      const [busy, setBusy] = useState(false)
+
+      const load = useCallback(async () => {
+        try {
+          const out = await post('ideas', { op: 'list' })
+          setIdeas(out.ideas ?? [])
+          setError(null)
+        } catch (err) {
+          setIdeas([])
+          // host 还没重启时这个路由不存在，别甩一句「接口不存在」就完了
+          setError(/接口不存在|404/.test(err.message)
+            ? '选题池要重启 dsh-web 之后才启用：systemctl --user restart dsh-web.service'
+            : err.message)
+        }
+      }, [])
+      useEffect(() => { load() }, [load])
+
+      const act = async (op, payload) => {
+        setBusy(true)
+        try {
+          const out = await post('ideas', { op, ...payload })
+          if (Array.isArray(out.ideas)) setIdeas(out.ideas)
+          setError(null)
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const add = async () => {
+        const title = form.title.trim()
+        if (!title || busy) return
+        await act('add', { title, angle: form.angle.trim(), source: form.source.trim() })
+        setForm({ title: '', angle: '', source: '' })
+      }
+
+      const all = ideas ?? []
+      const rows = all.filter(row => (tab === 'used' ? row.status === 'used' : row.status !== 'used'))
+
+      return h('div', { className: 'sd-pane' },
+        h('div', { className: 'sd-head' },
+          h('h1', { className: 'sd-h1' }, '选题池'),
+          h('div', { className: 'sd-sub' }, '攒着的题先放这儿，想开新片时直接从池子里挑')),
+        h('div', { className: 'sd-body' },
+          h('div', { className: 'sd-ideaform' },
+            h('input', {
+              className: 'sd-input', placeholder: '一句话标题，比如「一场暴雨是怎么形成的」',
+              value: form.title,
+              onChange: event => setForm(prev => ({ ...prev, title: event.target.value })),
+              onKeyDown: event => { if (event.key === 'Enter') add() },
+            }),
+            h('input', {
+              className: 'sd-input', placeholder: '角度（可选）：为什么这题值得做',
+              value: form.angle,
+              onChange: event => setForm(prev => ({ ...prev, angle: event.target.value })),
+              onKeyDown: event => { if (event.key === 'Enter') add() },
+            }),
+            h('input', {
+              className: 'sd-input', placeholder: '来源（可选）：链接或出处',
+              value: form.source,
+              onChange: event => setForm(prev => ({ ...prev, source: event.target.value })),
+              onKeyDown: event => { if (event.key === 'Enter') add() },
+            }),
+            h('button', {
+              className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+              disabled: busy || !form.title.trim(), onClick: add,
+            }, '加进池子')),
+
+          h('div', { className: 'sd-tabs', style: { marginTop: 16 } },
+            h('button', {
+              className: 'sd-tab', type: 'button', 'data-on': tab === 'new' ? '1' : '0',
+              onClick: () => setTab('new'),
+            }, `待用 ${all.filter(row => row.status !== 'used').length}`),
+            h('button', {
+              className: 'sd-tab', type: 'button', 'data-on': tab === 'used' ? '1' : '0',
+              onClick: () => setTab('used'),
+            }, `已用 ${all.filter(row => row.status === 'used').length}`)),
+
+          error ? h('div', { className: 'sd-error', style: { marginTop: 10 } }, error) : null,
+
+          ideas && !rows.length
+            ? h('div', { className: 'sd-empty' },
+              tab === 'new'
+                ? '池子是空的。上面写一条；以后新建的项目会自动记进来。'
+                : '还没有用过的题。')
+            : null,
+
+          h('div', { className: 'sd-ideas' }, rows.map(row => h('div', { className: 'sd-idea', key: row.id },
+            h('div', { className: 'sd-idea-x' },
+              h('b', null, row.title),
+              row.angle ? h('s', null, row.angle) : null,
+              row.source ? h('em', null, row.source) : null),
+            h('div', { className: 'sd-idea-ops' },
+              row.status !== 'used'
+                ? h('button', {
+                  className: 'sd-btn', 'data-kind': 'primary', type: 'button', disabled: busy,
+                  onClick: () => onUse(row.title),
+                }, '用它开项目')
+                : null,
+              h('button', {
+                className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy,
+                onClick: () => act('update', { id: row.id, patch: { status: row.status === 'used' ? 'new' : 'used' } }),
+              }, row.status === 'used' ? '放回待用' : '标为已用'),
+              h('button', {
+                className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy,
+                onClick: () => act('remove', { id: row.id }),
+              }, '删'))))))
+      )
     }
 
     // ------------------------------------------------------------------ 主页：项目墙
@@ -3777,8 +3916,8 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ 新建
 
-    function NewDialog({ error, onClose, onCreate }) {
-      const [topic, setTopic] = useState('')
+    function NewDialog({ error, onClose, onCreate, initialTopic = '' }) {
+      const [topic, setTopic] = useState(initialTopic)
       const [minutes, setMinutes] = useState(5)
       const [rawText, setRawText] = useState('')
       const [showRaw, setShowRaw] = useState(false)

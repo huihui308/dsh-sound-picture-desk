@@ -64,7 +64,7 @@ export function stageOf(item) {
 }
 
 export function emptyState() {
-  return { version: 1, settings: { ...DEFAULT_SETTINGS }, items: [] }
+  return { version: 1, settings: { ...DEFAULT_SETTINGS }, items: [], ideas: [] }
 }
 
 /** 老的或无字段的 state 补齐结构，读一次就够。 */
@@ -88,6 +88,8 @@ export function migrateState(raw) {
   delete state.settings.platformImageEndpoint
   delete state.settings.platformImageModel
   state.items = Array.isArray(state.items) ? state.items : []
+  // 选题池：跨项目的灵感清单，老状态里没有就补一个空数组
+  state.ideas = Array.isArray(state.ideas) ? state.ideas : []
   for (const item of state.items) {
     item.segments = Array.isArray(item.segments) ? item.segments : []
     item.log = Array.isArray(item.log) ? item.log : []

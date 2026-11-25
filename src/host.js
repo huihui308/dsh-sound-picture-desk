@@ -569,6 +569,20 @@ async function createItem(store, body) {
   await store.ensureItemDirs(item.id)
   const { state } = await store.mutate(draft => {
     draft.items.unshift(item)
+    // 顺手把这题记进选题池，免得以后想起某条片却找不到当初的题
+    draft.ideas = Array.isArray(draft.ideas) ? draft.ideas : []
+    if (!draft.ideas.some(row => row.title === item.title)) {
+      draft.ideas.unshift({
+        id: newId('idea'),
+        title: item.title,
+        angle: '',
+        kind: 'history',
+        status: 'used',
+        source: 'workbench',
+        at: new Date().toISOString(),
+        usedBy: item.id,
+      })
+    }
     return item.id
   })
   return { id: item.id, state }
@@ -1824,6 +1838,57 @@ async function route(ctx, store, req, res) {
         return json(res, 200, result)
       }
       return json(res, 400, { ok: false, detail: 'target 只能是 image 或 tts' })
+    }
+    case 'ideas': {
+      // 选题池：list / add / update / remove 四个动作，数据跟着 state.json 走
+      const op = String(body.op ?? 'list')
+      if (op === 'list') {
+        const state = await store.read()
+        return json(res, 200, { ideas: state.ideas ?? [] })
+      }
+      if (op === 'add') {
+        const title = String(body.title ?? '').trim().slice(0, 120)
+        if (!title) return json(res, 400, { error: '先写个标题' })
+        const idea = {
+          id: newId('idea'),
+          title,
+          angle: String(body.angle ?? '').trim().slice(0, 300),
+          kind: String(body.kind ?? 'history').slice(0, 20),
+          status: 'new',
+          source: String(body.source ?? '').trim().slice(0, 300),
+          at: new Date().toISOString(),
+          usedBy: null,
+        }
+        const { state } = await store.mutate(draft => {
+          draft.ideas = Array.isArray(draft.ideas) ? draft.ideas : []
+          draft.ideas.unshift(idea)
+          return null
+        })
+        return json(res, 200, { idea, ideas: state.ideas })
+      }
+      if (op === 'update') {
+        const id = String(body.id ?? '')
+        const patch = body.patch && typeof body.patch === 'object' ? body.patch : {}
+        const { state } = await store.mutate(draft => {
+          const hit = (draft.ideas ?? []).find(row => row.id === id)
+          if (!hit) throw Object.assign(new Error('找不到这条选题'), { status: 404 })
+          if (typeof patch.title === 'string' && patch.title.trim()) hit.title = patch.title.trim().slice(0, 120)
+          if (typeof patch.angle === 'string') hit.angle = patch.angle.trim().slice(0, 300)
+          if (typeof patch.source === 'string') hit.source = patch.source.trim().slice(0, 300)
+          if (typeof patch.status === 'string' && ['new', 'used', 'parked'].includes(patch.status)) hit.status = patch.status
+          return null
+        })
+        return json(res, 200, { ideas: state.ideas })
+      }
+      if (op === 'remove') {
+        const id = String(body.id ?? '')
+        const { state } = await store.mutate(draft => {
+          draft.ideas = (draft.ideas ?? []).filter(row => row.id !== id)
+          return null
+        })
+        return json(res, 200, { ideas: state.ideas })
+      }
+      return json(res, 400, { error: `不认识的选题操作：${op}` })
     }
     case 'create': {
       const { id, state } = await createItem(store, body)
