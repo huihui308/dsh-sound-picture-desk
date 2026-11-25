@@ -356,6 +356,44 @@ window.__ModuleLoader__.load({
 .sd-idea-x em{font-size:10px;color:var(--dsw-alias-label-tertiary);font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sd-idea-ops{display:flex;gap:6px;flex:0 0 auto}
 
+
+/* ---- 选题池：矩阵 + 抽屉 ---- */
+.sd-idea-pane{position:relative}
+.sd-idea-pane:has(.sd-drawer) .sd-body{padding-right:446px}
+.sd-quick{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.sd-quick .sd-input{flex:1}
+.sd-mx{display:grid;grid-template-columns:64px repeat(6,1fr);gap:6px}
+.sd-mx-colf{text-align:center;font-size:10px;color:var(--dsw-alias-label-tertiary);padding-bottom:2px}
+.sd-mx-row{display:flex;align-items:center;font-size:11.5px;color:var(--dsw-alias-label-secondary)}
+.sd-mx-cell{height:46px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font:inherit;font-size:14px;font-variant-numeric:tabular-nums;cursor:pointer}
+.sd-mx-cell:hover{border-color:var(--dsw-alias-brand-primary)}
+.sd-mx-cell[data-empty="1"]{background:transparent;border:1px dashed var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary);font-size:12px}
+.sd-mx-cell[data-hot="1"]{color:var(--dsw-alias-brand-primary)}
+.sd-mx-cell[data-on="1"]{border:1.5px solid var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent);color:var(--dsw-alias-brand-primary)}
+.sd-thin{display:flex;gap:8px;flex-wrap:wrap}
+.sd-thin-item{display:flex;align-items:center;gap:7px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-1);padding:7px 11px;font:inherit;font-size:11px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.sd-thin-item span{color:var(--dsw-alias-label-tertiary)}
+.sd-thin-item em{font-style:normal;color:var(--dsw-alias-label-tertiary);font-size:10px}
+.sd-thin-item b{color:var(--dsw-alias-brand-primary);font-weight:400;font-size:10.5px}
+.sd-drawer{position:absolute;top:0;right:0;bottom:0;width:430px;background:var(--dsw-alias-bg-layer-1);border-left:1px solid var(--dsw-alias-border-l1);display:flex;flex-direction:column;z-index:5;box-shadow:-16px 0 32px rgba(0,0,0,.28)}
+.sd-dw-head{display:flex;align-items:flex-start;gap:10px;padding:14px 16px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.sd-dw-head b{font-size:14px}
+.sd-dw-head p{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:4px;line-height:1.6}
+.sd-dw-head .sd-btn{margin-left:auto}
+.sd-dw-body{padding:12px 16px;overflow:auto;flex:1}
+.sd-dw-label{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-bottom:8px}
+.sd-hooks{display:flex;flex-wrap:wrap;gap:6px}
+.sd-hook{height:27px;padding:0 11px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;cursor:pointer}
+.sd-hook[data-on="1"]{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 45%,transparent);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 14%,transparent);color:var(--dsw-alias-brand-primary)}
+.sd-cands{display:flex;flex-direction:column;gap:8px}
+.sd-cand{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-2);padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.sd-cand b{font-size:12.5px;font-weight:600;line-height:1.5}
+.sd-cand s{font-size:10.5px;color:var(--dsw-alias-label-tertiary);text-decoration:none;line-height:1.6}
+.sd-cand-row{display:flex;gap:5px;align-items:center;margin-top:3px;flex-wrap:wrap}
+.sd-cand-row .sd-tag[data-src="1"]{color:var(--dsw-alias-brand-primary);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary) 30%,transparent);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-cand-row .sd-tag[data-warn="1"]{color:var(--dsw-alias-state-warning-primary)}
+.sd-dw-tip{font-size:10px;color:var(--dsw-alias-label-tertiary);line-height:1.7;margin-top:10px}
+
 /* ---- 主页项目墙 ---- */
 .sd-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:18px}
 .sd-pcard{display:flex;flex-direction:column;padding:0;border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font:inherit;color:inherit;text-align:left;cursor:pointer}
@@ -893,12 +931,23 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------------------------ 选题池
 
     /** 选题池：攒题、挑题、标记用过。数据落在 state.json 的 ideas 里。 */
+    // ------------------------------------------------------------------ 选题池（矩阵 + 生成）
+
+    const IDEA_ERAS = ['先秦', '秦汉', '魏晋', '隋唐', '宋', '元', '明', '清']
+    const IDEA_FIELDS = ['军事', '政治', '经济', '制度', '人物', '科技']
+    const IDEA_HOOKS = ['反常', '因果', '数字', '消失', '对照', '逆袭']
+
+    /** 选题池：矩阵看缺口，点空格让模型补，候选带出处才收。 */
     function IdeasView({ onUse }) {
       const [ideas, setIdeas] = useState(null)
       const [error, setError] = useState(null)
-      const [tab, setTab] = useState('new')
-      const [form, setForm] = useState({ title: '', angle: '', source: '' })
+      const [notice, setNotice] = useState(null)
       const [busy, setBusy] = useState(false)
+      const [drawer, setDrawer] = useState(null)
+      const [hook, setHook] = useState('')
+      const [cands, setCands] = useState(null)
+      const [quick, setQuick] = useState('')
+      const [quickOpen, setQuickOpen] = useState(false)
 
       const load = useCallback(async () => {
         try {
@@ -907,7 +956,6 @@ window.__ModuleLoader__.load({
           setError(null)
         } catch (err) {
           setIdeas([])
-          // host 还没重启时这个路由不存在，别甩一句「接口不存在」就完了
           setError(/接口不存在|404/.test(err.message)
             ? '选题池要重启 dsh-web 之后才启用：systemctl --user restart dsh-web.service'
             : err.message)
@@ -921,6 +969,40 @@ window.__ModuleLoader__.load({
           const out = await post('ideas', { op, ...payload })
           if (Array.isArray(out.ideas)) setIdeas(out.ideas)
           setError(null)
+          return out
+        } catch (err) {
+          setError(err.message)
+          return null
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const all = ideas ?? []
+      const countOf = (era, field) => all.filter(row => row.era === era && row.field === field).length
+      const thin = []
+      IDEA_ERAS.forEach(era => IDEA_FIELDS.forEach(field => thin.push({ era, field, n: countOf(era, field) })))
+      thin.sort((a, b) => a.n - b.n)
+      const thinnest = thin.slice(0, 5)
+      const used = all.filter(row => row.status === 'used').length
+      const pending = all.filter(row => row.status !== 'used').length
+
+      const openCell = cell => {
+        setDrawer(cell)
+        setCands(null)
+        setHook('')
+        setNotice(null)
+        setError(null)
+      }
+
+      const generate = async () => {
+        if (!drawer || busy) return
+        setBusy(true)
+        setCands(null)
+        try {
+          const out = await post('ideas', { op: 'generate', era: drawer.era, field: drawer.field, hook })
+          setCands(out.candidates ?? [])
+          setError(null)
         } catch (err) {
           setError(err.message)
         } finally {
@@ -928,88 +1010,130 @@ window.__ModuleLoader__.load({
         }
       }
 
-      const add = async () => {
-        const title = form.title.trim()
-        if (!title || busy) return
-        await act('add', { title, angle: form.angle.trim(), source: form.source.trim() })
-        setForm({ title: '', angle: '', source: '' })
+      const take = async cand => {
+        const out = await act('add', {
+          title: cand.title, angle: cand.angle, source: cand.source,
+          era: drawer?.era ?? '', field: drawer?.field ?? '', hook,
+        })
+        if (out) setNotice(`收进池子：${cand.title}`)
       }
 
-      const all = ideas ?? []
-      const rows = all.filter(row => (tab === 'used' ? row.status === 'used' : row.status !== 'used'))
+      const quickAdd = async () => {
+        const title = quick.trim()
+        if (!title || busy) return
+        const out = await act('add', { title, era: drawer?.era ?? '', field: drawer?.field ?? '', hook })
+        if (out) { setQuick(''); setQuickOpen(false); setNotice('记下了') }
+      }
 
-      return h('div', { className: 'sd-pane' },
+      return h('div', { className: 'sd-pane sd-idea-pane' },
         h('div', { className: 'sd-head' },
-          h('h1', { className: 'sd-h1' }, '选题池'),
-          h('div', { className: 'sd-sub' }, '攒着的题先放这儿，想开新片时直接从池子里挑')),
+          h('div', { className: 'sd-head-row' },
+            h('div', { className: 'sd-head-title' },
+              h('h1', { className: 'sd-h1' }, '选题池'),
+              h('div', { className: 'sd-sub' },
+                `${all.length} 条 · 待用 ${pending} · 已用 ${used} · 格子里是已攒的条数，虚框是空的`)),
+            h('button', {
+              className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+              onClick: () => setQuickOpen(v => !v),
+            }, quickOpen ? '收起' : '＋ 记一条'))),
+
         h('div', { className: 'sd-body' },
-          h('div', { className: 'sd-ideaform' },
+          quickOpen ? h('div', { className: 'sd-quick' },
             h('input', {
-              className: 'sd-input', placeholder: '一句话标题，比如「一场暴雨是怎么形成的」',
-              value: form.title,
-              onChange: event => setForm(prev => ({ ...prev, title: event.target.value })),
-              onKeyDown: event => { if (event.key === 'Enter') add() },
-            }),
-            h('input', {
-              className: 'sd-input', placeholder: '角度（可选）：为什么这题值得做',
-              value: form.angle,
-              onChange: event => setForm(prev => ({ ...prev, angle: event.target.value })),
-              onKeyDown: event => { if (event.key === 'Enter') add() },
-            }),
-            h('input', {
-              className: 'sd-input', placeholder: '来源（可选）：链接或出处',
-              value: form.source,
-              onChange: event => setForm(prev => ({ ...prev, source: event.target.value })),
-              onKeyDown: event => { if (event.key === 'Enter') add() },
+              className: 'sd-input', autoFocus: true,
+              placeholder: drawer ? `记到 ${drawer.era} · ${drawer.field}` : '想到什么就写一句，回车进池子',
+              value: quick,
+              onChange: event => setQuick(event.target.value),
+              onKeyDown: event => { if (event.key === 'Enter') quickAdd() },
             }),
             h('button', {
               className: 'sd-btn', 'data-kind': 'primary', type: 'button',
-              disabled: busy || !form.title.trim(), onClick: add,
-            }, '加进池子')),
+              disabled: busy || !quick.trim(), onClick: quickAdd,
+            }, '加进池子')) : null,
 
-          h('div', { className: 'sd-tabs', style: { marginTop: 16 } },
+          error ? h('div', { className: 'sd-error' }, error) : null,
+          notice ? h('div', { className: 'sd-sub', style: { marginBottom: 8 } }, notice) : null,
+
+          h('div', { className: 'sd-mx' },
+            h('div', { className: 'sd-mx-corner' }),
+            IDEA_FIELDS.map(field => h('div', { key: `f-${field}`, className: 'sd-mx-colf' }, field)),
+            IDEA_ERAS.map(era => [
+              h('div', { key: `e-${era}`, className: 'sd-mx-row' }, era),
+              ...IDEA_FIELDS.map(field => {
+                const n = countOf(era, field)
+                const on = drawer && drawer.era === era && drawer.field === field
+                return h('button', {
+                  key: `${era}-${field}`,
+                  className: 'sd-mx-cell',
+                  type: 'button',
+                  'data-empty': n ? '0' : '1',
+                  'data-hot': n >= 4 ? '1' : '0',
+                  'data-on': on ? '1' : '0',
+                  onClick: () => openCell({ era, field }),
+                }, n ? String(n) : '＋')
+              }),
+            ])),
+
+          h('div', { className: 'sd-sub', style: { margin: '16px 0 8px' } }, '你最薄的几格'),
+          h('div', { className: 'sd-thin' },
+            thinnest.map(cell => h('button', {
+              key: `${cell.era}-${cell.field}`,
+              className: 'sd-thin-item', type: 'button',
+              onClick: () => openCell({ era: cell.era, field: cell.field }),
+            }, cell.era, h('span', null, cell.field), h('em', null, `${cell.n} 条`), h('b', null, '去补 →'))))),
+
+        drawer ? h('div', { className: 'sd-drawer' },
+          h('div', { className: 'sd-dw-head' },
+            h('div', null,
+              h('b', null, `补「${drawer.era} · ${drawer.field}」`),
+              h('p', null, `这个格子 ${countOf(drawer.era, drawer.field)} 条 · 池子里共 ${all.length} 条 · 会避开已有的`)),
             h('button', {
-              className: 'sd-tab', type: 'button', 'data-on': tab === 'new' ? '1' : '0',
-              onClick: () => setTab('new'),
-            }, `待用 ${all.filter(row => row.status !== 'used').length}`),
+              className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+              onClick: () => { setDrawer(null); setCands(null) },
+            }, '关闭')),
+          h('div', { className: 'sd-dw-body' },
+            h('div', { className: 'sd-dw-label' }, '想让人记住什么'),
+            h('div', { className: 'sd-hooks' },
+              IDEA_HOOKS.map(name => h('button', {
+                key: name, className: 'sd-hook', type: 'button',
+                'data-on': hook === name ? '1' : '0',
+                onClick: () => setHook(hook === name ? '' : name),
+              }, name))),
             h('button', {
-              className: 'sd-tab', type: 'button', 'data-on': tab === 'used' ? '1' : '0',
-              onClick: () => setTab('used'),
-            }, `已用 ${all.filter(row => row.status === 'used').length}`)),
+              className: 'sd-btn', 'data-kind': 'primary', type: 'button',
+              style: { width: '100%', marginTop: 12, height: 34, justifyContent: 'center' },
+              disabled: busy, onClick: generate,
+            }, busy ? '生成中…' : '生成 5 条'),
 
-          error ? h('div', { className: 'sd-error', style: { marginTop: 10 } }, error) : null,
-
-          ideas && !rows.length
-            ? h('div', { className: 'sd-empty' },
-              tab === 'new'
-                ? '池子是空的。上面写一条；以后新建的项目会自动记进来。'
-                : '还没有用过的题。')
-            : null,
-
-          h('div', { className: 'sd-ideas' }, rows.map(row => h('div', { className: 'sd-idea', key: row.id },
-            h('div', { className: 'sd-idea-x' },
-              h('b', null, row.title),
-              row.angle ? h('s', null, row.angle) : null,
-              row.source ? h('em', null, row.source) : null),
-            h('div', { className: 'sd-idea-ops' },
-              row.status !== 'used'
-                ? h('button', {
-                  className: 'sd-btn', 'data-kind': 'primary', type: 'button', disabled: busy,
-                  onClick: () => onUse(row.title),
-                }, '用它开项目')
-                : null,
-              h('button', {
-                className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy,
-                onClick: () => act('update', { id: row.id, patch: { status: row.status === 'used' ? 'new' : 'used' } }),
-              }, row.status === 'used' ? '放回待用' : '标为已用'),
-              h('button', {
-                className: 'sd-btn', 'data-kind': 'ghost', type: 'button', disabled: busy,
-                onClick: () => act('remove', { id: row.id }),
-              }, '删'))))))
-      )
+            cands && cands.length
+              ? h('div', { className: 'sd-cands' },
+                h('div', { className: 'sd-dw-label', style: { marginTop: 14 } }, '候选 · 带出处的才收'),
+                cands.map((cand, index) => h('div', { className: 'sd-cand', key: `${cand.title}-${index}` },
+                  h('b', null, cand.title),
+                  cand.angle ? h('s', null, cand.angle) : null,
+                  h('div', { className: 'sd-cand-row' },
+                    h('span', { className: 'sd-tag' }, drawer.era),
+                    h('span', { className: 'sd-tag' }, drawer.field),
+                    hook ? h('span', { className: 'sd-tag' }, hook) : null,
+                    cand.source ? h('span', { className: 'sd-tag', 'data-src': '1' }, cand.source) : h('span', { className: 'sd-tag', 'data-warn': '1' }, '无出处'),
+                    h('button', {
+                      className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+                      style: { marginLeft: 'auto', height: 24, padding: '0 9px' },
+                      disabled: busy, onClick: () => take(cand),
+                    }, '收进池子'),
+                    h('button', {
+                      className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
+                      style: { height: 24, padding: '0 9px' },
+                      onClick: () => onUse(cand.title),
+                    }, '直接开工')))))
+              : null,
+            cands === null
+              ? h('p', { className: 'sd-dw-tip' }, '选一个钩子再生成。生成会读一遍池子里已有的标题，避免重复。')
+              : null,
+            h('p', { className: 'sd-dw-tip' }, '只收带出处的：没标注文献的题，写稿时大概率会被编。')))
+          : null)
     }
 
-    // ------------------------------------------------------------------ 主页：项目墙
 
     function ProjectCard({ item, onOpen }) {
       // 用第一张分镜图做封面：成片封面自带标题大字，压到卡片上会和卡片标题打架

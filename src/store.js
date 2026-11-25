@@ -90,6 +90,13 @@ export function migrateState(raw) {
   state.items = Array.isArray(state.items) ? state.items : []
   // 选题池：跨项目的灵感清单，老状态里没有就补一个空数组
   state.ideas = Array.isArray(state.ideas) ? state.ideas : []
+  // era / field / hook 三件套是矩阵视图的分组依据，老条目可能没有，补空串
+  state.ideas.forEach(row => {
+    row.era = typeof row.era === 'string' ? row.era : ''
+    row.field = typeof row.field === 'string' ? row.field : ''
+    row.hook = typeof row.hook === 'string' ? row.hook : ''
+    row.source = typeof row.source === 'string' ? row.source : ''
+  })
   for (const item of state.items) {
     item.segments = Array.isArray(item.segments) ? item.segments : []
     item.log = Array.isArray(item.log) ? item.log : []

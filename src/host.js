@@ -14,6 +14,7 @@ import { encoderArgsSync, encoderInfo, maxParallelSessions, resolveEncoder } fro
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
+import { buildIdeaPrompt, IDEA_SYSTEM, normalizeIdeaCandidates } from './ideas.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, isTaskLocked, publicTask, startTask } from './jobs.js'
 import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, clipWindow, composeCopy, countVariant, formatDuration, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
@@ -1846,14 +1847,33 @@ async function route(ctx, store, req, res) {
         const state = await store.read()
         return json(res, 200, { ideas: state.ideas ?? [] })
       }
+      if (op === 'generate') {
+        // 按「时代 · 领域」补空位：把池子里已有的标题一起交给模型，让它避开
+        const era = String(body.era ?? '').trim().slice(0, 20)
+        const field = String(body.field ?? '').trim().slice(0, 20)
+        const hook = String(body.hook ?? '').trim().slice(0, 20) || '不限'
+        if (!era && !field) return json(res, 400, { error: '先点一个格子' })
+        const state = await store.read()
+        const taken = (state.ideas ?? []).map(row => row.title).filter(Boolean).slice(0, 80)
+        const { text } = await callModel(ctx, {
+          maxTokens: 2400,
+          signal: AbortSignal.timeout(150_000),
+          system: IDEA_SYSTEM,
+          user: buildIdeaPrompt({ era, field, hook, taken }),
+        })
+        const candidates = normalizeIdeaCandidates(extractJson(text))
+        if (!candidates.length) return json(res, 502, { error: '模型没给出可用的选题，再试一次' })
+        return json(res, 200, { candidates, era, field, hook })
+      }
       if (op === 'add') {
-        const title = String(body.title ?? '').trim().slice(0, 120)
-        if (!title) return json(res, 400, { error: '先写个标题' })
         const idea = {
           id: newId('idea'),
           title,
           angle: String(body.angle ?? '').trim().slice(0, 300),
           kind: String(body.kind ?? 'history').slice(0, 20),
+          era: String(body.era ?? '').trim().slice(0, 20),
+          field: String(body.field ?? '').trim().slice(0, 20),
+          hook: String(body.hook ?? '').trim().slice(0, 20),
           status: 'new',
           source: String(body.source ?? '').trim().slice(0, 300),
           at: new Date().toISOString(),
@@ -1875,6 +1895,9 @@ async function route(ctx, store, req, res) {
           if (typeof patch.title === 'string' && patch.title.trim()) hit.title = patch.title.trim().slice(0, 120)
           if (typeof patch.angle === 'string') hit.angle = patch.angle.trim().slice(0, 300)
           if (typeof patch.source === 'string') hit.source = patch.source.trim().slice(0, 300)
+          if (typeof patch.era === 'string') hit.era = patch.era.trim().slice(0, 20)
+          if (typeof patch.field === 'string') hit.field = patch.field.trim().slice(0, 20)
+          if (typeof patch.hook === 'string') hit.hook = patch.hook.trim().slice(0, 20)
           if (typeof patch.status === 'string' && ['new', 'used', 'parked'].includes(patch.status)) hit.status = patch.status
           return null
         })
