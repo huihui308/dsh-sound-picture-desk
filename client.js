@@ -297,6 +297,171 @@ window.__ModuleLoader__.load({
 .sd-rev-tab{border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:11px;padding:4px 9px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
 .sd-rev-tab[data-on="1"]{color:var(--dsw-alias-brand-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
 
+/* ---- 工作台导航（左栏） ---- */
+.sd-rail{width:258px;flex:0 0 258px;border-right:1px solid var(--dsw-alias-border-l1);background:var(--dsw-specific-sidebar-fill,var(--dsw-alias-bg-layer-1));display:flex;flex-direction:column;min-height:0;padding:0 12px 10px}
+.sd-brand{display:flex;align-items:center;gap:10px;padding:16px 6px 12px}
+.sd-brand-t{display:flex;flex-direction:column;gap:3px}
+.sd-brand-t b{font-size:14px;font-weight:600;letter-spacing:.02em}
+.sd-brand-t s{font-size:10px;color:var(--dsw-alias-label-tertiary);text-decoration:none;letter-spacing:.16em}
+.sd-group{font-size:10px;color:var(--dsw-alias-label-tertiary);letter-spacing:.16em;padding:10px 8px 6px}
+.sd-navrow{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border-radius:7px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}
+.sd-navrow[data-on="1"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.sd-navrow em{font-style:normal;font-size:10.5px;color:var(--dsw-alias-label-tertiary)}
+.sd-nav-add{margin-left:auto;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);font:inherit;font-size:13px;cursor:pointer;padding:0 2px;line-height:1}
+.sd-nav-add:hover{color:var(--dsw-alias-brand-primary)}
+.sd-projlist{overflow:auto;padding:2px 0 4px;display:flex;flex-direction:column;gap:1px;min-height:0}
+.sd-proj{display:flex;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer;position:relative;align-items:flex-start}
+.sd-proj:hover{background:var(--dsw-alias-bg-layer-2)}
+.sd-proj[data-on="1"]{background:var(--dsw-alias-bg-layer-2)}
+.sd-proj[data-on="1"]::before{content:'';position:absolute;left:-12px;top:9px;bottom:9px;width:2px;border-radius:0 2px 2px 0;background:var(--dsw-alias-brand-primary)}
+.sd-proj-thumb{width:30px;height:52px;flex:0 0 30px;border-radius:3px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary)}
+.sd-proj-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.sd-proj-x{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sd-proj-x b{font-size:12px;font-weight:400;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-proj[data-on="1"] .sd-proj-x b{color:var(--dsw-alias-label-primary);font-weight:600}
+.sd-proj-x s{font-size:9.5px;color:var(--dsw-alias-label-tertiary);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-proj-x em{font-style:normal;font-size:9.5px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-proj-x em[data-kind="run"]{color:var(--dsw-alias-brand-primary)}
+.sd-proj-del{position:absolute;right:3px;top:3px;border:none;background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:12px;line-height:1;padding:2px 5px;opacity:0;border-radius:4px}
+.sd-proj:hover .sd-proj-del{opacity:1}
+.sd-proj-del:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-3)}
+.sd-side-foot{margin-top:auto;border-top:1px solid var(--dsw-alias-border-l1);padding-top:8px;display:flex;flex-direction:column;gap:1px}
+
+/* ---- 左栏：品牌 + 分组 + 图标行 ---- */
+.sd-brand{display:flex;align-items:center;gap:10px;padding:16px 14px 14px}
+.sd-blogo{width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-brand-primary)}
+.sd-brandtext b{display:block;font-size:14px;letter-spacing:.04em}
+.sd-brandtext s{display:block;font-size:9.5px;color:var(--dsw-alias-label-tertiary);text-decoration:none;letter-spacing:.18em;margin-top:3px}
+.sd-group{font-size:10px;color:var(--dsw-alias-label-tertiary);letter-spacing:.16em;padding:14px 14px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-nav{display:flex;align-items:center;gap:10px;height:34px;margin:0 8px;padding:0 9px;border-radius:7px;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.sd-nav i{display:flex;color:var(--dsw-alias-label-tertiary)}
+.sd-nav[data-on="1"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.sd-nav[data-on="1"] i{color:var(--dsw-alias-brand-primary)}
+.sd-nav em{font-style:normal;margin-left:auto;font-size:10px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92px}
+.sd-nav b{font-weight:400;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sd-nav .sd-step{width:16px;height:16px;flex:0 0 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;line-height:1;border:1.2px dashed var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary);margin-left:1px}
+.sd-nav .sd-step[data-state="done"]{background:var(--dsw-alias-brand-primary);border:1.2px solid var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-weight:700}
+.sd-nav .sd-step[data-state="now"]{border:1.2px solid var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary);background:transparent}
+.sd-nav[data-state="now"] b{font-weight:600;color:var(--dsw-alias-label-primary)}
+
+/* ---- 主页项目墙 ---- */
+.sd-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:18px}
+.sd-pcard{display:flex;flex-direction:column;padding:0;border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font:inherit;color:inherit;text-align:left;cursor:pointer}
+.sd-pcard:hover{border-color:var(--dsw-alias-brand-primary)}
+.sd-ph{position:relative;display:block;aspect-ratio:9/16;overflow:hidden;background:var(--dsw-alias-bg-layer-2)}
+.sd-ph img{width:100%;height:100%;object-fit:cover;display:block}
+.sd-ph::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,5,3,0) 45%,rgba(8,5,3,.92) 100%)}
+.sd-tag{position:absolute;right:9px;top:9px;z-index:2;font-size:9.5px;padding:2px 7px;border-radius:5px;background:rgba(12,9,7,.72);color:var(--dsw-alias-label-secondary)}
+.sd-tag[data-k="done"]{color:var(--dsw-alias-brand-primary);background:rgba(12,9,7,.66)}
+.sd-tag[data-k="run"]{color:#e9c98d}
+.sd-pt{position:absolute;left:13px;right:13px;bottom:12px;z-index:2}
+.sd-pt b{display:block;font-size:15px;font-weight:600;color:#f4ead9}
+.sd-pt s{display:block;font-size:10.5px;color:rgba(241,230,211,.72);text-decoration:none;margin-top:4px}
+.sd-bar{display:block;height:3px;background:rgba(255,255,255,.14);margin-top:9px;border-radius:2px;overflow:hidden}
+.sd-bar i{display:block;height:100%;background:var(--dsw-alias-brand-primary)}
+.sd-pn{padding:9px 13px 11px;font-size:10.5px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- 全局页：人物库 / 发布 / 数据 ---- */
+.sd-facegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:12px}
+.sd-facecard{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-layer-1);font:inherit;color:inherit;cursor:pointer;text-align:left}
+.sd-facecard:hover{border-color:var(--dsw-alias-brand-primary)}
+.sd-faceimg{width:100%;aspect-ratio:1;border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);display:flex;align-items:center;justify-content:center;margin-bottom:5px;color:var(--dsw-alias-label-tertiary)}
+.sd-faceimg img{width:100%;height:100%;object-fit:cover;display:block}
+.sd-facecard b{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sd-facecard s{font-size:10.5px;color:var(--dsw-alias-label-tertiary);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.sd-facecard em{font-style:normal;font-size:10px;color:var(--dsw-alias-label-tertiary)}
+.sd-rows{display:flex;flex-direction:column;gap:6px}
+.sd-rowitem{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}
+.sd-rowitem-t{flex:1;font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-rowitem-m{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.sd-statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.sd-stat{padding:11px 13px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-layer-1)}
+.sd-stat b{display:block;font-size:10px;font-weight:400;color:var(--dsw-alias-label-tertiary);letter-spacing:.1em;margin-bottom:6px}
+.sd-stat s{font-size:18px;text-decoration:none;font-variant-numeric:tabular-nums}
+
+/* ---- 阶段轨道 ---- */
+.sd-stage{display:flex;align-items:flex-start;padding:2px 0 0;border-bottom:1px solid var(--dsw-alias-border-l1);margin-top:2px}
+.sd-stage-i{display:flex;align-items:flex-start;gap:9px;border:none;background:transparent;font:inherit;cursor:pointer;padding:6px 0 10px;width:126px;flex:0 0 auto;text-align:left}
+.sd-stage-i:disabled{cursor:not-allowed;opacity:.5}
+.sd-stage-i:hover .sd-stage-x b{color:var(--dsw-alias-label-secondary)}
+.sd-stage-dot{width:22px;height:22px;border-radius:50%;flex:0 0 22px;display:flex;align-items:center;justify-content:center;font-size:11px;border:1.5px dashed var(--dsw-alias-border-l2);color:var(--dsw-alias-label-tertiary);line-height:1}
+.sd-stage-i[data-done="1"] .sd-stage-dot{background:var(--dsw-alias-brand-primary);border:1.5px solid var(--dsw-alias-brand-primary);color:var(--dsw-alias-bg-base);font-weight:700}
+.sd-stage-i[data-on="1"] .sd-stage-dot{border-style:solid;border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.sd-stage-i[data-on="1"][data-done="1"] .sd-stage-dot{color:var(--dsw-alias-bg-base)}
+.sd-stage-x{display:flex;flex-direction:column;gap:2px;padding-top:1px;min-width:0}
+.sd-stage-x b{font-size:12.5px;font-weight:400;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.sd-stage-i[data-done="1"] .sd-stage-x b{color:var(--dsw-alias-label-secondary)}
+.sd-stage-i[data-on="1"] .sd-stage-x b{color:var(--dsw-alias-label-primary);font-weight:600}
+.sd-stage-x s{font-size:10px;color:var(--dsw-alias-label-tertiary);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:96px}
+.sd-stage-l{flex:1;height:1px;background:var(--dsw-alias-border-l2);margin:17px 4px 0 0;min-width:10px}
+
+/* ---- 底部任务带 ---- */
+.sd-job{display:flex;align-items:center;gap:12px;padding:9px 22px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);font-size:11.5px;flex:0 0 auto}
+.sd-job[data-kind="error"]{background:color-mix(in srgb,var(--dsw-alias-state-error-primary) 8%,transparent)}
+.sd-job-t{color:var(--dsw-alias-label-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px}
+.sd-job-bar{width:240px;height:4px;border-radius:2px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;flex:0 0 auto}
+.sd-job-bar i{display:block;height:100%;background:var(--dsw-alias-brand-primary);transition:width .3s ease}
+.sd-job-m{color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+
+/* ---- 界面配色：工作台暖调（墨褐 + 暖金） ---- */
+.sd-root[data-theme="warm"]{
+  --dsw-alias-bg-base:#16110d;
+  --dsw-alias-bg-layer-1:#1c1611;
+  --dsw-alias-bg-layer-2:#261e16;
+  --dsw-alias-bg-layer-3:#31271c;
+  --dsw-alias-bg-overlay:#1f1813;
+  --dsw-alias-label-primary:#f1e6d3;
+  --dsw-alias-label-secondary:#b6a48c;
+  --dsw-alias-label-tertiary:#82725f;
+  --dsw-alias-border-l1:#3a2d22;
+  --dsw-alias-border-l2:#2b2219;
+  --dsw-alias-brand-primary:#d9a441;
+  --dsw-alias-link:#d9a441;
+  --dsw-alias-button-primary-fill:#d9a441;
+  --dsw-alias-button-primary-hover:#e3b357;
+  --dsw-alias-interactive-bg-hover:#2d241a;
+  --dsw-alias-state-success-primary:#7fa46f;
+  --dsw-alias-state-error-primary:#d4614a;
+  --dsw-alias-state-error-base:#c9442d;
+  --dsw-alias-state-warn-primary:#d9a441;
+  --dsw-alias-state-idle-primary:#82725f;
+  --dsw-specific-sidebar-fill:#1c1611;
+  --dsw-specific-menu:#251e17
+}
+.sd-root[data-theme="warm"] .sd-btn[data-kind="primary"]{color:#1a130c}
+.sd-root[data-theme="warm"] .sd-danger,
+.sd-root[data-theme="warm"] .sd-error{color:#e0836b}
+
+/* ---- 界面配色：跟随 DSH（宿主变量没传进插件，这里按 DSH 深色中性配色给一套） ---- */
+.sd-root[data-theme="dsh"]{
+  --dsw-alias-bg-base:#1b1c20;
+  --dsw-alias-bg-layer-1:#202227;
+  --dsw-alias-bg-layer-2:#262a31;
+  --dsw-alias-bg-layer-3:#2e333b;
+  --dsw-alias-bg-overlay:#202227;
+  --dsw-alias-label-primary:#e9eaee;
+  --dsw-alias-label-secondary:#a9aeb7;
+  --dsw-alias-label-tertiary:#7b818b;
+  --dsw-alias-border-l1:#343941;
+  --dsw-alias-border-l2:#2a2f36;
+  --dsw-alias-brand-primary:#6c9dff;
+  --dsw-alias-link:#6c9dff;
+  --dsw-alias-button-primary-fill:#4f8bf5;
+  --dsw-alias-button-primary-hover:#6299f7;
+  --dsw-alias-interactive-bg-hover:#2b3038;
+  --dsw-alias-state-success-primary:#63bf85;
+  --dsw-alias-state-error-primary:#e0725f;
+  --dsw-alias-state-error-base:#d4553f;
+  --dsw-alias-state-warn-primary:#d9a441;
+  --dsw-alias-state-idle-primary:#7b818b;
+  --dsw-specific-sidebar-fill:#202227;
+  --dsw-specific-menu:#262a31
+}
+.sd-root[data-theme="dsh"] .sd-btn[data-kind="primary"]{color:#fff}
+.sd-root[data-theme="dsh"] .sd-danger,
+.sd-root[data-theme="dsh"] .sd-error{color:#ef8a76}
+
+
 `
 
     // ------------------------------------------------------------------ 工具
@@ -375,6 +540,7 @@ window.__ModuleLoader__.load({
       const [pendingDelete, setPendingDelete] = useState(null)
       const [deletingBusy, setDeletingBusy] = useState(false)
       const [trashOpen, setTrashOpen] = useState(false)
+      const [view, setView] = useState('home')
       const [chatOpen, setChatOpen] = useState(true)
       const [chatInput, setChatInput] = useState('')
       const [sending, setSending] = useState(false)
@@ -415,6 +581,21 @@ window.__ModuleLoader__.load({
           if (timer.current) { clearInterval(timer.current); timer.current = null }
         }
       }, [anyRunning, load])
+
+      // 界面配色：点一下立即生效。localStorage 优先——host 没重启时不认这个键，写进 state 也被过滤
+      const [theme, setTheme] = useState('warm')
+      const chooseTheme = useCallback(value => {
+        const next = value === 'dsh' ? 'dsh' : 'warm'
+        setTheme(next)
+        try { window.localStorage.setItem('spd-theme', next) } catch { /* 存不进也不影响本次 */ }
+      }, [])
+      useEffect(() => {
+        let stored = null
+        try { stored = window.localStorage.getItem('spd-theme') } catch { stored = null }
+        if (stored === 'warm' || stored === 'dsh') { setTheme(stored); return }
+        const fromSettings = data?.settings?.theme
+        if (fromSettings === 'warm' || fromSettings === 'dsh') setTheme(fromSettings)
+      }, [data?.settings?.theme])
 
       const current = useMemo(
         () => data?.items?.find(row => row.id === currentId) ?? null,
@@ -457,6 +638,13 @@ window.__ModuleLoader__.load({
         }
       }, [chatInput, sending, currentId, load])
 
+      // 从主页/人物库/发布/数据点回某个项目：切到它并回到项目视图
+      const openItem = useCallback(id => {
+        setNotice(null)
+        setCurrentId(id)
+        setView('project')
+      }, [])
+
       const clearChat = useCallback(async () => {
         try {
           await post('chat/clear', {})
@@ -467,7 +655,7 @@ window.__ModuleLoader__.load({
       }, [load])
 
       if (error) {
-        return h('div', { className: 'sd-root' },
+        return h('div', { className: 'sd-root', 'data-theme': theme },
           h('div', { className: 'sd-pane' },
             h('div', { className: 'sd-head' }, h('div', { className: 'sd-h1' }, '声画工作台')),
             h('div', { className: 'sd-body' },
@@ -478,29 +666,38 @@ window.__ModuleLoader__.load({
       }
 
       if (!data) {
-        return h('div', { className: 'sd-root' },
+        return h('div', { className: 'sd-root', 'data-theme': theme },
           h('div', { className: 'sd-pane' },
             h('div', { className: 'sd-body', style: { paddingTop: 48, color: 'var(--dsw-alias-label-tertiary)' } }, '正在打开工作台…')))
       }
 
       return h(React.Fragment, null,
         h('style', null, STYLE),
-        h('div', { className: 'sd-root' },
+        h('div', { className: 'sd-root', 'data-theme': theme },
           h(Rail, {
-            items: data.items, currentId, onPick: id => { setNotice(null); setCurrentId(id) },
+            items: data.items, view, onView: setView,
             onCreate: () => { setNotice(null); setCreating(true) },
-            onDelete: item => { setNotice(null); setPendingDelete(item) },
             trashCount: data.trashCount ?? 0,
             onOpenTrash: () => setTrashOpen(true),
+            onSettings: () => setSettingsOpen(true),
           }),
           h('div', { className: 'sd-pane' },
-            current
-              ? h(Project, {
-                  // key 用项目 id：切项目时整棵子树重挂，各页本地状态（草稿/封面大字/大图）不残留
-                  key: current.id, item: current, data, busy, notice,
-                  onAction: run, onReload: load, onSettings: () => setSettingsOpen(true),
-                })
-              : h(EmptyState, { onCreate: () => setCreating(true), model: data.model })),
+            view === 'home'
+              ? h(HomeView, {
+                items: data.items, onOpen: openItem,
+                onCreate: () => { setNotice(null); setCreating(true) },
+              })
+              : view === 'anchors' ? h(AnchorLibrary, { items: data.items, onOpen: openItem })
+                : view === 'assets' ? h(AssetLibrary, null)
+                  : view === 'publish' ? h(PublishOverview, { items: data.items, onOpen: openItem })
+                    : view === 'data' ? h(DataOverview, { items: data.items, onOpen: openItem })
+                      : current
+                        ? h(Project, {
+                          // key 用项目 id：切项目时整棵子树重挂，各页本地状态（草稿/封面大字/大图）不残留
+                          key: current.id, item: current, data, busy, notice,
+                          onAction: run, onReload: load, onSettings: () => setSettingsOpen(true),
+                        })
+                        : h(EmptyState, { onCreate: () => setCreating(true), model: data.model })),
           // 助手栏已按需求移除：chat 相关逻辑保留，界面不再渲染
           pendingDelete ? h(ConfirmDelete, {
             item: pendingDelete,
@@ -530,7 +727,8 @@ window.__ModuleLoader__.load({
             onChanged: load,
           }) : null,
           settingsOpen ? h(SettingsDialog, {
-            data, onClose: () => setSettingsOpen(false),
+            data, theme, onTheme: chooseTheme,
+            onClose: () => setSettingsOpen(false),
             onSaved: async () => { await load(); setSettingsOpen(false) },
           }) : null,
           creating ? h(NewDialog, {
@@ -615,41 +813,218 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ 左栏
 
-    function Rail({ items, currentId, onPick, onCreate, onDelete, trashCount, onOpenTrash }) {
-      return h('div', { className: 'sd-rail' },
-        h('div', { className: 'sd-rail-head' },
-          h(DeskIcon, { size: 17 }),
-          h('span', { className: 'sd-rail-title' }, '声画工作台'),
-          h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onCreate, title: '新建一个项目' }, '＋')),
-        h('div', { className: 'sd-rail-list' },
-          items.length
-            ? items.map(item => h('div', {
-                key: item.id, className: 'sd-item',
-                'data-on': item.id === currentId ? '1' : '0',
-                role: 'button', tabIndex: 0,
-                onClick: () => onPick(item.id),
-                onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') onPick(item.id) },
-              },
-              h('span', { className: 'sd-item-title' }, item.title || '未命名'),
-              h('span', { className: 'sd-item-meta' },
-                h('span', { className: 'sd-dot', 'data-on': item.stage === 'rendered' ? '1' : '0' }),
-                h('span', null, item.stageLabel),
-                item.counts.segments ? h('span', null, `· ${item.counts.segments} 段`) : null),
-              // 删除入口：平时藏着，鼠标移到这一行才出现
-              h('button', {
-                className: 'sd-item-del', type: 'button', title: '删除这个项目',
-                onClick: event => { event.stopPropagation(); onDelete(item) },
-              }, '×')))
-            : h('div', { className: 'sd-hint', style: { padding: '10px 6px' } }, '还没有项目。点上面的 ＋ 建一个。')),
-        h('div', { className: 'sd-rail-foot' },
-          h('button', {
-            className: 'sd-trash-link', type: 'button', onClick: onOpenTrash,
-          },
-            '回收站',
-            trashCount ? h('span', { className: 'sd-trash-count' }, String(trashCount)) : null)))
+    const NAV_ICONS = {
+      home: ['M3 3.5h5.5v5.5H3z', 'M11.5 3.5H17v5.5h-5.5z', 'M3 13h5.5v5.5H3z', 'M11.5 13H17v5.5h-5.5z'],
+      people: ['M7.5 4.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 1 0 0-5.6', 'M2.5 16.6c0-2.8 2.2-4.8 5-4.8s5 2 5 4.8', 'M14.6 6.1a2 2 0 1 0 0 4 2 2 0 1 0 0-4', 'M13.3 12.4c2.1.3 3.8 2 3.8 4.2'],
+      audio: ['M6 11.9a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 1 0 0-4.4', 'M8.2 16.3V6.3l8.4-1.6v8', 'M14.6 10.3a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 1 0 0-4.4'],
+      send: ['M10 16.5V4', 'M5.2 8.8 10 4l4.8 4.8'],
+      chart: ['M3 16.5V9', 'M8 16.5V4', 'M13 16.5v-6', 'M18 16.5H2'],
+      trash: ['M3.5 5.5h13', 'M8 5.5V3.8h4v1.7', 'M5.5 5.5l.8 11h7.4l.8-11'],
     }
 
-    // ------------------------------------------------------------------ 空状态
+    function NavIcon({ name }) {
+      const paths = NAV_ICONS[name]
+      if (!paths) return null
+      return h('svg', {
+        width: 17, height: 17, viewBox: '0 0 20 20', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 1.5, 'aria-hidden': true,
+        style: { display: 'block' },
+      }, paths.map(d => h('path', { key: d, d })))
+    }
+
+    // ------------------------------------------------------------------ 左栏
+
+    function Rail({ items, view, onView, onCreate, trashCount, onOpenTrash, onSettings }) {
+      const navRow = (key, label, count, icon) => h('div', {
+        key, className: 'sd-nav', 'data-on': view === key ? '1' : '0',
+        role: 'button', tabIndex: 0,
+        onClick: () => onView(key),
+        onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') onView(key) },
+      },
+      icon ? h('i', null, h(NavIcon, { name: icon })) : null,
+      h('b', null, label),
+      count === null || count === undefined ? null : h('em', null, String(count)))
+
+      const anchors = items.reduce((n, item) => n + ((item.anchors ?? []).length), 0)
+
+      return h('div', { className: 'sd-rail' },
+        h('div', { className: 'sd-brand' },
+          h('span', { className: 'sd-blogo' }, h(DeskIcon, { size: 18 })),
+          h('div', { className: 'sd-brandtext' },
+            h('b', null, '声画工作台'),
+            h('s', null, '发现 · 讲述 · 成片'))),
+
+        h('div', { className: 'sd-group' }, '管理工作台'),
+        navRow('home', '主页', null, 'home'),
+        navRow('anchors', '人物库', anchors, 'people'),
+        navRow('assets', '素材库', null, 'audio'),
+
+        h('div', { className: 'sd-group' }, '产出'),
+        navRow('publish', '发布', null, 'send'),
+        navRow('data', '数据', null, 'chart'),
+
+        h('div', { className: 'sd-side-foot' },
+          h('button', { className: 'sd-trash-link', type: 'button', onClick: onOpenTrash },
+            '回收站',
+            trashCount ? h('span', { className: 'sd-trash-count' }, String(trashCount)) : null),
+          h('button', { className: 'sd-trash-link', type: 'button', onClick: onSettings }, '设置')))
+    }
+
+    // ------------------------------------------------------------------ 主页：项目墙
+
+    function ProjectCard({ item, onOpen }) {
+      // 用第一张分镜图做封面：成片封面自带标题大字，压到卡片上会和卡片标题打架
+      const cover = item.counts.imaged ? 'images/s001.png' : (item.cover?.path ?? '')
+      const done = Boolean(item.render)
+      const pct = done
+        ? 100
+        : item.counts.segments
+          ? Math.round(((item.counts.voiced + item.counts.imaged) / (item.counts.segments * 2)) * 100)
+          : 0
+      const tag = item.task?.running ? '进行中' : done ? '已成片' : item.counts.segments ? item.stageLabel : '草稿'
+      const note = item.task?.running
+        ? (item.task.message || '处理中…')
+        : done
+          ? `成片 ${formatSecs(item.render.secs || item.totalSecs || 0)}`
+          : item.counts.segments
+            ? `${item.counts.imaged}/${item.counts.segments} 张图`
+            : '还没写稿'
+      return h('button', { className: 'sd-pcard', type: 'button', onClick: () => onOpen(item.id) },
+        h('span', { className: 'sd-ph' },
+          cover ? h('img', { src: mediaUrl(item.id, cover, item.counts.imaged || 1), alt: '', loading: 'lazy' }) : null,
+          h('span', { className: 'sd-tag', 'data-k': item.task?.running ? 'run' : done ? 'done' : '' }, tag),
+          h('span', { className: 'sd-pt' },
+            h('b', null, item.title || '未命名'),
+            h('s', null, item.counts.segments ? `${item.counts.segments} 段 · ${formatSecs(item.totalSecs || 0)}` : '草稿'),
+            h('span', { className: 'sd-bar' }, h('i', { style: { width: `${pct}%` } })))),
+        h('span', { className: 'sd-pn' }, note))
+    }
+
+    function HomeView({ items, onOpen, onCreate }) {
+      const done = items.filter(item => item.render).length
+      const secs = items.reduce((n, item) => n + (item.totalSecs || 0), 0)
+      return h('div', { className: 'sd-pane' },
+        h('div', { className: 'sd-head' },
+          h('div', { className: 'sd-head-row' },
+            h('div', { className: 'sd-head-title' },
+              h('h1', { className: 'sd-h1' }, '我的项目'),
+              h('div', { className: 'sd-sub' },
+                `${items.length} 个项目 · ${done} 条已成片 · 总旁白 ${formatSecs(secs)}`)),
+            h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: onCreate }, '新建项目'))),
+        h('div', { className: 'sd-body' },
+          items.length
+            ? h('div', { className: 'sd-wall' }, items.map(item => h(ProjectCard, { key: item.id, item, onOpen })))
+            : h('div', { className: 'sd-empty' },
+              h('div', null, '还没有项目。'),
+              h('div', null, '给它一个主题（比如「九子夺嫡」「安史之乱怎么爆的」），剩下的它自己往下做。'))))
+    }
+
+    // ------------------------------------------------------------------ 全局页（人物 / 素材 / 发布 / 数据）
+
+    /** 人物库：跨项目聚合定稿锚点。锚点本身属于项目，点一个回到那个项目去改。 */
+    function AnchorLibrary({ items, onOpen }) {
+      const rows = []
+      for (const item of items) {
+        for (const row of (item.anchors ?? [])) rows.push({ ...row, itemId: item.id, itemTitle: item.title })
+      }
+      return h('div', { className: 'sd-pane' },
+        h('div', { className: 'sd-head' },
+          h('h1', { className: 'sd-h1' }, '人物库'),
+          h('div', { className: 'sd-sub' },
+            rows.length
+              ? `${items.length} 个项目共 ${rows.length} 条锚点 · 点一个回到它所在的项目去改`
+              : '还没有人物锚点')),
+        h('div', { className: 'sd-body' },
+          rows.length
+            ? h('div', { className: 'sd-facegrid' }, rows.map(row => {
+              // 锚点的图在候选列表里，定稿的优先；没有候选就是还没画过
+              const pic = row.approved || (row.candidates ?? []).slice(-1)[0] || ''
+              return h('button', {
+                key: `${row.itemId}-${row.id ?? row.name}`,
+                className: 'sd-facecard', type: 'button',
+                title: row.desc || '',
+                onClick: () => onOpen(row.itemId),
+              },
+              h('span', { className: 'sd-faceimg' },
+                pic
+                  ? h('img', { src: mediaUrl(row.itemId, pic), alt: '', loading: 'lazy' })
+                  : h(DeskIcon, { size: 18 })),
+              h('b', null, row.name || '未命名'),
+              h('s', null, row.itemTitle || ''),
+              h('em', null, row.approved ? '已定稿' : pic ? '待确认' : '未画'))
+            }))
+            : h('div', { className: 'sd-empty' },
+              h('div', null, '还没有人物锚点。'),
+              h('div', null, '进任意项目 → 参考图，抽一次人物和场景，定稿之后这里就会汇总。'))))
+    }
+
+    /** 素材库：还没接后端，说明清楚要做什么，别放个白页。 */
+    function AssetLibrary() {
+      return h('div', { className: 'sd-pane' },
+        h('div', { className: 'sd-head' },
+          h('h1', { className: 'sd-h1' }, '素材库'),
+          h('div', { className: 'sd-sub' }, 'BGM · 音效 · 片头模板')),
+        h('div', { className: 'sd-body' },
+          h('div', { className: 'sd-empty' },
+            h('div', null, '这一页还没接。'),
+            h('div', null, '要放的是：按情绪分类的 BGM、转场音效、片头模板。合成时直接挑，BGM 自动压在旁白底下。'),
+            h('div', { className: 'sd-hint', style: { marginTop: 14 } },
+              '现在成片只有旁白，没有背景音。接口做好之后素材从这里进，不用每次翻目录。'))))
+    }
+
+    /** 发布：把所有已成片的项目列出来，点进去到那一条的发布页。 */
+    function PublishOverview({ items, onOpen }) {
+      const ready = items.filter(item => item.render)
+      return h('div', { className: 'sd-pane' },
+        h('div', { className: 'sd-head' },
+          h('h1', { className: 'sd-h1' }, '发布'),
+          h('div', { className: 'sd-sub' },
+            ready.length ? `${ready.length} 条已成片，可以生成发布包` : '还没有成片')),
+        h('div', { className: 'sd-body' },
+          ready.length
+            ? h('div', { className: 'sd-rows' }, ready.map(item => h('div', { className: 'sd-rowitem', key: item.id },
+              h('span', { className: 'sd-rowitem-t' }, item.title || '未命名'),
+              h('span', { className: 'sd-rowitem-m' }, `${item.counts.segments} 段 · ${formatSecs(item.render.secs || item.totalSecs || 0)}`),
+              h('span', { className: 'sd-rowitem-m' }, item.cover?.path ? '有封面' : '无封面'),
+              h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: () => onOpen(item.id) }, '去发布'))))
+            : h('div', { className: 'sd-empty' },
+              h('div', null, '还没有成片。'),
+              h('div', null, '先去项目里合成一条，这里才会出现可发布的东西。'))))
+    }
+
+    /** 数据：本地账本。播放量还没有回流通道，这里只算它真能算的。 */
+    function DataOverview({ items, onOpen }) {
+      const segs = items.reduce((n, item) => n + (item.counts.segments || 0), 0)
+      const secs = items.reduce((n, item) => n + (item.totalSecs || 0), 0)
+      const done = items.filter(item => item.render).length
+      const imaged = items.reduce((n, item) => n + (item.counts.imaged || 0), 0)
+      const voiced = items.reduce((n, item) => n + (item.counts.voiced || 0), 0)
+      const people = items.reduce((n, item) => n + ((item.anchors ?? []).length), 0)
+      const cards = [
+        ['项目', String(items.length)],
+        ['已成片', String(done)],
+        ['旁白总长', formatSecs(secs)],
+        ['段落', String(segs)],
+        ['已配音', `${voiced}/${segs}`],
+        ['已出图', `${imaged}/${segs}`],
+        ['人物锚点', String(people)],
+        ['出图成本', '¥0.00'],
+      ]
+      return h('div', { className: 'sd-pane' },
+        h('div', { className: 'sd-head' },
+          h('h1', { className: 'sd-h1' }, '数据'),
+          h('div', { className: 'sd-sub' }, '本地账本 · 播放数据还没有回流通道，这一页只算工作台自己的账')),
+        h('div', { className: 'sd-body' },
+          h('div', { className: 'sd-statgrid' }, cards.map(([label, value]) => h('div', { className: 'sd-stat', key: label },
+            h('b', null, label), h('s', null, value)))),
+          h('div', { className: 'sd-rows' }, items.map(item => h('div', { className: 'sd-rowitem', key: item.id },
+            h('span', { className: 'sd-rowitem-t' }, item.title || '未命名'),
+            h('span', { className: 'sd-rowitem-m' }, `${item.counts.segments} 段`),
+            h('span', { className: 'sd-rowitem-m' }, formatSecs(item.totalSecs || 0)),
+            h('span', { className: 'sd-rowitem-m' }, `配音 ${item.counts.voiced}/${item.counts.segments}`),
+            h('span', { className: 'sd-rowitem-m' }, item.render ? '已成片' : item.stageLabel),
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: () => onOpen(item.id) }, '打开'))))))
+    }
 
     function EmptyState({ onCreate, model }) {
       return h('div', { className: 'sd-pane' },
@@ -762,11 +1137,10 @@ window.__ModuleLoader__.load({
       // 换项目时回到自动落页
       useEffect(() => { setPicked(null) }, [item.id])
 
-      // 稿件生成完就带用户去看稿子，不用自己再点一下页签
+      // 稿件生成完就带用户去看稿子，不用自己再点一下阶段
       const wasRunning = useRef(false)
       useEffect(() => {
         const running = Boolean(item.task?.running)
-      const segSeconds = item.settings?.segmentSeconds ?? data.settings.segmentSeconds ?? 40
         const had = wasRunning.current
         wasRunning.current = running
         // 只有「生成稿件」跑完才该带用户去看稿子；出图、配音、合成都在当前页继续看结果
@@ -780,6 +1154,26 @@ window.__ModuleLoader__.load({
       const pct = task && task.total ? Math.min(100, Math.round((task.done / task.total) * 100)) : 0
       const pages = { item, data, busy, notice, onAction, onReload, onSettings, onGoTab: setPicked }
 
+      // 阶段轨道：圆点表示完成/当前，下面那行小字只写这一阶段真实的产物
+      const stageNodes = []
+      TAB_KEYS.forEach((key, index) => {
+        const stage = data.stages.find(row => row.id === key)
+        const done = tabDone(item, key)
+        const on = active === key
+        stageNodes.push(h('button', {
+          key, type: 'button', className: 'sd-stage-i',
+          'data-on': on ? '1' : '0', 'data-done': done ? '1' : '0',
+          onClick: () => setPicked(key),
+        },
+          h('span', { className: 'sd-stage-dot' }, done ? '✓' : on ? '●' : ''),
+          h('span', { className: 'sd-stage-x' },
+            h('b', null, stage?.label ?? key),
+            h('s', null, stageHint(item, key)))))
+        if (index < TAB_KEYS.length - 1) {
+          stageNodes.push(h('span', { key: `${key}-l`, className: 'sd-stage-l' }))
+        }
+      })
+
       return h('div', { className: 'sd-pane' },
         h('div', { className: 'sd-head' },
           h('div', { className: 'sd-head-row' },
@@ -788,63 +1182,17 @@ window.__ModuleLoader__.load({
               h('div', { className: 'sd-sub' },
                 item.angle || `主题：${item.topic}`,
                 item.counts.segments ? ` · ${item.counts.segments} 段 · 约 ${formatSecs(item.totalSecs || 0)}` : '')),
-            h('button', { className: 'sd-btn', 'data-kind': 'ghost', onClick: onSettings, title: '设置' }, h(GearIcon))),
-
-          // 阶段导航（发布是独立入口，不进六阶段派生；没成片时置灰）
-          h('div', { className: 'sd-tabnav' },
-            TAB_KEYS.map((key, index) => {
-              const stage = data.stages.find(row => row.id === key)
-              const done = tabDone(item, key)
-              return h('button', {
-                key, type: 'button', className: 'sd-tabnav-btn',
-                'data-on': active === key ? '1' : '0',
-                'data-done': done ? '1' : '0',
-                onClick: () => setPicked(key),
-              },
-                h('span', { className: 'sd-tabnav-mark' }, TabMark({ key, done, index, active })),
-                h('span', null, stage?.label ?? key))
-            }),
-            h('span', { className: 'sd-tabnav-sep' }),
+            // 发布是独立入口，不进六阶段派生；没成片时置灰
             h('button', {
-              key: 'publish', type: 'button', className: 'sd-tabnav-btn',
-              'data-on': active === 'publish' ? '1' : '0',
+              className: 'sd-btn', 'data-kind': 'ghost', type: 'button',
               disabled: !item.render,
+              'data-on': active === 'publish' ? '1' : '0',
               title: item.render ? '生成发布包' : '先合成成片',
               onClick: () => setPicked('publish'),
-            },
-              h('span', { className: 'sd-tabnav-mark' }, active === 'publish' ? '●' : '⑦'),
-              h('span', null, '发布'))),
+            }, '发布'),
+            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: onSettings, title: '设置' }, h(GearIcon))),
 
-          // 只在跑着或出错时占位：跑完就把进度条撤掉，免得停在一句中间文案上像没结束
-          task && (task.running || task.error) ? h('div', null,
-            h('div', { className: 'sd-progress' },
-              h('div', { className: 'sd-progress-bar', style: { width: `${pct}%` } })),
-            h('div', { className: 'sd-taskline' },
-              h('span', null, task.message || '处理中…'),
-              task.total > 1 ? h('span', null, `${task.done}/${task.total}`) : null,
-              // 慢模型写稿可能好几分钟，让用户看见它还在动
-              task.running && task.startedAt
-                ? h('span', { style: { opacity: .7 } }, `${elapsedLabel(task.startedAt)}`)
-                : null,
-              task.error ? h('span', { style: { color: 'var(--dsw-alias-state-error-primary)' } }, task.error) : null,
-              // 跑着的时候给一个出口，不然只能干等
-              task.running
-                ? h('button', {
-                  className: 'sd-stop', type: 'button',
-                  disabled: stopping,
-                  onClick: async () => {
-                    setStopping(true)
-                    try {
-                      await post('cancel', { id: item.id })
-                    } catch {
-                      // 已经结束了也无所谓
-                    } finally {
-                      setTimeout(() => setStopping(false), 1500)
-                    }
-                  },
-                }, stopping ? '正在停止…' : '停止')
-              : null))
-            : null,
+          h('div', { className: 'sd-stage' }, stageNodes),
 
           notice ? h('div', {
             className: 'sd-error',
@@ -858,7 +1206,45 @@ window.__ModuleLoader__.load({
                 : active === 'anchors' ? h(AnchorPage, pages)
                   : active === 'imaged' ? h(ImagePage, pages)
                   : active === 'publish' ? h(PublishPage, pages)
-                  : h(RenderPage, pages)))
+                    : h(RenderPage, pages)),
+
+        // 任务条固定在底部：切阶段、滚页面都不丢进度
+        task && (task.running || task.error)
+          ? h('div', { className: 'sd-job', 'data-kind': task.error ? 'error' : 'idle' },
+            h('span', { className: 'sd-job-t' }, task.message || '处理中…'),
+            task.total > 1 ? h('span', { className: 'sd-job-bar' }, h('i', { style: { width: `${pct}%` } })) : null,
+            task.total > 1 ? h('span', { className: 'sd-job-m' }, `${task.done}/${task.total}`) : null,
+            // 慢模型写稿可能好几分钟，让用户看见它还在动
+            task.running && task.startedAt ? h('span', { className: 'sd-job-m' }, elapsedLabel(task.startedAt)) : null,
+            task.error ? h('span', { className: 'sd-job-m', style: { color: 'var(--dsw-alias-state-error-primary)' } }, task.error) : null,
+            task.running
+              ? h('button', {
+                className: 'sd-stop', type: 'button',
+                disabled: stopping,
+                onClick: async () => {
+                  setStopping(true)
+                  try {
+                    await post('cancel', { id: item.id })
+                  } catch {
+                    // 已经结束了也无所谓
+                  } finally {
+                    setTimeout(() => setStopping(false), 1500)
+                  }
+                },
+              }, stopping ? '正在停止…' : '停止')
+              : null)
+          : null)
+    }
+
+    /** 轨道节点下面那行小字：只写这一阶段真实的产物量，不写文案。 */
+    function stageHint(item, key) {
+      const n = item.counts.segments
+      if (key === 'idea') return item.topic ? String(item.topic).slice(0, 9) : '未定'
+      if (key === 'scripted') return n ? `${n} 段 · ${formatSecs(item.totalSecs || 0)}` : '待写稿'
+      if (key === 'anchors') return item.anchors?.length ? `${item.anchors.length} 条` : '未抽'
+      if (key === 'voiced') return n ? `${item.counts.voiced}/${n}` : '—'
+      if (key === 'imaged') return n ? `${item.counts.imaged}/${n}` : '—'
+      return item.render ? formatSecs(item.render.secs || 0) : '待合成'
     }
 
     function TabMark({ key, done, index, active }) {
@@ -3621,7 +4007,7 @@ window.__ModuleLoader__.load({
             h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: onClose }, '关闭'))))
     }
 
-    function SettingsDialog({ data, onClose, onSaved }) {
+    function SettingsDialog({ data, theme = 'warm', onTheme, onClose, onSaved }) {
       const settings = data.settings
       const [form, setForm] = useState(() => ({ ...settings }))
       const [ttsKey, setTtsKey] = useState('')
@@ -3691,7 +4077,7 @@ window.__ModuleLoader__.load({
         try {
           // 每段时长统一按 12–90 秒这一档走，和选题页、服务端口径一致
           const segmentSeconds = Math.max(12, Math.min(90, Number(form.segmentSeconds) || 40))
-          await post('settings', { settings: { ...form, segmentSeconds } })
+          await post('settings', { settings: { ...form, segmentSeconds, theme } })
           if (ttsKey.trim()) await post('secrets', { ttsKey: ttsKey.trim() })
           if (imageKey.trim()) await post('secrets', { imageKey: imageKey.trim() })
           await onSaved()
@@ -3734,7 +4120,23 @@ window.__ModuleLoader__.load({
           h('div', { className: 'sd-tabpanel' },
             tab === 'general'
               ? h('div', { className: 'sd-section' },
-                h('div', { className: 'sd-section-title' }, '回收站'),
+                h('div', { className: 'sd-section-title' }, '外观'),
+                h('div', { className: 'sd-field' },
+                  h('label', null, '界面配色'),
+                  h('div', { className: 'sd-row', style: { gap: 8 } },
+                    h('button', {
+                      className: 'sd-btn', type: 'button',
+                      'data-kind': theme === 'warm' ? 'primary' : 'ghost',
+                      onClick: () => onTheme?.('warm'),
+                    }, '工作台暖调'),
+                    h('button', {
+                      className: 'sd-btn', type: 'button',
+                      'data-kind': theme === 'dsh' ? 'primary' : 'ghost',
+                      onClick: () => onTheme?.('dsh'),
+                    }, '跟随 DSH')),
+                  h('div', { className: 'sd-hint', style: { marginTop: 6 } },
+                    '暖调是墨褐底配暖金强调，跟片子的调性一致；跟随 DSH 用中性深灰底配蓝强调，跟宿主界面一个调子。点一下立即生效，不用保存。')),
+                h('div', { className: 'sd-section-title', style: { marginTop: 18 } }, '回收站'),
                 h('div', { className: 'sd-field' },
                   h('label', null, '保留天数'),
                   h('input', {

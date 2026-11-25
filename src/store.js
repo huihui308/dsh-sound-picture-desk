@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   visualStyle: 'cinematic',
   segmentSeconds: 40,
   trashDays: 7,
+  theme: 'warm',
   renderWorkers: 0,
   coverInVideo: true,
   width: 1080,
