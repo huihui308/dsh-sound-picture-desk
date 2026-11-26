@@ -126,8 +126,20 @@ async function generatePlatform({ endpoint, key, model, prompt, width, height, s
     throw new Error('平台生图返回的不是 JSON')
   }
   const b64 = parsed?.data?.[0]?.b64_json
-  if (typeof b64 !== 'string' || !b64) throw new Error('平台生图没有返回图片数据')
-  return Buffer.from(b64, 'base64')
+  if (typeof b64 === 'string' && b64) return Buffer.from(b64, 'base64')
+  // 本机自建服务（ComfyUI 之类包一层）常常不认 response_format，只回一个 url。
+  // 这种情况不能当失败——把图下载下来就行。
+  const url = parsed?.data?.[0]?.url
+  if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+    const hit = await withTimeout(async signal => {
+      const res = await fetch(url, { signal })
+      if (!res.ok) throw new Error(`生图返回了图片地址，但下载失败（HTTP ${res.status}）`)
+      return Buffer.from(await res.arrayBuffer())
+    }, 60_000, '下载生图结果', signal)
+    if (hit.length) return hit
+    throw new Error('生图返回的图片地址下载回来是空的')
+  }
+  throw new Error('平台生图没有返回图片数据（既没有 b64_json 也没有 url）')
 }
 
 /** image-01 系列只活在 MiniMax 原生接口上，OpenAI 兼容入口不认它。 */
