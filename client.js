@@ -421,6 +421,14 @@ window.__ModuleLoader__.load({
 .sd-icard s{font-size:10.5px;color:var(--dsw-alias-label-tertiary);text-decoration:none;line-height:1.6}
 .sd-icard-ops{display:flex;gap:6px;margin-top:3px}
 
+
+/* ---- 主页卡片：删除 ---- */
+.sd-pcard-wrap{position:relative;display:flex}
+.sd-pcard-wrap .sd-pcard{flex:1}
+.sd-pcard-del{position:absolute;right:9px;top:9px;z-index:3;width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,.16);background:rgba(12,9,7,.62);color:rgba(241,230,211,.72);font:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:0;transition:opacity .15s}
+.sd-pcard-wrap:hover .sd-pcard-del{opacity:1}
+.sd-pcard-del:hover{background:rgba(201,68,45,.82);color:#fff;border-color:transparent}
+
 /* ---- 主页项目墙 ---- */
 .sd-wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:18px}
 .sd-pcard{display:flex;flex-direction:column;padding:0;border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font:inherit;color:inherit;text-align:left;cursor:pointer}
@@ -428,7 +436,7 @@ window.__ModuleLoader__.load({
 .sd-ph{position:relative;display:block;aspect-ratio:9/16;overflow:hidden;background:var(--dsw-alias-bg-layer-2)}
 .sd-ph img{width:100%;height:100%;object-fit:cover;display:block}
 .sd-ph::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,5,3,0) 45%,rgba(8,5,3,.92) 100%)}
-.sd-tag{position:absolute;right:9px;top:9px;z-index:2;font-size:9.5px;padding:2px 7px;border-radius:5px;background:rgba(12,9,7,.72);color:var(--dsw-alias-label-secondary)}
+.sd-tag{position:absolute;left:9px;top:9px;z-index:2;font-size:9.5px;padding:2px 7px;border-radius:5px;background:rgba(12,9,7,.72);color:var(--dsw-alias-label-secondary)}
 .sd-tag[data-k="done"]{color:var(--dsw-alias-brand-primary);background:rgba(12,9,7,.66)}
 .sd-tag[data-k="run"]{color:#e9c98d}
 .sd-pt{position:absolute;left:13px;right:13px;bottom:12px;z-index:2}
@@ -765,6 +773,7 @@ window.__ModuleLoader__.load({
               ? h(HomeView, {
                 items: data.items, onOpen: openItem,
                 onCreate: () => { setNotice(null); setCreating(true) },
+                onDelete: item => { setNotice(null); setPendingDelete(item) },
               })
               : view === 'ideas' ? h(IdeasView, {
                 onUse: title => { setNotice(null); setNewTopic(title); setCreating(true) },
@@ -822,9 +831,14 @@ window.__ModuleLoader__.load({
               try {
                 const result = await post('create', payload)
                 setCreating(false)
+                setNewTopic('')
                 await load()
-                if (result?.id) setCurrentId(result.id)
-                setNotice('项目建好了，点「写稿」开始')
+                if (result?.id) {
+                  // 建完直接进去，别让人在主页上再找一遍
+                  setCurrentId(result.id)
+                  setView('project')
+                  setNotice('项目建好了，点「写稿」开始')
+                }
               } catch (err) {
                 setNotice({ tone: 'error', text: err.message })
               }
@@ -1204,7 +1218,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function ProjectCard({ item, onOpen }) {
+    function ProjectCard({ item, onOpen, onDelete }) {
       // 用第一张分镜图做封面：成片封面自带标题大字，压到卡片上会和卡片标题打架
       const cover = item.counts.imaged ? 'images/s001.png' : (item.cover?.path ?? '')
       const done = Boolean(item.render)
@@ -1221,7 +1235,8 @@ window.__ModuleLoader__.load({
           : item.counts.segments
             ? `${item.counts.imaged}/${item.counts.segments} 张图`
             : '还没写稿'
-      return h('button', { className: 'sd-pcard', type: 'button', onClick: () => onOpen(item.id) },
+      return h('div', { className: 'sd-pcard-wrap' },
+        h('button', { className: 'sd-pcard', type: 'button', onClick: () => onOpen(item.id) },
         h('span', { className: 'sd-ph' },
           cover ? h('img', { src: mediaUrl(item.id, cover, item.counts.imaged || 1), alt: '', loading: 'lazy' }) : null,
           h('span', { className: 'sd-tag', 'data-k': item.task?.running ? 'run' : done ? 'done' : '' }, tag),
@@ -1229,10 +1244,16 @@ window.__ModuleLoader__.load({
             h('b', null, item.title || '未命名'),
             h('s', null, item.counts.segments ? `${item.counts.segments} 段 · ${formatSecs(item.totalSecs || 0)}` : '草稿'),
             h('span', { className: 'sd-bar' }, h('i', { style: { width: `${pct}%` } })))),
-        h('span', { className: 'sd-pn' }, note))
+        h('span', { className: 'sd-pn' }, note)),
+        onDelete
+          ? h('button', {
+            className: 'sd-pcard-del', type: 'button', title: '删除这个项目',
+            onClick: event => { event.stopPropagation(); onDelete(item) },
+          }, '⋯')
+          : null)
     }
 
-    function HomeView({ items, onOpen, onCreate }) {
+    function HomeView({ items, onOpen, onCreate, onDelete }) {
       const done = items.filter(item => item.render).length
       const secs = items.reduce((n, item) => n + (item.totalSecs || 0), 0)
       return h('div', { className: 'sd-pane' },
@@ -1245,7 +1266,7 @@ window.__ModuleLoader__.load({
             h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: onCreate }, '新建项目'))),
         h('div', { className: 'sd-body' },
           items.length
-            ? h('div', { className: 'sd-wall' }, items.map(item => h(ProjectCard, { key: item.id, item, onOpen })))
+            ? h('div', { className: 'sd-wall' }, items.map(item => h(ProjectCard, { key: item.id, item, onOpen, onDelete })))
             : h('div', { className: 'sd-empty' },
               h('div', null, '还没有项目。'),
               h('div', null, '给它一个主题（比如「九子夺嫡」「安史之乱怎么爆的」），剩下的它自己往下做。'))))

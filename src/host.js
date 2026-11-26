@@ -553,6 +553,15 @@ async function createItem(store, body) {
   const topic = String(body.topic ?? '').trim()
   if (!topic) throw Object.assign(new Error('先写一个题材或书名'), { status: 400 })
   const rawText = String(body.rawText ?? '').trim().slice(0, 200_000)
+  // 同名项目拦一下：建重了以后连回收站里都分不清哪个是哪个
+  const before = await store.read()
+  const dup = before.items.find(row => !row.deletedAt && String(row.topic ?? '').trim() === topic)
+  if (dup) {
+    throw Object.assign(
+      new Error(`已经有一个「${dup.title}」了。想接着做就回主页点它；确实要建新的，把题目改一个字（比如加个副标题）`),
+      { status: 409 },
+    )
+  }
   const targetMinutes = Math.max(1, Math.min(30, Number(body.targetMinutes) || 5))
   const language = body.language === 'en' ? 'en' : 'zh'
   const item = {
