@@ -115,24 +115,40 @@ const JSON_RULES = `只输出 JSON，不要别的话：
 直接输出这份 JSON：不要复述题目、不要解释思路、不要把稿子写进思考过程。`
 
 /** 按口吻拼出 system prompt；没给或给了不认识的值，落回说书人（老项目默认行为不变）。 */
-function buildSystem(toneId) {
+/** 英文稿的额外约束：中文那套铺垫和排比，翻成英文就是灾难。 */
+const EN_RULES = `
+语言：这一篇用英文写，给英语国家的观众听。
+- 句子短，一句一个意思。不要长从句、不要分号串三件事。
+- 开头两句就把利害说清，不要像中文那样先铺背景。
+- 不要用四字对仗、排比、起承转合这类中文修辞，英文里它们读起来像翻译腔。
+- 人名地名用通行英文写法，第一次出现给一句身份（An Lushan, a frontier general）。
+- 数字与单位按英文习惯写（forty thousand troops，不是 4 万 troops）。
+`
+
+function buildSystem(toneId, language = 'zh') {
   const tone = TONES[toneId] ?? TONES.storyteller
+  const langBlock = language === 'en' ? EN_RULES : ''
   return `${tone.persona}
 
 写法要求：
 ${tone.rules.map(rule => `- ${rule}`).join('\n')}
-${COMMON_RULES}
+${COMMON_RULES}${langBlock}
 
 ${IMAGE_RULES}
 
 ${JSON_RULES}`
 }
 
-function userPrompt({ topic, rawText, segmentCount, perSegmentChars, style, tone, references }) {
+function userPrompt({ topic, rawText, segmentCount, perSegmentChars, style, tone, references, language = 'zh' }) {
+  // 中文按字数、英文按词数：两种语言的"每秒装多少"差一倍多
+  const perSegmentWords = Math.round(perSegmentChars / 4.2 * 2.6)
+  const lengthLine = language === 'en'
+    ? `Write ${segmentCount} segments. Each 90 to 130 words — about ${Math.round(perSegmentChars / 4.2)} seconds spoken.`
+    : `一共写 ${segmentCount} 段。每段旁白 ${perSegmentChars - 20}–${perSegmentChars + 20} 个汉字，念出来大约 ${Math.round(perSegmentChars / 4.2)} 秒。`
   const lines = [
-    `题材：${topic}`,
-    `稿子口吻：${toneLabel(tone)}。`,
-    `一共写 ${segmentCount} 段。每段旁白 ${perSegmentChars - 20}–${perSegmentChars + 20} 个汉字，念出来大约 ${Math.round(perSegmentChars / 4.2)} 秒。`,
+    language === 'en' ? `Topic: ${topic}` : `题材：${topic}`,
+    language === 'en' ? `Tone: spoken history narration, plain and direct.` : `稿子口吻：${toneLabel(tone)}。`,
+    lengthLine,
     `画面风格：${VISUAL_STYLES[style]?.label ?? '电影写实'}。image 字段只写画面内容，不要重复风格词。`,
   ]
   if (references?.length) {
@@ -179,7 +195,7 @@ function normalizeSegments(rows) {
 /**
  * 生成说书稿。返回 { title, angle, segments }，不做落盘——调用方决定怎么存。
  */
-export async function writeScript(ctx, { topic, rawText, settings, signal, route, references, onProgress }) {
+export async function writeScript(ctx, { topic, rawText, settings, signal, route, references, onProgress, language = 'zh' }) {
   // 段长口径与界面/服务端一致：12–90 秒。老项目里存过 300 时也按 90 写稿，
   // 否则写出来的稿子会按 300 秒一段，和界面显示的段长对不上。
   const segmentSeconds = Math.min(90, Math.max(12, Number(settings?.segmentSeconds) || 40))
@@ -189,8 +205,8 @@ export async function writeScript(ctx, { topic, rawText, settings, signal, route
   const segmentCount = Math.max(3, Math.min(40, Math.round((Number(settings?.targetMinutes) || 5) * 60 / segmentSeconds) || requested))
   const tone = settings?.tone ?? 'storyteller'
   const { text } = await callModel(ctx, {
-    system: buildSystem(tone),
-    user: userPrompt({ topic, rawText, segmentCount, perSegmentChars, style: settings?.visualStyle ?? 'cinematic', tone, references }),
+    system: buildSystem(tone, language),
+    user: userPrompt({ topic, rawText, segmentCount, perSegmentChars, style: settings?.visualStyle ?? 'cinematic', tone, references, language }),
     // 推理型模型（glm-5.3 等）会先想很久，预算给小了正文就没地方放
     // 实测：3 段稿子思考约 9000 字（≈6000 token），给 7600 会截断白跑一轮，一次给够
     maxTokens: Math.min(48000, 12000 + segmentCount * 1500),

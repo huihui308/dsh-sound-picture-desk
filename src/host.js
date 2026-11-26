@@ -554,10 +554,12 @@ async function createItem(store, body) {
   if (!topic) throw Object.assign(new Error('先写一个题材或书名'), { status: 400 })
   const rawText = String(body.rawText ?? '').trim().slice(0, 200_000)
   const targetMinutes = Math.max(1, Math.min(30, Number(body.targetMinutes) || 5))
+  const language = body.language === 'en' ? 'en' : 'zh'
   const item = {
     id: newId('bk'),
     title: topic.slice(0, 60),
     topic,
+    language,
     rawText,
     angle: '',
     targetMinutes,
@@ -603,6 +605,7 @@ async function startScript(ctx, store, secrets, itemId) {
       signal,
       route: item.model ?? null,
       references: item.references ?? [],
+      language: item.language === 'en' ? 'en' : 'zh',
       // 推理型模型会先想很久，把「在思考」和「在写作」分开报，用户才知道没卡住
       onProgress: ({ reasoning, text }) => {
         if (text > 0) report(0, `正在写正文（已 ${text} 字，思考 ${reasoning} 字）`, 1)
@@ -658,6 +661,7 @@ async function runVoiceBody(store, secrets, itemId, onlyIds, report, signal) {
       voice: settings.voice,
       text: row.text,
       signal,
+      language: item.language === 'en' ? 'en' : 'zh',
     })
     const name = `s${String(row.idx + 1).padStart(3, '0')}.mp3`
     const file = join(dirs.audio, name)

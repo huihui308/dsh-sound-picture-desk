@@ -4112,6 +4112,8 @@ window.__ModuleLoader__.load({
     function NewDialog({ error, onClose, onCreate, initialTopic = '' }) {
       const [topic, setTopic] = useState(initialTopic)
       const [minutes, setMinutes] = useState(5)
+      // 语言从立项就定：它决定写稿、配音指令和字幕口径，后面再改等于重做
+      const [language, setLanguage] = useState('zh')
       // 时长不再默认 5 分钟：题目输完后按它估一个，用户可改
       const [durAdvice, setDurAdvice] = useState(null)
       const [durBusy, setDurBusy] = useState(false)
@@ -4154,7 +4156,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setFormError(null)
         try {
-          await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText })
+          await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText, language })
         } catch (err) {
           setFormError(err.message)
         } finally {
@@ -4187,6 +4189,17 @@ window.__ModuleLoader__.load({
                 type: 'number', min: 1, max: 30, value: minutes,
                 onChange: event => pickMinutes(event.target.value),
               })),
+            h('div', { className: 'sd-dur', style: { marginTop: 12 } },
+              h('span', { className: 'sd-find-lb' }, '语言'),
+              [['zh', '中文'], ['en', 'English']].map(([value, label]) => h('button', {
+                key: value, className: 'sd-dur-chip', type: 'button',
+                'data-on': language === value ? '1' : '0',
+                onClick: () => setLanguage(value),
+              }, label)),
+              h('span', { className: 'sd-dur-tip', style: { marginTop: 0, marginLeft: 6 } },
+                language === 'en'
+                  ? '稿子、配音、字幕都按英文走'
+                  : '按中文写稿与配音')),
             durBusy
               ? h('div', { className: 'sd-dur-tip' }, '正在按题目估时长…')
               : durAdvice

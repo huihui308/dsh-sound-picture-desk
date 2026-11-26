@@ -89,6 +89,10 @@ export function migrateState(raw) {
   delete state.settings.platformImageModel
   state.items = Array.isArray(state.items) ? state.items : []
   // 选题池：跨项目的灵感清单，老状态里没有就补一个空数组
+  // 项目语言：影响写稿、配音指令与字幕口径；老项目一律按中文
+  state.items.forEach(item => {
+    item.language = item.language === 'en' ? 'en' : 'zh'
+  })
   state.ideas = Array.isArray(state.ideas) ? state.ideas : []
   // era / field / hook 三件套是矩阵视图的分组依据，老条目可能没有，补空串
   state.ideas.forEach(row => {

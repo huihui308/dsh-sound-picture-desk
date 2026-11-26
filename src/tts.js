@@ -35,6 +35,8 @@ export const TTS_PRESETS = [
 ]
 
 const INSTRUCTION = '请朗读下面这段旁白。语气平稳克制，像在给朋友讲一件旧事，句与句之间留一点停顿，不要播音腔。'
+// 英文要单独给指令：中文那条会让模型带中文韵律去读英文，重音全错
+const INSTRUCTION_EN = 'Read the following narration. Calm and restrained, like telling an old story to a friend. Slight pause between sentences. Natural English stress, no broadcast-anchor tone, no rising inflection at the end of each sentence.'
 
 /** 合成请求自己的超时：调用方没给 signal 时（如试听路由）也不能无限挂着。 */
 const REQUEST_TIMEOUT_MS = 120_000
@@ -73,7 +75,7 @@ function describeFailure(status, body) {
  * 合成一段旁白音频。
  * @returns {Promise<Buffer>} mp3 字节。
  */
-export async function synthesize({ endpoint, model, key, voice, text, signal }) {
+export async function synthesize({ endpoint, model, key, voice, text, signal, language = 'zh' }) {
   if (!key) throw new Error('还没有配置音频密钥，去设置里填一次')
   const content = String(text ?? '').trim()
   if (!content) throw new Error('这一段没有文字，无法合成')
@@ -81,7 +83,7 @@ export async function synthesize({ endpoint, model, key, voice, text, signal }) 
   const body = {
     model,
     messages: [
-      { role: 'user', content: INSTRUCTION },
+      { role: 'user', content: language === 'en' ? INSTRUCTION_EN : INSTRUCTION },
       { role: 'assistant', content },
     ],
     audio: { voice: VOICES.some(row => row.id === voice) ? voice : 'mimo_default', format: 'mp3' },
