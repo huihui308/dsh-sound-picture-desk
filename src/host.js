@@ -1840,6 +1840,30 @@ async function route(ctx, store, req, res) {
       }
       return json(res, 400, { ok: false, detail: 'target 只能是 image 或 tts' })
     }
+    case 'topic/suggest': {
+      // 按题目估一个合适时长，用户再改。只给建议，不替他定
+      const topic = String(body.topic ?? '').trim().slice(0, 120)
+      if (topic.length < 2) return json(res, 400, { error: '题目太短' })
+      const { text } = await callModel(ctx, {
+        maxTokens: 500,
+        signal: AbortSignal.timeout(40_000),
+        system: `你在给一条竖屏历史科普旁白估时长。按题目信息量判断能撑多久，不要往长了估。
+
+判据：
+- 单个人物、单个事件（一场政变、一次刺杀、一顿酒）：6 到 10 分钟
+- 一场战争、一项制度的演变、一个朝代的崩解：10 到 15 分钟
+- 跨朝代、跨国、通史级题目：15 到 25 分钟
+- 纯概念解释、单一现象追问：4 到 7 分钟
+- 题目本身很窄（某个细节、某件器物）：4 到 6 分钟
+
+只输出 JSON，不要别的文字：
+{"minutes":8,"reason":"一句话说清为什么是这个长度，20 字以内"}`,
+        user: `题目：${topic}`,
+      })
+      const parsed = extractJson(text)
+      const minutes = Math.max(2, Math.min(30, Math.round(Number(parsed?.minutes) || 5)))
+      return json(res, 200, { minutes, reason: String(parsed?.reason ?? '').slice(0, 80) })
+    }
     case 'ideas': {
       // 选题池：list / add / update / remove 四个动作，数据跟着 state.json 走
       const op = String(body.op ?? 'list')

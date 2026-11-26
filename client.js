@@ -395,6 +395,15 @@ window.__ModuleLoader__.load({
 .sd-dw-tip{font-size:10px;color:var(--dsw-alias-label-tertiary);line-height:1.7;margin-top:10px}
 
 
+
+/* ---- 新建弹窗：时长档位 ---- */
+.sd-dur{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sd-dur-chip{height:30px;padding:0 11px;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer}
+.sd-dur-chip[data-on="1"]{border-color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 14%,transparent);color:var(--dsw-alias-brand-primary)}
+.sd-dur-input{width:74px;height:30px}
+.sd-dur-tip{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:7px;line-height:1.7}
+.sd-dur-redo{margin-left:8px;border:none;background:none;color:var(--dsw-alias-brand-primary);font:inherit;font-size:10.5px;cursor:pointer;padding:0;text-decoration:underline}
+
 /* ---- 选题池：下拉找题 ---- */
 .sd-find{border:1px dashed var(--dsw-alias-border-l2);border-radius:10px;padding:12px 14px;margin-bottom:4px;background:color-mix(in srgb,var(--dsw-alias-brand-primary) 3%,transparent)}
 .sd-find-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
@@ -4103,12 +4112,42 @@ window.__ModuleLoader__.load({
     function NewDialog({ error, onClose, onCreate, initialTopic = '' }) {
       const [topic, setTopic] = useState(initialTopic)
       const [minutes, setMinutes] = useState(5)
+      // 时长不再默认 5 分钟：题目输完后按它估一个，用户可改
+      const [durAdvice, setDurAdvice] = useState(null)
+      const [durBusy, setDurBusy] = useState(false)
       const [rawText, setRawText] = useState('')
       const [showRaw, setShowRaw] = useState(false)
       const [busy, setBusy] = useState(false)
       const [formError, setFormError] = useState(null)
       const boxRef = useRef(null)
+      const askedRef = useRef('')
+      const touchedRef = useRef(false)
       useDialog(onClose, boxRef)
+
+      // 停止输入 1.2 秒后估一次；同一题目不重复问；用户手动改过就不再覆盖
+      useEffect(() => {
+        const text = topic.trim()
+        if (text.length < 2 || text === askedRef.current) return undefined
+        const timer = setTimeout(async () => {
+          askedRef.current = text
+          setDurBusy(true)
+          try {
+            const out = await post('topic/suggest', { topic: text })
+            setDurAdvice(out)
+            if (!touchedRef.current && out?.minutes) setMinutes(String(out.minutes))
+          } catch {
+            // 估不出来就维持原值，不挡建项目
+          } finally {
+            setDurBusy(false)
+          }
+        }, 1200)
+        return () => clearTimeout(timer)
+      }, [topic])
+
+      const pickMinutes = value => {
+        touchedRef.current = true
+        setMinutes(value)
+      }
 
       const submit = async () => {
         if (!topic.trim()) { setFormError('先写一个主题或书名'); return }
@@ -4136,11 +4175,31 @@ window.__ModuleLoader__.load({
               onKeyDown: event => { if (event.key === 'Enter') submit() },
             })),
           h('div', { className: 'sd-field' },
-            h('label', { htmlFor: 'sd-minutes' }, '目标时长（分钟）'),
-            h('input', {
-              id: 'sd-minutes', className: 'sd-input', type: 'number', min: 1, max: 30, value: minutes,
-              onChange: event => setMinutes(event.target.value),
-            })),
+            h('label', { htmlFor: 'sd-minutes' }, '目标时长'),
+            h('div', { className: 'sd-dur' },
+              [5, 8, 10, 15, 20].map(n => h('button', {
+                key: n, className: 'sd-dur-chip', type: 'button',
+                'data-on': Number(minutes) === n ? '1' : '0',
+                onClick: () => pickMinutes(String(n)),
+              }, `${n} 分`)),
+              h('input', {
+                id: 'sd-minutes', className: 'sd-input sd-dur-input',
+                type: 'number', min: 1, max: 30, value: minutes,
+                onChange: event => pickMinutes(event.target.value),
+              })),
+            durBusy
+              ? h('div', { className: 'sd-dur-tip' }, '正在按题目估时长…')
+              : durAdvice
+                ? h('div', { className: 'sd-dur-tip' },
+                  `建议 ${durAdvice.minutes} 分钟`,
+                  durAdvice.reason ? ` · ${durAdvice.reason}` : '',
+                  Number(minutes) !== durAdvice.minutes
+                    ? h('button', {
+                      className: 'sd-dur-redo', type: 'button',
+                      onClick: () => pickMinutes(String(durAdvice.minutes)),
+                    }, `用建议值 ${durAdvice.minutes}`)
+                    : null)
+                : null),
           h('div', { className: 'sd-field' },
             h('label', { style: { cursor: 'pointer', color: 'var(--dsw-alias-link)' }, onClick: () => setShowRaw(v => !v) },
               showRaw ? '收起原始材料' : '有原始材料？贴进来（可选）'),
