@@ -491,6 +491,10 @@ window.__ModuleLoader__.load({
 .sd-job-bar{width:240px;height:4px;border-radius:2px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;flex:0 0 auto}
 .sd-job-bar i{display:block;height:100%;background:var(--dsw-alias-brand-primary);transition:width .3s ease}
 .sd-job-m{color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+/* 单件任务的往返进度条：没有分母，只表示「还在跑」 */
+.sd-job-bar[data-indet="1"] i{width:32%;animation:sd-indet 1.15s ease-in-out infinite}
+@keyframes sd-indet{0%{transform:translateX(-110%)}100%{transform:translateX(330%)}}
+
 
 /* ---- 界面配色：工作台暖调（墨褐 + 暖金） ---- */
 .sd-root[data-theme="warm"]{
@@ -1576,7 +1580,10 @@ window.__ModuleLoader__.load({
         task && (task.running || task.error)
           ? h('div', { className: 'sd-job', 'data-kind': task.error ? 'error' : 'idle' },
             h('span', { className: 'sd-job-t' }, task.message || '处理中…'),
-            task.total > 1 ? h('span', { className: 'sd-job-bar' }, h('i', { style: { width: `${pct}%` } })) : null,
+            // 单件任务（画一张图、写一次稿）没有分母，用往返滚动的条表示「还在跑」
+            task.total > 1
+              ? h('span', { className: 'sd-job-bar' }, h('i', { style: { width: `${pct}%` } }))
+              : h('span', { className: 'sd-job-bar', 'data-indet': '1' }, h('i')),
             task.total > 1 ? h('span', { className: 'sd-job-m' }, `${task.done}/${task.total}`) : null,
             // 慢模型写稿可能好几分钟，让用户看见它还在动
             task.running && task.startedAt ? h('span', { className: 'sd-job-m' }, elapsedLabel(task.startedAt)) : null,
