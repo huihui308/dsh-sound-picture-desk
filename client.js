@@ -614,6 +614,11 @@ window.__ModuleLoader__.load({
       }))
     }
 
+    /** 底部两个入口的图标：回收站复用 NAV_ICONS，齿轮复用设置页那个。 */
+    function DeskIcon2({ name }) {
+      return h('span', { className: 'sd-foot-ico' }, name === 'gear' ? h(GearIcon) : h(NavIcon, { name }))
+    }
+
     function GearIcon() {
       return h('svg', { width: 15, height: 15, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, 'aria-hidden': true, style: { display: 'block' } },
         h('circle', { cx: 12, cy: 12, r: 3 }),
@@ -970,11 +975,16 @@ window.__ModuleLoader__.load({
         navRow('publish', '发布', null, 'send'),
         navRow('data', '数据', null, 'chart'),
 
+        // 底部固定区：回收站是「我的东西」，设置是「系统」，中间拉一条线分开
         h('div', { className: 'sd-side-foot' },
           h('button', { className: 'sd-trash-link', type: 'button', onClick: onOpenTrash },
+            h(NavIcon, { name: 'trash' }),
             '回收站',
             trashCount ? h('span', { className: 'sd-trash-count' }, String(trashCount)) : null),
-          h('button', { className: 'sd-trash-link', type: 'button', onClick: onSettings }, '设置')))
+          h('div', { className: 'sd-foot-sep' }),
+          h('button', { className: 'sd-trash-link', type: 'button', onClick: onSettings },
+            h(DeskIcon2, { name: 'gear' }),
+            '设置')))
     }
 
     // ------------------------------------------------------------------ 选题池
