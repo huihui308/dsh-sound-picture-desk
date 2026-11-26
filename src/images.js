@@ -100,6 +100,35 @@ function isLocalEndpoint(endpoint) {
   return /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::|\/|$)/i.test(String(endpoint ?? ''))
 }
 
+/**
+ * 在可用模型列表里找最接近的那个。
+ * 只做「忽略大小写」这一种纠正：模型名的大小写普遍没语义，但确实有些平台
+ * 对驼峰敏感（MiniMax-H3-Image），所以只在找不到原名时才退一步猜。
+ */
+export function matchModelName(available, wanted) {
+  const list = Array.isArray(available) ? available.filter(id => typeof id === 'string' && id) : []
+  const target = String(wanted ?? '').trim()
+  if (!target) return null
+  if (list.includes(target)) return target
+  const lower = target.toLowerCase()
+  return list.find(id => id.toLowerCase() === lower) ?? null
+}
+
+/** 拉一次 /v1/models，给「模型名写错」时兜底用。失败返回空数组，不抛。 */
+async function listModels(endpoint, key, signal) {
+  try {
+    const res = await fetch(`${trimSlash(endpoint)}/models`, {
+      headers: key ? { authorization: `Bearer ${key}` } : {},
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) return []
+    const parsed = await res.json()
+    return Array.isArray(parsed?.data) ? parsed.data.map(row => row?.id).filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
 async function generatePlatform({ endpoint, key, model, prompt, width, height, signal }) {
   // 本机自建服务免密钥；平台通道必须填 key
   if (!key && !isLocalEndpoint(endpoint)) throw new Error('还没有配置平台生图密钥')
@@ -118,7 +147,17 @@ async function generatePlatform({ endpoint, key, model, prompt, width, height, s
     '平台生图',
     signal,
   )
-  if (!response.ok) throw new Error(describeFailure(response.status, raw, endpoint))
+  if (!response.ok) {
+    // 模型名大小写写错是最常见的一类：拉一次模型列表，纠正得了就重试一次
+    const looksLikeModel = response.status === 404 || /model/i.test(raw)
+    if (looksLikeModel) {
+      const fixed = matchModelName(await listModels(endpoint, key, signal), model)
+      if (fixed && fixed !== model) {
+        return generatePlatform({ endpoint, key, model: fixed, prompt, width, height, signal })
+      }
+    }
+    throw new Error(describeFailure(response.status, raw, endpoint))
+  }
   let parsed
   try {
     parsed = JSON.parse(raw)
@@ -282,13 +321,16 @@ export async function testImageChannel({ endpoint, model, key }) {
     } catch {
       // 有的服务 /models 返回空体，不影响结论
     }
-    // 图像模型常常不出现在 /models 列表里，所以缺了也不判失败，只是提示
+    // 图像模型常常不出现在 /models 列表里，所以缺了也不判失败，只是提示。
+    // 能猜出正确写法就直接说出来——大小写写错是最常见的一种。
     const missing = model && models.length && !models.includes(model)
-    return {
-      ok: true,
-      models,
-      detail: `地址与密钥可用（${elapsed()} ms）${missing ? '，当前模型不在列表里，可以从下方候选里选一个' : ''}`,
-    }
+    const fix = missing ? matchModelName(models, model) : null
+    const hint = !missing
+      ? ''
+      : fix
+        ? `，模型名大小写不对，应为「${fix}」`
+        : '，当前模型不在列表里，可以从下方候选里选一个'
+    return { ok: true, models, detail: `地址与密钥可用（${elapsed()} ms）${hint}` }
   }
   if (response.status === 404 || response.status === 405) {
     return { ok: false, detail: `地址可达，但不支持 /models（HTTP ${response.status}）。确认地址填到 /v1 为止；这个服务只能靠出图验证。` }
