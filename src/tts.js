@@ -50,9 +50,9 @@ export const TTS_PRESETS = [
     id: 'minimax',
     label: 'MiniMax 官方',
     provider: 'minimax',
-    endpoint: 'https://api.minimax.chat/v1',
+    endpoint: 'https://api.minimaxi.com/v1',
     model: 'speech-2.8-hd',
-    note: '要用 GroupId（控制台「账户信息」里那串数字），走 t2a_v2 接口。',
+    note: '国内入口 api.minimaxi.com，国际版换 api.minimax.io。GroupId 在控制台「账户信息」，新版 API 可留空。',
   },
 ]
 
