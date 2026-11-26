@@ -4714,17 +4714,7 @@ window.__ModuleLoader__.load({
                 className: 'sd-input', value: form.ttsModel, placeholder: 'mimo-v2.5-tts',
                 onChange: event => { set('ttsModel', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
               })),
-            form.ttsProvider === 'minimax'
-              ? h('div', { className: 'sd-field' },
-                h('label', null, 'GroupId（可留空）'),
-                h('input', {
-                  className: 'sd-input', value: form.ttsGroupId ?? '', spellCheck: false,
-                  placeholder: '新版密钥不需要，留空即可；旧版 eyJ 开头的密钥才要填',
-                  onChange: event => { set('ttsGroupId', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
-                }),
-                h('div', { className: 'sd-hint', style: { marginTop: 5 } },
-                  'sk-api- 开头的新版密钥：不用填。报 1004 时再回来填旧版的 GroupId。'))
-              : null,
+
             h('div', { className: 'sd-field' },
               h('label', null, `密钥${data.secrets.ttsKey ? '（已配置，留空不改）' : ''}`),
               h('input', {

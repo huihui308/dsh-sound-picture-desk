@@ -52,7 +52,7 @@ export const TTS_PRESETS = [
     provider: 'minimax',
     endpoint: 'https://api.minimaxi.com/v1',
     model: 'speech-2.8-hd',
-    note: '国内入口 api.minimaxi.com，国际版换 api.minimax.io。GroupId 在控制台「账户信息」，新版 API 可留空。',
+    note: '国内入口 api.minimaxi.com，国际版换 api.minimax.io。新版 sk-api- 密钥直接可用；老版 eyJ 密钥要 GroupId，当前版本不支持。',
   },
 ]
 
