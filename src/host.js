@@ -15,6 +15,7 @@ import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { buildIdeaPrompt, IDEA_SYSTEM, normalizeIdeaCandidates, normalizeNewIdea } from './ideas.js'
+import { SHOT_SYSTEM, buildShotPrompt, normalizeShots } from './shots.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, isTaskLocked, publicTask, startTask } from './jobs.js'
 import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, clipWindow, composeCopy, countVariant, formatDuration, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
@@ -1018,6 +1019,64 @@ async function extractAnchors(ctx, store, itemId) {
 }
 
 /** 给一个参考条目画一张候选图。 */
+
+/**
+ * 试切一段：让模型把这段旁白拆成 3 个镜头，再真画出来。
+ * 只在验证阶段用——结果存 item.shotTrials，不碰正式的分镜字段。
+ */
+async function tryShots(ctx, store, secrets, itemId, segIdx, signal) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const seg = (item.segments ?? []).find(row => row.idx === segIdx)
+  if (!seg?.text) throw Object.assign(new Error('这一段没有文字'), { status: 400 })
+  const settings = effectiveSettings(state, item)
+  const prev = (item.segments ?? []).find(row => row.idx === segIdx - 1)
+  const dirs = await store.ensureItemDirs(itemId)
+  const folder = join(dirs.base, 'shots-try')
+  await mkdir(folder, { recursive: true })
+
+  const { text } = await callModel(ctx, {
+    system: SHOT_SYSTEM,
+    user: buildShotPrompt({ text: seg.text, prevImage: prev?.imagePrompt }),
+    maxTokens: 3000,
+    signal,
+    route: item.model ?? null,
+  })
+  const shots = normalizeShots(extractJson(text), 3)
+  if (!shots.length) throw new Error('模型没有给出可用镜头，重试一次看看')
+
+  const wantW = Number(settings.imageWidth) || 1024
+  const wantH = Number(settings.imageHeight) || 1792
+  const drawn = []
+  let index = 0
+  for (const shot of shots) {
+    index += 1
+    // 评论句标了 reuse：不新出图，明确告诉调用方「这镜沿用上一张」
+    if (shot.reuse) {
+      drawn.push({ ...shot, path: null })
+      continue
+    }
+    const raw = await generateImage(settings, secrets, {
+      content: shot.desc,
+      width: wantW,
+      height: wantH,
+      signal,
+    })
+    const { buffer } = await normalizeImageBuffer(raw, dirs, wantW, wantH, signal)
+    const name = `shots-try/${segIdx + 1}-${index}.png`
+    await writeFile(join(dirs.base, name), buffer)
+    drawn.push({ ...shot, path: name })
+  }
+
+  await store.mutate(draft => {
+    const row = findItem(draft, itemId)
+    row.shotTrials = (row.shotTrials ?? []).filter(trial => trial.segIdx !== segIdx)
+    row.shotTrials.push({ segIdx, at: new Date().toISOString(), shots: drawn })
+    return null
+  })
+  return drawn
+}
+
 /** 画一张参考图的具体动作，单张与批量共用。 */
 async function drawOneAnchor({ store, secrets, itemId, target, settings, dirs, instruction, signal }) {
   const tail = String(instruction ?? '').trim()
@@ -1746,6 +1805,19 @@ async function route(ctx, store, req, res) {
       const secrets = await store.readSecrets()
       await drawAnchor(store, secrets, String(body.id ?? ''), String(body.anchorId ?? ''), body.instruction)
       return json(res, 200, { task: publicTask(String(body.id ?? '')) })
+    }
+    case 'shots/try': {
+      // 验证「一句一景」用：切一段 + 真画三张，结果不落正式字段
+      const secrets = await store.readSecrets()
+      const id = String(body.id ?? '')
+      const segIdx = Math.max(0, Math.min(199, Number(body.segIdx) || 0))
+      startTask(id, 'shots-try', 1, async ({ report, signal }) => {
+        report(0, '正在切镜头并出图…')
+        const drawn = await tryShots(ctx, store, secrets, id, segIdx, signal)
+        report(1, '试切完成')
+        return { shots: drawn.length }
+      })
+      return json(res, 200, { task: publicTask(id) })
     }
     case 'anchors/draw-all': {
       const secrets = await store.readSecrets()

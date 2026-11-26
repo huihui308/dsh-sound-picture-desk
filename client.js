@@ -125,6 +125,15 @@ window.__ModuleLoader__.load({
 .sd-voice-pick{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
 .sd-voice-name{font-size:13px;font-weight:600;flex:0 0 auto}
 .sd-voice-note{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- 试切镜头 ---- */
+.sd-trial-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
+.sd-trial-card{flex:0 0 210px;display:flex;flex-direction:column;gap:6px}
+.sd-trial-shot{width:210px;height:368px;border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1)}
+.sd-trial-shot img{width:100%;height:100%;object-fit:cover;display:block}
+.sd-trial-reuse{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);font-size:11.5px;border:1px dashed var(--dsw-alias-border-l1);border-radius:7px}
+.sd-trial-meta{display:flex;gap:5px;align-items:center}
+.sd-trial-desc{font-size:11px;line-height:1.55;color:var(--dsw-alias-label-secondary);max-height:96px;overflow:hidden}
 .sd-voice-audio{width:220px;height:30px;flex:0 0 220px}
 .sd-anchor{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);padding:12px 13px;margin-bottom:12px}
 .sd-anchor[data-approved="1"]{border-color:color-mix(in srgb,var(--dsw-alias-state-success-primary) 42%,transparent)}
@@ -2176,6 +2185,8 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ ③ 旁白
 
+    const SHOT_LABEL = { wide: '全景', medium: '中景', close: '特写', detail: '细节' }
+
     function VoicePage({ item, data, busy, onAction, onReload }) {
       const settings = { ...data.settings, ...(item.settings ?? {}) }
       const samples = item.samples?.voice ?? {}
@@ -2184,6 +2195,7 @@ window.__ModuleLoader__.load({
       const missing = item.counts.segments - item.counts.voiced
       const ready = item.counts.segments > 0 && missing === 0
       // 声线列表跟着服务商走：MiMo 和 MiniMax 的 id 不通用
+      const shotTrials = item.shotTrials ?? []
       const voiceList = data.settings?.ttsProvider === 'minimax'
         ? (data.minimaxVoices ?? [])
         : (data.mimoVoices ?? data.voices ?? [])
@@ -2280,6 +2292,30 @@ window.__ModuleLoader__.load({
             h('button', { className: 'sd-btn', 'data-kind': missing ? 'ghost' : 'primary', type: 'button', onClick: () => goTab('imaged') }, '去分镜图出画面'),
             h('span', { style: { flex: 1 } }),
             h('span', { className: 'sd-hint' }, `已配 ${item.counts.voiced}/${item.counts.segments} 段`))),
+
+        h('div', { className: 'sd-card-block' },
+          h('div', { className: 'sd-block-title' }, '一句一景 · 试切'),
+          h('div', { className: 'sd-hint' },
+            '选一段，让模型把它拆成三个镜头并真画出来，看切出来的画面是不是雷同。结果只作参考，不影响正式分镜。'),
+          h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8, flexWrap: 'wrap' } },
+            [1, 5, 8, 12].filter(n => item.segments.some(seg => seg.idx === n - 1)).map(n => h('button', {
+              key: n, className: 'sd-btn', type: 'button', disabled: busy,
+              onClick: () => onAction('shots/try', { id: item.id, segIdx: n - 1 }),
+            }, `试切第 ${n} 段`))),
+          shotTrials.length
+            ? shotTrials.map(trial => h('div', { key: trial.segIdx, style: { marginTop: 14 } },
+              h('div', { className: 'sd-hint', style: { marginBottom: 8 } }, `第 ${trial.segIdx + 1} 段拆成 ${trial.shots.length} 镜`),
+              h('div', { className: 'sd-trial-row' },
+                trial.shots.map((shot, index) => h('div', { key: index, className: 'sd-trial-card' },
+                  h('div', { className: 'sd-trial-shot' },
+                    shot.path
+                      ? h('img', { src: mediaUrl(item.id, shot.path), alt: '' })
+                      : h('div', { className: 'sd-trial-reuse' }, '沿用上一镜')),
+                  h('div', { className: 'sd-trial-meta' },
+                    h('span', { className: 'sd-tag' }, SHOT_LABEL[shot.shot] ?? shot.shot),
+                    shot.reuse ? h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '评论句') : null),
+                  h('div', { className: 'sd-trial-desc' }, shot.desc))))))
+            : null),
 
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'voice', disabled: busy, onAction, onReload,
