@@ -848,6 +848,7 @@ window.__ModuleLoader__.load({
             // 创建失败时就地提示，不用去头部找被遮罩盖住的 notice
             error: notice?.tone === 'error' ? notice.text : null,
             initialTopic: newTopic,
+            styles: data.styles ?? [],
             onClose: () => { setCreating(false); setNewTopic('') },
             onCreate: async payload => {
               try {
@@ -4218,13 +4219,16 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ 新建
 
-    function NewDialog({ error, onClose, onCreate, initialTopic = '' }) {
+    function NewDialog({ error, onClose, onCreate, initialTopic = '', styles = [] }) {
       const [topic, setTopic] = useState(initialTopic)
       const [minutes, setMinutes] = useState(5)
       // 语言从立项就定：它决定写稿、配音指令和字幕口径，后面再改等于重做
       const [language, setLanguage] = useState('zh')
       // 画面节奏：一段多少秒 = 画面多久换一次。15 秒偏快，40 秒偏慢
       const [segSeconds, setSegSeconds] = useState(20)
+      // 画面风格与比例也是「这部片子长什么样」，跟着项目定
+      const [visualStyle, setVisualStyle] = useState('cinematic')
+      const [aspect, setAspect] = useState('1080x1920')
       // 时长不再默认 5 分钟：题目输完后按它估一个，用户可改
       const [durAdvice, setDurAdvice] = useState(null)
       const [durBusy, setDurBusy] = useState(false)
@@ -4267,7 +4271,11 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setFormError(null)
         try {
-          await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText, language, segmentSeconds: segSeconds })
+          const [aspectW, aspectH] = aspect.split('x').map(Number)
+          await onCreate({
+            topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText, language,
+            segmentSeconds: segSeconds, visualStyle, width: aspectW, height: aspectH,
+          })
         } catch (err) {
           setFormError(err.message)
         } finally {
@@ -4300,6 +4308,19 @@ window.__ModuleLoader__.load({
                 type: 'number', min: 1, max: 30, value: minutes,
                 onChange: event => pickMinutes(event.target.value),
               })),
+            h('div', { className: 'sd-dur', style: { marginTop: 12 } },
+              h('span', { className: 'sd-find-lb' }, '画面风格'),
+              h('select', {
+                className: 'sd-select', style: { width: 148 }, value: visualStyle,
+                onChange: event => setVisualStyle(event.target.value),
+              }, (styles.length ? styles : [{ id: 'cinematic', label: '电影写实' }])
+                .map(row => h('option', { key: row.id, value: row.id }, row.label))),
+              h('span', { className: 'sd-find-lb', style: { marginLeft: 10 } }, '比例'),
+              [['1080x1920', '9:16 竖屏'], ['1920x1080', '16:9 横屏']].map(([value, label]) => h('button', {
+                key: value, className: 'sd-dur-chip', type: 'button',
+                'data-on': aspect === value ? '1' : '0',
+                onClick: () => setAspect(value),
+              }, label))),
             h('div', { className: 'sd-dur', style: { marginTop: 12 } },
               h('span', { className: 'sd-find-lb' }, '画面节奏'),
               [[15, '15 秒'], [20, '20 秒'], [30, '30 秒'], [40, '40 秒']].map(([value, label]) => h('button', {
@@ -4741,7 +4762,7 @@ window.__ModuleLoader__.load({
             imagePreset?.note ? h('div', { className: 'sd-hint', style: { marginTop: 4 } }, imagePreset.note) : null,
             h('div', { className: 'sd-row', style: { gap: 12, marginTop: 4 } },
               h('div', { className: 'sd-field', style: { flex: 1 } },
-                h('label', null, '画面风格'),
+                h('label', null, '画面风格（新建项目默认值）'),
                 h('select', { className: 'sd-select', value: form.visualStyle, onChange: event => set('visualStyle', event.target.value) },
                   data.styles.map(row => h('option', { key: row.id, value: row.id }, row.label)))),
               h('div', { className: 'sd-field', style: { flex: 1 } },
