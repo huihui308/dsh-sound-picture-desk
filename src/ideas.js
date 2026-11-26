@@ -26,13 +26,19 @@ export const IDEA_SYSTEM = `你在给一个历史科普短视频账号想选题�
 {"ideas":[{"title":"...","angle":"...","source":"..."}]}`
 
 /** 拼一次生成的 user 消息：格子 + 钩子 + 已有标题。 */
-export function buildIdeaPrompt({ region, era, field, hook, taken = [], count = 5 }) {
-  const hint = HOOK_HINTS[hook] || '不限，但要有一个抓人的切口'
+export function buildIdeaPrompt({ region, era, field, hook, hooks, taken = [], count = 5 }) {
+  // hooks 是数组（多选），hook 是单个字符串（兼容老调用）
+  const picks = (Array.isArray(hooks) ? hooks : (hook ? String(hook).split('/') : []))
+    .map(name => String(name).trim())
+    .filter(Boolean)
+  const hint = picks.length
+    ? `${picks.map(name => `${name}（${HOOK_HINTS[name] || '不限'}）`).join('、')}，这几种角度都要有，大致平均分`
+    : '不限，但要有一个抓人的切口'
   const lines = taken.map((title, index) => `${index + 1}. ${title}`).join('\n')
   const scope = [region, era, field].filter(Boolean).join(' · ') || '不限地域 / 时代 / 领域'
   const lock = region ? `地域是硬约束：所有候选都必须属于${region}的历史，一条都不能跑题。\n` : ''
   return `补这个范围：${scope}
-${lock}钩子方向：${hook || '不限'}（${hint}）
+${lock}钩子方向：${hint}
 
 已经有这些选题，必须避开：
 ${taken.length ? lines : '（池子还是空的）'}

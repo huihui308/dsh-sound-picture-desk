@@ -970,7 +970,10 @@ window.__ModuleLoader__.load({
       const [region, setRegion] = useState('中国')
       const [era, setEra] = useState('')
       const [field, setField] = useState('')
-      const [hook, setHook] = useState('')
+      // 钩子可多选：选了几个就让模型按这几个角度分着出
+      const [hooks, setHooks] = useState([])
+      const hookStr = hooks.join('/')
+      const toggleHook = name => setHooks(prev => (prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name]))
       const [cands, setCands] = useState(null)
       const [quick, setQuick] = useState('')
       const [quickOpen, setQuickOpen] = useState(false)
@@ -1027,7 +1030,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setCands(null)
         try {
-          const out = await post('ideas', { op: 'generate', region, era, field, hook, count })
+          const out = await post('ideas', { op: 'generate', region, era, field, hook: hookStr, count })
           setCands(out.candidates ?? [])
           setError(null)
         } catch (err) {
@@ -1040,7 +1043,7 @@ window.__ModuleLoader__.load({
       const take = async cand => {
         const out = await act('add', {
           title: cand.title, angle: cand.angle, source: cand.source,
-          region, era, field, hook,
+          region, era, field, hook: hookStr,
         })
         if (out) setNotice(`收进池子：${cand.title}`)
       }
@@ -1048,15 +1051,24 @@ window.__ModuleLoader__.load({
       const quickAdd = async () => {
         const title = quick.trim()
         if (!title || busy) return
-        const out = await act('add', { title, region, era, field, hook })
+        const out = await act('add', { title, region, era, field, hook: hookStr })
         if (out) { setQuick(''); setQuickOpen(false); setNotice('记下了') }
       }
 
-      const chip = (list, value, onPick) => list.map(name => h('button', {
-        key: name, className: 'sd-pick-chip', type: 'button',
-        'data-on': value === name ? '1' : '0',
-        onClick: () => onPick(value === name ? '' : name),
-      }, name))
+      const chip = (list, value, onPick) => list.map(name => {
+        const on = Array.isArray(value) ? value.includes(name) : value === name
+        return h('button', {
+          key: name, className: 'sd-pick-chip', type: 'button',
+          'data-on': on ? '1' : '0',
+          onClick: () => (Array.isArray(value) ? onPick(name) : onPick(on ? '' : name)),
+        }, name)
+      })
+
+      // 存的是 "反常/因果" 这种，展示时拆成多个标签
+      const tags = (value, extra = {}) => (Array.isArray(value) ? value : String(value ?? '').split('/'))
+        .map(name => String(name).trim())
+        .filter(Boolean)
+        .map(name => h('span', Object.assign({ key: name, className: 'sd-tag' }, extra), name))
 
       return h('div', { className: 'sd-pane' },
         h('div', { className: 'sd-head' },
@@ -1109,7 +1121,9 @@ window.__ModuleLoader__.load({
               }, busy ? '生成中…' : `给我 ${count} 个`)),
             h('div', { className: 'sd-find-row', style: { marginTop: 10 } },
               h('span', { className: 'sd-find-lb' }, '钩子'),
-              h('div', { className: 'sd-pick-chips' }, chip(IDEA_HOOKS, hook, setHook)),
+              h('div', { className: 'sd-pick-chips' }, chip(IDEA_HOOKS, hooks, toggleHook)),
+              h('span', { className: 'sd-find-hint' },
+                hooks.length > 1 ? `已选 ${hooks.length} 种角度，平分这 ${count} 条` : '可多选'),
               h('span', { className: 'sd-find-lb', style: { marginLeft: 'auto' } }, '数量'),
               h('div', { className: 'sd-pick-chips' },
                 [3, 5, 8, 10].map(n => h('button', {
@@ -1129,7 +1143,7 @@ window.__ModuleLoader__.load({
                     region ? h('span', { className: 'sd-tag' }, region) : null,
                     era ? h('span', { className: 'sd-tag' }, era) : null,
                     field ? h('span', { className: 'sd-tag' }, field) : null,
-                    hook ? h('span', { className: 'sd-tag' }, hook) : null,
+                    ...tags(hookStr),
                     cand.source
                       ? h('span', { className: 'sd-tag', 'data-src': '1' }, cand.source)
                       : h('span', { className: 'sd-tag', 'data-warn': '1' }, '无出处'),
@@ -1156,7 +1170,7 @@ window.__ModuleLoader__.load({
                   row.region ? h('span', { className: 'sd-tag' }, row.region) : null,
                   row.era ? h('span', { className: 'sd-tag' }, row.era) : null,
                   row.field ? h('span', { className: 'sd-tag' }, row.field) : null,
-                  row.hook ? h('span', { className: 'sd-tag' }, row.hook) : null,
+                  ...tags(row.hook),
                   row.source ? h('span', { className: 'sd-tag', 'data-src': '1' }, row.source) : null),
                 h('div', { className: 'sd-icard-ops' },
                   row.status !== 'used'

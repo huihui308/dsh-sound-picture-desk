@@ -11,6 +11,19 @@ test('buildIdeaPrompt：把格子、钩子、已有标题都写进去', () => {
   assert.match(text, /2\. 乙/)
 })
 
+test('buildIdeaPrompt：多钩子时要求每种角度都有', () => {
+  const text = buildIdeaPrompt({ region: '日本', hooks: ['反常', '因果'] })
+  assert.match(text, /反常（/)
+  assert.match(text, /因果（/)
+  assert.match(text, /平均分/)
+})
+
+test('buildIdeaPrompt：老调用传单个 hook 字符串也能拆', () => {
+  const text = buildIdeaPrompt({ region: '日本', hook: '数字/对照' })
+  assert.match(text, /数字（/)
+  assert.match(text, /对照（/)
+})
+
 test('buildIdeaPrompt：条数写进 prompt', () => {
   assert.match(buildIdeaPrompt({ region: '日本', count: 8 }), /给 8 条/)
   assert.match(buildIdeaPrompt({ region: '日本' }), /给 5 条/)
