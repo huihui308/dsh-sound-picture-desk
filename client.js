@@ -2266,13 +2266,20 @@ window.__ModuleLoader__.load({
           error ? h('div', { className: 'sd-hint', style: { marginTop: 8, color: 'var(--dsw-alias-state-error-primary)' } }, error) : null),
 
         h('div', { className: 'sd-card-block' },
-          h('div', { className: 'sd-block-title' }, '第二步：进入下一步'),
+          h('div', { className: 'sd-block-title' }, '第二步：整片配音'),
           h('div', { className: 'sd-hint' },
-            `音色定为「${pickedLabel}」。整片配音统一放到最后一步的「配音并合成」，那里缺多少补多少，不用现在等。`),
+            `音色定为「${pickedLabel}」。可以现在一次配完，也可以直接去出画面——最后一步「配音并合成」会缺多少补多少。`),
           h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8, alignItems: 'center' } },
-            h('button', { className: 'sd-btn', 'data-kind': 'primary', type: 'button', onClick: () => goTab('imaged') }, '去分镜图出画面'),
-            item.totalSecs ? h('span', { style: { flex: 1 } }) : null,
-            item.totalSecs ? h('span', { className: 'sd-hint' }, `已配 ${item.counts.voiced}/${item.counts.segments} 段`) : null)),
+            h('button', {
+              className: 'sd-btn', 'data-kind': missing ? 'primary' : undefined, type: 'button',
+              disabled: busy || recording,
+              onClick: () => onAction('tts', { id: item.id }),
+            }, recording
+              ? '配音中…'
+              : missing ? `全部配音（${missing} 段）` : '全部配好了'),
+            h('button', { className: 'sd-btn', 'data-kind': missing ? 'ghost' : 'primary', type: 'button', onClick: () => goTab('imaged') }, '去分镜图出画面'),
+            h('span', { style: { flex: 1 } }),
+            h('span', { className: 'sd-hint' }, `已配 ${item.counts.voiced}/${item.counts.segments} 段`))),
 
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'voice', disabled: busy, onAction, onReload,
