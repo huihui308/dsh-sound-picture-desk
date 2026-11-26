@@ -4499,6 +4499,11 @@ window.__ModuleLoader__.load({
       const imageModelChoices = [...new Set([form.imageModel || '', ...imageModels].filter(Boolean))]
       const imagePresetId = presetIdOf(data.imagePresets, form.imageEndpoint, form.imageModel)
       const ttsPresetId = presetIdOf(data.ttsPresets, form.ttsEndpoint, form.ttsModel)
+      // 当前预设支持哪些模型；选「自定义」时退回手填。已存的模型若不在列表里也带上，免得被悄悄改掉
+      const ttsPresetModels = (data.ttsPresets ?? []).find(row => row.id === ttsPresetId)?.models ?? []
+      const ttsModelChoices = ttsPresetModels.length
+        ? [...new Set([form.ttsModel, ...ttsPresetModels].filter(Boolean))]
+        : []
       const imagePreset = (data.imagePresets ?? []).find(row => row.id === imagePresetId)
 
       // 选服务商就把地址和模型填好；选「自定义」只把地址留给用户改，不动已经填的内容
@@ -4720,10 +4725,15 @@ window.__ModuleLoader__.load({
               })),
             h('div', { className: 'sd-field' },
               h('label', null, '模型'),
-              h('input', {
-                className: 'sd-input', value: form.ttsModel, placeholder: 'mimo-v2.5-tts',
-                onChange: event => { set('ttsModel', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
-              })),
+              ttsModelChoices.length
+                ? h('select', {
+                  className: 'sd-select', value: form.ttsModel,
+                  onChange: event => { set('ttsModel', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
+                }, ttsModelChoices.map(m => h('option', { key: m, value: m }, m)))
+                : h('input', {
+                  className: 'sd-input', value: form.ttsModel, placeholder: 'mimo-v2.5-tts',
+                  onChange: event => { set('ttsModel', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
+                })),
 
             h('div', { className: 'sd-field' },
               h('label', null, `密钥${data.secrets.ttsKey ? '（已配置，留空不改）' : ''}`),

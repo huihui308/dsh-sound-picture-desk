@@ -36,6 +36,7 @@ export const TTS_PRESETS = [
     provider: 'mimo',
     endpoint: 'https://token-plan-cn.xiaomimimo.com/v1',
     model: 'mimo-v2.5-tts',
+    models: ['mimo-v2.5-tts'],
     note: 'token-plan 计费入口，适合按套餐用量走。',
   },
   {
@@ -44,6 +45,7 @@ export const TTS_PRESETS = [
     provider: 'mimo',
     endpoint: 'https://api.xiaomimimo.com/v1',
     model: 'mimo-v2.5-tts',
+    models: ['mimo-v2.5-tts'],
     note: '按量付费的公开入口，key 和 token-plan 的不通用。',
   },
   {
@@ -52,6 +54,8 @@ export const TTS_PRESETS = [
     provider: 'minimax',
     endpoint: 'https://api.minimaxi.com/v1',
     model: 'speech-2.8-hd',
+    // 版本号越大越新、音质越好；turbo 是同代的快速版，赶时间才选
+    models: ['speech-2.8-hd', 'speech-2.8-turbo', 'speech-2.6-hd', 'speech-2.6-turbo', 'speech-02-hd', 'speech-02-turbo'],
     note: '国内入口 api.minimaxi.com，国际版换 api.minimax.io。新版 sk-api- 密钥直接可用；老版 eyJ 密钥要 GroupId，当前版本不支持。',
   },
 ]
