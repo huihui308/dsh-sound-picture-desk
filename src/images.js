@@ -129,7 +129,7 @@ async function listModels(endpoint, key, signal) {
   }
 }
 
-async function generatePlatform({ endpoint, key, model, prompt, width, height, signal }) {
+async function generatePlatform({ endpoint, key, model, prompt, width, height, signal, plainFormat = false }) {
   // 本机自建服务免密钥；平台通道必须填 key
   if (!key && !isLocalEndpoint(endpoint)) throw new Error('还没有配置平台生图密钥')
   // 读 body 也要算进超时：b64 大图有上百 KB，卡在读取阶段时只包住建连是没用的
@@ -138,7 +138,15 @@ async function generatePlatform({ endpoint, key, model, prompt, width, height, s
       const hit = await fetch(`${trimSlash(endpoint)}/images/generations`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(key ? { authorization: `Bearer ${key}` } : {}) },
-        body: JSON.stringify({ model, prompt, size: `${width}x${height}`, response_format: 'b64_json', n: 1 }),
+        // b64_json 省掉一次下载往返；不传就按标准的 url 默认走。
+        // 严格校验参数的服务会拒绝未知字段，那种情况由下面的重试兜住。
+        body: JSON.stringify({
+          model,
+          prompt,
+          size: `${width}x${height}`,
+          ...(plainFormat ? {} : { response_format: 'b64_json' }),
+          n: 1,
+        }),
         signal,
       })
       return { response: hit, raw: await hit.text() }
@@ -148,6 +156,10 @@ async function generatePlatform({ endpoint, key, model, prompt, width, height, s
     signal,
   )
   if (!response.ok) {
+    // 服务不认识 response_format：去掉这个可选参数，按标准默认（url）再要一次
+    if (!plainFormat && /response_format|unknown (field|parameter)|extra (field|input)|invalid (field|parameter)/i.test(raw)) {
+      return generatePlatform({ endpoint, key, model, prompt, width, height, signal, plainFormat: true })
+    }
     // 模型名大小写写错是最常见的一类：拉一次模型列表，纠正得了就重试一次
     const looksLikeModel = response.status === 404 || /model/i.test(raw)
     if (looksLikeModel) {
