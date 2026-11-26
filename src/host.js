@@ -565,11 +565,14 @@ async function createItem(store, body) {
   }
   const targetMinutes = Math.max(1, Math.min(30, Number(body.targetMinutes) || 5))
   const language = body.language === 'en' ? 'en' : 'zh'
+  // 节奏跟着项目走：一段多少秒决定画面多久换一次，不该只有一个全局值
+  const segSeconds = Math.max(12, Math.min(90, Number(body.segmentSeconds) || 40))
   const item = {
     id: newId('bk'),
     title: topic.slice(0, 60),
     topic,
     language,
+    settings: { segmentSeconds: segSeconds },
     rawText,
     angle: '',
     targetMinutes,

@@ -2293,7 +2293,7 @@ window.__ModuleLoader__.load({
             h('span', { style: { flex: 1 } }),
             h('span', { className: 'sd-hint' }, `已配 ${item.counts.voiced}/${item.counts.segments} 段`))),
 
-        h('div', { className: 'sd-card-block' },
+        h('div', { className: 'sd-card-block', style: { display: 'none' } },
           h('div', { className: 'sd-block-title' }, '一句一景 · 试切'),
           h('div', { className: 'sd-hint' },
             '选一段，让模型把它拆成三个镜头并真画出来，看切出来的画面是不是雷同。结果只作参考，不影响正式分镜。'),
@@ -4223,6 +4223,8 @@ window.__ModuleLoader__.load({
       const [minutes, setMinutes] = useState(5)
       // 语言从立项就定：它决定写稿、配音指令和字幕口径，后面再改等于重做
       const [language, setLanguage] = useState('zh')
+      // 画面节奏：一段多少秒 = 画面多久换一次。15 秒偏快，40 秒偏慢
+      const [segSeconds, setSegSeconds] = useState(30)
       // 时长不再默认 5 分钟：题目输完后按它估一个，用户可改
       const [durAdvice, setDurAdvice] = useState(null)
       const [durBusy, setDurBusy] = useState(false)
@@ -4265,7 +4267,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setFormError(null)
         try {
-          await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText, language })
+          await onCreate({ topic: topic.trim(), targetMinutes: Number(minutes) || 5, rawText, language, segmentSeconds: segSeconds })
         } catch (err) {
           setFormError(err.message)
         } finally {
@@ -4298,6 +4300,17 @@ window.__ModuleLoader__.load({
                 type: 'number', min: 1, max: 30, value: minutes,
                 onChange: event => pickMinutes(event.target.value),
               })),
+            h('div', { className: 'sd-dur', style: { marginTop: 12 } },
+              h('span', { className: 'sd-find-lb' }, '画面节奏'),
+              [[15, '15 秒'], [20, '20 秒'], [30, '30 秒'], [40, '40 秒']].map(([value, label]) => h('button', {
+                key: value, className: 'sd-dur-chip', type: 'button',
+                'data-on': segSeconds === value ? '1' : '0',
+                onClick: () => setSegSeconds(value),
+              }, label)),
+              h('span', { className: 'sd-dur-tip', style: { marginTop: 0, marginLeft: 6 } },
+                segSeconds <= 20 ? '画面换得勤，段落要短，稿子会碎一些'
+                  : segSeconds >= 40 ? '画面换得慢，一段讲完一件事，适合长镜头叙事'
+                    : '折中，一段能讲清一个转折')),
             h('div', { className: 'sd-dur', style: { marginTop: 12 } },
               h('span', { className: 'sd-find-lb' }, '语言'),
               [['zh', '中文'], ['en', 'English']].map(([value, label]) => h('button', {
