@@ -4518,7 +4518,7 @@ window.__ModuleLoader__.load({
         try {
           const payload = target === 'image'
             ? { target: 'image', endpoint: form.imageEndpoint, model: form.imageModel, key: keyFor('image') }
-            : { target: 'tts', endpoint: form.ttsEndpoint, model: form.ttsModel, key: keyFor('tts'), voice: form.voice }
+            : { target: 'tts', endpoint: form.ttsEndpoint, model: form.ttsModel, key: keyFor('tts'), voice: form.voice, provider: form.ttsProvider ?? 'mimo', groupId: form.ttsGroupId ?? '' }
           const result = await post('test', payload)
           setTest(prev => ({
             ...prev,

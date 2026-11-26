@@ -209,9 +209,10 @@ export async function synthesize({ endpoint, model, key, voice, text, signal, la
  * 真合成一小段来验通道：地址错、路径错、key 错、模型名错，
  * 在这一步就会给出不同的报错，而不是等到批量配音时才炸。
  */
-export async function testTtsChannel({ endpoint, model, key, voice }) {
+export async function testTtsChannel({ endpoint, model, key, voice, provider, groupId }) {
   const started = Date.now()
   try {
+    // 检测必须走和正式合成同一条协议分支，否则 MiniMax 会被当成 MiMo 发 chat/completions
     const buffer = await synthesize({
       endpoint,
       model,
@@ -219,6 +220,8 @@ export async function testTtsChannel({ endpoint, model, key, voice }) {
       voice,
       text: '测试。',
       signal: AbortSignal.timeout(60_000),
+      provider,
+      groupId,
     })
     const kb = Math.max(1, Math.round(buffer.length / 1024))
     return { ok: true, detail: `合成成功，返回 ${kb} KB 音频（${Date.now() - started} ms）` }

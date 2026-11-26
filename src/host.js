@@ -1657,6 +1657,8 @@ async function route(ctx, store, req, res) {
           model: settings.ttsModel,
           key: secrets.ttsKey,
           voice: settings.voice,
+          provider: settings.ttsProvider,
+          groupId: settings.ttsGroupId,
         }),
       ])
       return json(res, 200, { image, tts, ffmpeg: await probeFfmpeg() })
@@ -1898,6 +1900,8 @@ async function route(ctx, store, req, res) {
           model: String(body.model ?? settings.ttsModel),
           key: String(body.key ?? '').trim() || secrets.ttsKey,
           voice: String(body.voice ?? settings.voice),
+          provider: String(body.provider ?? settings.ttsProvider ?? 'mimo'),
+          groupId: String(body.groupId ?? settings.ttsGroupId ?? ''),
         })
         return json(res, 200, result)
       }
