@@ -1853,18 +1853,20 @@ async function route(ctx, store, req, res) {
         const era = String(body.era ?? '').trim().slice(0, 20)
         const field = String(body.field ?? '').trim().slice(0, 20)
         const hook = String(body.hook ?? '').trim().slice(0, 20) || '不限'
+        // 一次要几条：3 到 12 之间，默认 5。token 预算跟着条数走，免得 10 条被截断
+        const count = Math.max(1, Math.min(12, Number(body.count) || 5))
         if (!region && !era && !field) return json(res, 400, { error: '先选一个范围' })
         const state = await store.read()
         const taken = (state.ideas ?? []).map(row => row.title).filter(Boolean).slice(0, 80)
         const { text } = await callModel(ctx, {
-          maxTokens: 2400,
-          signal: AbortSignal.timeout(150_000),
+          maxTokens: Math.min(12_000, 800 + count * 360),
+          signal: AbortSignal.timeout(180_000),
           system: IDEA_SYSTEM,
-          user: buildIdeaPrompt({ region, era, field, hook, taken }),
+          user: buildIdeaPrompt({ region, era, field, hook, taken, count }),
         })
-        const candidates = normalizeIdeaCandidates(extractJson(text))
+        const candidates = normalizeIdeaCandidates(extractJson(text), count)
         if (!candidates.length) return json(res, 502, { error: '模型没给出可用的选题，再试一次' })
-        return json(res, 200, { candidates, region, era, field, hook })
+        return json(res, 200, { candidates, region, era, field, hook, count })
       }
       if (op === 'add') {
         const idea = {

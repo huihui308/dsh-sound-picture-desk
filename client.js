@@ -974,6 +974,19 @@ window.__ModuleLoader__.load({
       const [cands, setCands] = useState(null)
       const [quick, setQuick] = useState('')
       const [quickOpen, setQuickOpen] = useState(false)
+      // 一次要几条：记住上次选的，省得每次重设
+      const [count, setCount] = useState(() => {
+        try {
+          const saved = Number(localStorage.getItem('spd-idea-count'))
+          return [3, 5, 8, 10].includes(saved) ? saved : 5
+        } catch {
+          return 5
+        }
+      })
+      const pickCount = next => {
+        setCount(next)
+        try { localStorage.setItem('spd-idea-count', String(next)) } catch { /* 隐私模式下存不了，算了 */ }
+      }
 
       const load = useCallback(async () => {
         try {
@@ -1014,7 +1027,7 @@ window.__ModuleLoader__.load({
         setBusy(true)
         setCands(null)
         try {
-          const out = await post('ideas', { op: 'generate', region, era, field, hook })
+          const out = await post('ideas', { op: 'generate', region, era, field, hook, count })
           setCands(out.candidates ?? [])
           setError(null)
         } catch (err) {
@@ -1093,11 +1106,17 @@ window.__ModuleLoader__.load({
                 className: 'sd-btn', 'data-kind': 'primary', type: 'button',
                 style: { marginLeft: 'auto' },
                 disabled: busy, onClick: generate,
-              }, busy ? '生成中…' : '给我 5 个')),
+              }, busy ? '生成中…' : `给我 ${count} 个`)),
             h('div', { className: 'sd-find-row', style: { marginTop: 10 } },
               h('span', { className: 'sd-find-lb' }, '钩子'),
               h('div', { className: 'sd-pick-chips' }, chip(IDEA_HOOKS, hook, setHook)),
-              h('span', { className: 'sd-find-hint' }, '可不选，选了会让标题自带开头钩子'))),
+              h('span', { className: 'sd-find-lb', style: { marginLeft: 'auto' } }, '数量'),
+              h('div', { className: 'sd-pick-chips' },
+                [3, 5, 8, 10].map(n => h('button', {
+                  key: n, className: 'sd-pick-chip', type: 'button',
+                  'data-on': count === n ? '1' : '0',
+                  onClick: () => pickCount(n),
+                }, String(n)))))),
 
           cands && cands.length
             ? [

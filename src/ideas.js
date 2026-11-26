@@ -26,7 +26,7 @@ export const IDEA_SYSTEM = `你在给一个历史科普短视频账号想选题�
 {"ideas":[{"title":"...","angle":"...","source":"..."}]}`
 
 /** 拼一次生成的 user 消息：格子 + 钩子 + 已有标题。 */
-export function buildIdeaPrompt({ region, era, field, hook, taken = [] }) {
+export function buildIdeaPrompt({ region, era, field, hook, taken = [], count = 5 }) {
   const hint = HOOK_HINTS[hook] || '不限，但要有一个抓人的切口'
   const lines = taken.map((title, index) => `${index + 1}. ${title}`).join('\n')
   const scope = [region, era, field].filter(Boolean).join(' · ') || '不限地域 / 时代 / 领域'
@@ -37,7 +37,7 @@ ${lock}钩子方向：${hook || '不限'}（${hint}）
 已经有这些选题，必须避开：
 ${taken.length ? lines : '（池子还是空的）'}
 
-给 5 条。`
+给 ${count} 条。`
 }
 
 /** 模型输出的 JSON → 干净候选列表，过滤空标题、截断超长。 */

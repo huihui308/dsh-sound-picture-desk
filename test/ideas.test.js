@@ -11,6 +11,11 @@ test('buildIdeaPrompt：把格子、钩子、已有标题都写进去', () => {
   assert.match(text, /2\. 乙/)
 })
 
+test('buildIdeaPrompt：条数写进 prompt', () => {
+  assert.match(buildIdeaPrompt({ region: '日本', count: 8 }), /给 8 条/)
+  assert.match(buildIdeaPrompt({ region: '日本' }), /给 5 条/)
+})
+
 test('buildIdeaPrompt：空池子给明确占位，不留空行', () => {
   const text = buildIdeaPrompt({ era: '', field: '', hook: '' })
   assert.match(text, /不限地域 \/ 时代 \/ 领域/)
