@@ -396,6 +396,10 @@ window.__ModuleLoader__.load({
 
 
 
+
+.sd-stage-i[data-optional="1"] .sd-stage-dot{border-style:dotted;color:var(--dsw-alias-label-tertiary);opacity:.72}
+.sd-stage-i[data-optional="1"] .sd-stage-x s{opacity:.72}
+
 /* ---- 新建弹窗：时长档位 ---- */
 .sd-dur{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .sd-dur-chip{height:30px;padding:0 11px;border-radius:7px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer}
@@ -1470,18 +1474,23 @@ window.__ModuleLoader__.load({
       if (key === 'idea') return segments.length > 0
       if (key === 'scripted') return segments.length > 0 && segments.every(row => String(row.text ?? '').trim())
       if (key === 'voiced') return segments.length > 0 && segments.every(row => row.audioPath)
-      // 参考图是可选的：没建过就算完成，建了但没全定稿才拦
+      // 参考图是可选的：没抽过不算完成（不能打勾），但也不挡后续 —— 「可选」由 tabOptional 表达
       if (key === 'anchors') {
         const list = item.anchors ?? []
-        return list.length === 0 ? true : list.every(row => row.approved)
+        return list.length > 0 && list.every(row => row.approved)
       }
       if (key === 'imaged') return segments.length > 0 && segments.every(row => row.imagePath)
       return Boolean(item.render)
     }
 
+    /** 可选阶段：没做过就当它不存在，既不打勾也不算欠账。 */
+    function tabOptional(item, key) {
+      return key === 'anchors' && !(item.anchors ?? []).length
+    }
+
     /** 打开项目时落在第一个没做完的页，而不是永远从①开始。 */
     function defaultTab(item) {
-      return TAB_KEYS.find(key => !tabDone(item, key)) ?? 'rendered'
+      return TAB_KEYS.find(key => !tabDone(item, key) && !tabOptional(item, key)) ?? 'rendered'
     }
 
     function Project({ item, data, busy, notice, onAction, onReload, onSettings }) {
@@ -1512,13 +1521,15 @@ window.__ModuleLoader__.load({
       TAB_KEYS.forEach((key, index) => {
         const stage = data.stages.find(row => row.id === key)
         const done = tabDone(item, key)
+        const optional = tabOptional(item, key)
         const on = active === key
         stageNodes.push(h('button', {
           key, type: 'button', className: 'sd-stage-i',
           'data-on': on ? '1' : '0', 'data-done': done ? '1' : '0',
+          'data-optional': optional ? '1' : '0',
           onClick: () => setPicked(key),
         },
-          h('span', { className: 'sd-stage-dot' }, done ? '✓' : on ? '●' : ''),
+          h('span', { className: 'sd-stage-dot' }, done ? '✓' : on ? '●' : optional ? '·' : ''),
           h('span', { className: 'sd-stage-x' },
             h('b', null, stage?.label ?? key),
             h('s', null, stageHint(item, key)))))
