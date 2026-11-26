@@ -127,6 +127,19 @@ window.__ModuleLoader__.load({
 .sd-voice-note{font-size:11px;color:var(--dsw-alias-label-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---- 试切镜头 ---- */
+
+/* ---- 切镜预览 ---- */
+.sd-shot-preview{margin-top:12px;display:flex;flex-direction:column;gap:10px;max-height:520px;overflow:auto;padding-right:4px}
+.sd-shot-row{display:flex;gap:12px;border-top:1px solid var(--dsw-alias-border-l2);padding-top:9px}
+.sd-shot-src{flex:0 0 210px;font-size:11px;line-height:1.55;color:var(--dsw-alias-label-tertiary);display:flex;gap:6px}
+.sd-shot-idx{flex:0 0 auto;color:var(--dsw-alias-brand-primary);font-variant-numeric:tabular-nums}
+.sd-shot-list{flex:1;display:flex;flex-direction:column;gap:5px;min-width:0}
+.sd-shot-item{display:flex;gap:6px;align-items:flex-start;font-size:11.5px;line-height:1.55}
+.sd-shot-desc{color:var(--dsw-alias-label-secondary)}
+.sd-tag[data-shot="wide"]{color:#8fb08a}
+.sd-tag[data-shot="medium"]{color:#c9a978}
+.sd-tag[data-shot="close"]{color:#8fa8c8}
+.sd-tag[data-shot="detail"]{color:#c78f8f}
 .sd-trial-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
 .sd-trial-card{flex:0 0 210px;display:flex;flex-direction:column;gap:6px}
 .sd-trial-shot{width:210px;height:368px;border-radius:7px;overflow:hidden;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1)}
@@ -1992,6 +2005,9 @@ window.__ModuleLoader__.load({
         }
       }
 
+      const shotPreview = item.shotPreview
+      const shootBusy = item.task?.running && item.task.kind === 'shots-preview'
+      // 切镜预览放在稿子页：它验证的是稿子能不能拆成一镜一画面
       const dirty = topic !== (item.topic ?? '')
         || Number(minutes) !== (item.targetMinutes ?? 5)
         || (rawLoaded && raw !== rawBase) // 材料没拉到时不计入，免得把空串当成改动
@@ -2006,6 +2022,7 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null,
         h('div', { className: 'sd-card-block' },
           h('div', { className: 'sd-block-title' }, '这一期讲什么'),
+        null,
           h('div', { className: 'sd-field' },
             h('label', null, '主题 / 书名'),
             h('input', {
@@ -2147,6 +2164,8 @@ window.__ModuleLoader__.load({
 
     // ------------------------------------------------------------------ ② 稿子
 
+    const SHOT_LABEL = { wide: '全景', medium: '中景', close: '特写', detail: '细节' }
+
     function ScriptPage({ item, data, busy, onAction, onReload }) {
       const settings = { ...data.settings, ...(item.settings ?? {}) }
       const words = item.segments.reduce((sum, row) => sum + String(row.text ?? '').length, 0)
@@ -2175,6 +2194,36 @@ window.__ModuleLoader__.load({
               onClick: () => onAction('script', { id: item.id }, '正在生成稿件…'),
             }, '生成稿件'))),
 
+        h('div', { className: 'sd-card-block' },
+          h('div', { className: 'sd-block-title' }, '拆镜头（只切不画，先看雷不雷同）'),
+          h('div', { className: 'sd-hint' },
+            '把每一段拆成两三镜，每镜标景别。不花出图的钱——先看切出来的镜头是不是真的各不一样，再决定要不要往这一步投。'),
+          h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8, alignItems: 'center' } },
+            h('button', {
+              className: 'sd-btn', 'data-kind': shootBusy ? undefined : 'primary', type: 'button',
+              disabled: busy || shootBusy,
+              onClick: () => onAction('shots/preview', { id: item.id }, null),
+            }, shootBusy ? '正在切…' : shotPreview ? '重新切一遍' : '切镜头预览'),
+            shotPreview
+              ? h('span', { className: 'sd-hint' },
+                `上次：${shotPreview.rows.length} 段 → ${shotPreview.rows.reduce((n, row) => n + row.shots.length, 0)} 镜`
+                + (shotPreview.rows.some(row => !row.shots.length) ? '（有段没切出来）' : ''))
+              : null),
+          shotPreview
+            ? h('div', { className: 'sd-shot-preview' },
+              shotPreview.rows.map(row => h('div', { key: row.segIdx, className: 'sd-shot-row' },
+                h('div', { className: 'sd-shot-src' },
+                  h('span', { className: 'sd-shot-idx' }, String(row.segIdx + 1)),
+                  h('span', null, row.text)),
+                h('div', { className: 'sd-shot-list' },
+                  row.shots.length
+                    ? row.shots.map((shot, index) => h('div', { key: index, className: 'sd-shot-item' },
+                      h('span', { className: 'sd-tag', 'data-shot': shot.shot }, SHOT_LABEL[shot.shot] ?? shot.shot),
+                      shot.reuse ? h('span', { className: 'sd-tag', 'data-tone': 'warn' }, '沿用') : null,
+                      h('span', { className: 'sd-shot-desc' }, shot.desc)))
+                    : h('div', { className: 'sd-hint' }, '这段没切出来')))))
+            : null),
+
         // 不传 onZoom：稿子页不渲染图，点开放大没有对象
         item.segments.map(seg => h(SegmentCard, {
           key: seg.id, item, seg, mode: 'script', disabled: busy, onAction, onReload,
@@ -2184,8 +2233,6 @@ window.__ModuleLoader__.load({
     }
 
     // ------------------------------------------------------------------ ③ 旁白
-
-    const SHOT_LABEL = { wide: '全景', medium: '中景', close: '特写', detail: '细节' }
 
     function VoicePage({ item, data, busy, onAction, onReload }) {
       const settings = { ...data.settings, ...(item.settings ?? {}) }

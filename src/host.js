@@ -15,7 +15,7 @@ import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
 import { buildIdeaPrompt, IDEA_SYSTEM, normalizeIdeaCandidates, normalizeNewIdea } from './ideas.js'
-import { SHOT_SYSTEM, buildShotPrompt, normalizeShots } from './shots.js'
+import { SHOT_BATCH, SHOT_BATCH_SYSTEM, SHOT_SYSTEM, buildBatchPrompt, buildShotPrompt, normalizeBatchShots, normalizeShots } from './shots.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, isTaskLocked, publicTask, startTask } from './jobs.js'
 import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, clipWindow, composeCopy, countVariant, formatDuration, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
@@ -1023,6 +1023,59 @@ async function extractAnchors(ctx, store, itemId) {
 
 /** 给一个参考条目画一张候选图。 */
 
+
+/**
+ * 整篇切镜（只切不画）：验证「一段拆两三镜」到底可不可行，不花出图的钱。
+ * 结果存 item.shotPreview，不影响正式字段。
+ */
+async function previewShots(ctx, store, itemId, onlyMissing, signal, report) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const segments = (item.segments ?? []).filter(row => row.text)
+  if (!segments.length) throw Object.assign(new Error('还没有稿子'), { status: 400 })
+
+  const collected = new Map()
+  const batches = []
+  for (let i = 0; i < segments.length; i += SHOT_BATCH) batches.push(segments.slice(i, i + SHOT_BATCH))
+
+  let done = 0
+  for (const batch of batches) {
+    if (signal.aborted) throw new Error('已停止')
+    report(done, `正在切第 ${done + 1}-${Math.min(segments.length, done + batch.length)} 段`)
+    const { text } = await callModel(ctx, {
+      system: SHOT_BATCH_SYSTEM,
+      user: buildBatchPrompt(batch),
+      maxTokens: 2000 + batch.length * 900,
+      signal,
+      route: item.model ?? null,
+    })
+    const got = normalizeBatchShots(extractJson(text), batch.length)
+    batch.forEach((seg, index) => {
+      const shots = got.get(index)
+      if (shots) collected.set(seg.idx, shots)
+    })
+    done += batch.length
+    report(done, `已切 ${done}/${segments.length} 段`)
+  }
+
+  // 汇成按段号排好的列表；缺的段标出来，别假装切全了
+  const rows = segments.map(seg => ({
+    segIdx: seg.idx,
+    text: String(seg.text).slice(0, 200),
+    shots: collected.get(seg.idx) ?? [],
+    missing: !collected.has(seg.idx),
+  }))
+
+  await store.mutate(draft => {
+    const target = findItem(draft, itemId)
+    target.shotPreview = { at: new Date().toISOString(), rows }
+    return null
+  })
+
+  const total = rows.reduce((sum, row) => sum + row.shots.length, 0)
+  return { segments: rows.length, shots: total, missing: rows.filter(row => row.missing).length }
+}
+
 /**
  * 试切一段：让模型把这段旁白拆成 3 个镜头，再真画出来。
  * 只在验证阶段用——结果存 item.shotTrials，不碰正式的分镜字段。
@@ -1808,6 +1861,17 @@ async function route(ctx, store, req, res) {
       const secrets = await store.readSecrets()
       await drawAnchor(store, secrets, String(body.id ?? ''), String(body.anchorId ?? ''), body.instruction)
       return json(res, 200, { task: publicTask(String(body.id ?? '')) })
+    }
+    case 'shots/preview': {
+      // 整篇切镜，纯文本：先看切出来雷不雷同，再决定要不要花出图的钱
+      const id = String(body.id ?? '')
+      startTask(id, 'shots-preview', 1, async ({ report, signal }) => {
+        report(0, '正在切镜头…')
+        const summary = await previewShots(ctx, store, id, body.missingOnly === true, signal, report)
+        report(1, `切完：${summary.segments} 段 → ${summary.shots} 镜`)
+        return summary
+      })
+      return json(res, 200, { task: publicTask(id) })
     }
     case 'shots/try': {
       // 验证「一句一景」用：切一段 + 真画三张，结果不落正式字段
