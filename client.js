@@ -1577,8 +1577,7 @@ window.__ModuleLoader__.load({
               'data-on': active === 'publish' ? '1' : '0',
               title: item.render ? '生成发布包' : '先合成成片',
               onClick: () => setPicked('publish'),
-            }, '发布'),
-            h('button', { className: 'sd-btn', 'data-kind': 'ghost', type: 'button', onClick: onSettings, title: '设置' }, h(GearIcon))),
+            }, '发布')),
 
           h('div', { className: 'sd-stage' }, stageNodes),
 
