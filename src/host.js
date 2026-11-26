@@ -1014,6 +1014,34 @@ async function extractAnchors(ctx, store, itemId) {
 }
 
 /** 给一个参考条目画一张候选图。 */
+/** 画一张参考图的具体动作，单张与批量共用。 */
+async function drawOneAnchor({ store, secrets, itemId, target, settings, dirs, instruction, signal }) {
+  const tail = String(instruction ?? '').trim()
+  const content = [target.desc, tail && `调整：${tail}`].filter(Boolean).join('。')
+  const wantW = Number(settings.imageWidth) || 1024
+  const wantH = Number(settings.imageHeight) || 1792
+  const raw = await generateImage(settings, secrets, {
+    content,
+    width: wantW,
+    height: wantH,
+    signal,
+  })
+  const { buffer } = await normalizeImageBuffer(raw, dirs, wantW, wantH, signal)
+  const name = `anchors/${target.id}-${Date.now()}.png`
+  await writeFile(join(dirs.base, name), buffer)
+  await store.mutate(draft => {
+    const row = findItem(draft, itemId)
+    const hit = (row.anchors ?? []).find(a => a.id === target.id)
+    if (hit) {
+      hit.candidates = [...(hit.candidates ?? []), name].slice(-6)
+      // 用户改过描述就把改动留下，下次画图继续用
+      if (tail) hit.desc = content.slice(0, 600)
+    }
+    return null
+  })
+  return name
+}
+
 async function drawAnchor(store, secrets, itemId, anchorId, instruction) {
   const state = await store.read()
   const item = findItem(state, itemId)
@@ -1022,34 +1050,41 @@ async function drawAnchor(store, secrets, itemId, anchorId, instruction) {
   const settings = effectiveSettings(state, item)
   const dirs = await store.ensureItemDirs(itemId)
   await mkdir(join(dirs.base, 'anchors'), { recursive: true })
-  const tail = String(instruction ?? '').trim()
-  const content = [target.desc, tail && `调整：${tail}`].filter(Boolean).join('。')
 
   return startTask(itemId, 'anchor', 1, async ({ report, signal }) => {
     report(0, `正在画「${target.name}」`)
-    const wantW = Number(settings.imageWidth) || 1024
-    const wantH = Number(settings.imageHeight) || 1792
-    const raw = await generateImage(settings, secrets, {
-      content,
-      width: wantW,
-      height: wantH,
-      signal,
-    })
-    const { buffer } = await normalizeImageBuffer(raw, dirs, wantW, wantH, signal)
-    const name = `anchors/${anchorId}-${Date.now()}.png`
-    await writeFile(join(dirs.base, name), buffer)
-    await store.mutate(draft => {
-      const row = findItem(draft, itemId)
-      const hit = (row.anchors ?? []).find(a => a.id === anchorId)
-      if (hit) {
-        hit.candidates = [...(hit.candidates ?? []), name].slice(-6)
-        // 用户改过描述就把改动留下，下次画图继续用
-        if (tail) hit.desc = content.slice(0, 600)
-      }
-      return null
-    })
+    const path = await drawOneAnchor({ store, secrets, itemId, target, settings, dirs, instruction, signal })
     report(1, '画好了')
-    return { path: name }
+    return { path }
+  })
+}
+
+/** 一键画全部：只补没图的，定过稿的不动（除非显式重画）。 */
+async function drawAllAnchors(store, secrets, itemId, redraw) {
+  const state = await store.read()
+  const item = findItem(state, itemId)
+  const all = item.anchors ?? []
+  if (!all.length) throw Object.assign(new Error('还没有参考条目，先点「提取人物和场景」'), { status: 400 })
+  const targets = redraw
+    ? all
+    : all.filter(row => !row.approved && !(row.candidates ?? []).length)
+  if (!targets.length) {
+    throw Object.assign(new Error('没有要画的：每条都已经有图了。要全部重画就勾上「重画」再点'), { status: 400 })
+  }
+  const settings = effectiveSettings(state, item)
+  const dirs = await store.ensureItemDirs(itemId)
+  await mkdir(join(dirs.base, 'anchors'), { recursive: true })
+
+  return startTask(itemId, 'anchor', targets.length, async ({ report, signal }) => {
+    let done = 0
+    for (const target of targets) {
+      if (signal.aborted) throw new Error('已停止')
+      report(done, `正在画「${target.name}」（${done + 1}/${targets.length}）`)
+      await drawOneAnchor({ store, secrets, itemId, target, settings, dirs, signal })
+      done += 1
+      report(done, `已画 ${done}/${targets.length}`)
+    }
+    return { drawn: done }
   })
 }
 
@@ -1700,6 +1735,12 @@ async function route(ctx, store, req, res) {
       const secrets = await store.readSecrets()
       await drawAnchor(store, secrets, String(body.id ?? ''), String(body.anchorId ?? ''), body.instruction)
       return json(res, 200, { task: publicTask(String(body.id ?? '')) })
+    }
+    case 'anchors/draw-all': {
+      const secrets = await store.readSecrets()
+      const id = String(body.id ?? '')
+      await drawAllAnchors(store, secrets, id, body.redraw === true)
+      return json(res, 200, { task: publicTask(id) })
     }
     case 'anchors/approve': {
       // 定稿：记下选中的那张，同时把它绑定的描述固化

@@ -2280,6 +2280,9 @@ window.__ModuleLoader__.load({
       const drawing = task?.running && task.kind === 'anchor'
       const approvedCount = anchors.filter(row => row.approved).length
 
+      // 待画 = 没定稿且一张都没有的
+      const pendingAnchors = anchors.filter(row => !row.approved && !(row.candidates ?? []).length).length
+
       const call = async (path, payload, id) => {
         setBusyId(id ?? 'extract')
         setError(null)
@@ -2304,6 +2307,16 @@ window.__ModuleLoader__.load({
               disabled: busy || Boolean(busyId),
               onClick: () => call('anchors/extract', { id: item.id }),
             }, busyId === 'extract' ? '正在分析…' : anchors.length ? '重新提取' : '提取人物和场景'),
+            anchors.length
+              ? h('button', {
+                className: 'sd-btn', 'data-kind': pendingAnchors ? 'primary' : undefined, type: 'button',
+                disabled: busy || Boolean(busyId),
+                onClick: () => call('anchors/draw-all', { id: item.id }),
+              }, busyId === 'draw-all'
+                ? '正在画…'
+                : pendingAnchors ? `生成全部（${pendingAnchors} 条待画）` : '全部都有图了')
+              : null,
+
             anchors.length
               ? h('span', { className: 'sd-hint' }, `已定稿 ${approvedCount}/${anchors.length}`)
               : null,
