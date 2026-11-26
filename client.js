@@ -1869,7 +1869,7 @@ window.__ModuleLoader__.load({
     function IdeaPage({ item, data, busy, onAction, onReload }) {
       // 这个组件的父级是 Project，拿不到它的局部变量，设置要自己算一份
       const settings = { ...data.settings, ...(item.settings ?? {}) }
-      const segSeconds = Math.max(12, Math.min(90, Number(settings.segmentSeconds) || 40))
+      const segSeconds = Math.max(12, Math.min(90, Number(settings.segmentSeconds) || 20))
       const [topic, setTopic] = useState(item.topic ?? '')
       const [minutes, setMinutes] = useState(item.targetMinutes ?? 5)
       const [raw, setRaw] = useState(item.rawText ?? '')
@@ -4224,7 +4224,7 @@ window.__ModuleLoader__.load({
       // 语言从立项就定：它决定写稿、配音指令和字幕口径，后面再改等于重做
       const [language, setLanguage] = useState('zh')
       // 画面节奏：一段多少秒 = 画面多久换一次。15 秒偏快，40 秒偏慢
-      const [segSeconds, setSegSeconds] = useState(30)
+      const [segSeconds, setSegSeconds] = useState(20)
       // 时长不再默认 5 分钟：题目输完后按它估一个，用户可改
       const [durAdvice, setDurAdvice] = useState(null)
       const [durBusy, setDurBusy] = useState(false)
@@ -4303,6 +4303,7 @@ window.__ModuleLoader__.load({
             h('div', { className: 'sd-dur', style: { marginTop: 12 } },
               h('span', { className: 'sd-find-lb' }, '画面节奏'),
               [[15, '15 秒'], [20, '20 秒'], [30, '30 秒'], [40, '40 秒']].map(([value, label]) => h('button', {
+                // 20 秒是推荐档：84 字讲清一个事件，画面 20 秒换一次
                 key: value, className: 'sd-dur-chip', type: 'button',
                 'data-on': segSeconds === value ? '1' : '0',
                 onClick: () => setSegSeconds(value),
@@ -4605,7 +4606,7 @@ window.__ModuleLoader__.load({
         setError(null)
         try {
           // 每段时长统一按 12–90 秒这一档走，和选题页、服务端口径一致
-          const segmentSeconds = Math.max(12, Math.min(90, Number(form.segmentSeconds) || 40))
+          const segmentSeconds = Math.max(12, Math.min(90, Number(form.segmentSeconds) || 20))
           await post('settings', { settings: { ...form, segmentSeconds, theme } })
           if (ttsKey.trim()) await post('secrets', { ttsKey: ttsKey.trim() })
           if (imageKey.trim()) await post('secrets', { imageKey: imageKey.trim() })
@@ -4808,7 +4809,7 @@ window.__ModuleLoader__.load({
                 h('label', null, '每段时长（秒）'),
                 h('input', {
                   className: 'sd-input', type: 'number', min: 12, max: 90, value: form.segmentSeconds,
-                  onChange: event => set('segmentSeconds', Math.max(12, Math.min(90, Number(event.target.value) || 40))),
+                  onChange: event => set('segmentSeconds', Math.max(12, Math.min(90, Number(event.target.value) || 20))),
                 }))),
             h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8 } },
               h('button', {

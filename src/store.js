@@ -30,7 +30,9 @@ export const DEFAULT_SETTINGS = {
   voice: '白桦',
   tone: 'storyteller',
   visualStyle: 'cinematic',
-  segmentSeconds: 40,
+  // 20 秒一段：约 84 字，讲清一个事件，画面 20 秒换一次。
+  // 40 秒是初版拍的脑袋数，实测一段塞得进两件事，画面看着像不动。
+  segmentSeconds: 20,
   trashDays: 7,
   theme: 'warm',
   renderWorkers: 0,
