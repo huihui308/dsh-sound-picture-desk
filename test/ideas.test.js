@@ -1,6 +1,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildIdeaPrompt, normalizeIdeaCandidates, HOOK_HINTS } from '../src/ideas.js'
+import { buildIdeaPrompt, normalizeIdeaCandidates, normalizeNewIdea, HOOK_HINTS } from '../src/ideas.js'
+
+test('normalizeNewIdea：有标题就返回干净条目，字段齐全', () => {
+  const out = normalizeNewIdea({ title: ' 杯酒释兵权 ', region: '中国', era: '宋', field: '政治', hook: '反常/因果', source: '《宋史》' })
+  assert.equal(out.error, undefined)
+  assert.equal(out.idea.title, '杯酒释兵权')
+  assert.equal(out.idea.region, '中国')
+  assert.equal(out.idea.hook, '反常/因果')
+  assert.equal(out.idea.source, '《宋史》')
+})
+
+test('normalizeNewIdea：没标题返回 error，不返回半成品', () => {
+  assert.deepEqual(normalizeNewIdea({ title: '   ' }), { error: '先写个标题' })
+  assert.deepEqual(normalizeNewIdea({}), { error: '先写个标题' })
+  assert.deepEqual(normalizeNewIdea(null), { error: '先写个标题' })
+})
 
 test('buildIdeaPrompt：把格子、钩子、已有标题都写进去', () => {
   const text = buildIdeaPrompt({ era: '隋唐', field: '科技', hook: '反常', taken: ['甲', '乙'] })

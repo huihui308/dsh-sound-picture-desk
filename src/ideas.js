@@ -46,6 +46,30 @@ ${taken.length ? lines : '（池子还是空的）'}
 给 ${count} 条。`
 }
 
+/**
+ * 新增条目的参数归一。抽出来是因为 host 里手改容易丢行——
+ * 上一次就是 title 那两行被吃掉，接口直接抛 "title is not defined"。
+ */
+export function normalizeNewIdea(input = {}) {
+  // 传 null / 非对象也要给「先写个标题」，不能抛
+  const body = input && typeof input === 'object' ? input : {}
+  const title = String(body.title ?? '').trim().slice(0, 120)
+  if (!title) return { error: '先写个标题' }
+  return {
+    idea: {
+      title,
+      angle: String(body.angle ?? '').trim().slice(0, 300),
+      kind: String(body.kind ?? 'history').slice(0, 20),
+      region: String(body.region ?? '').trim().slice(0, 20),
+      era: String(body.era ?? '').trim().slice(0, 20),
+      field: String(body.field ?? '').trim().slice(0, 20),
+      // 多钩子存成 "反常/因果"，给 40 字余量
+      hook: String(body.hook ?? '').trim().slice(0, 40),
+      source: String(body.source ?? '').trim().slice(0, 300),
+    },
+  }
+}
+
 /** 模型输出的 JSON → 干净候选列表，过滤空标题、截断超长。 */
 export function normalizeIdeaCandidates(parsed, limit = 6) {
   const list = Array.isArray(parsed?.ideas) ? parsed.ideas : []

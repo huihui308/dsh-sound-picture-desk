@@ -14,7 +14,7 @@ import { encoderArgsSync, encoderInfo, maxParallelSessions, resolveEncoder } fro
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
 import { callModel, extractJson, modelInfo } from './llm.js'
-import { buildIdeaPrompt, IDEA_SYSTEM, normalizeIdeaCandidates } from './ideas.js'
+import { buildIdeaPrompt, IDEA_SYSTEM, normalizeIdeaCandidates, normalizeNewIdea } from './ideas.js'
 import { chatTurn } from './chat.js'
 import { cancelTask, isBusy, isTaskLocked, publicTask, startTask } from './jobs.js'
 import { PLATFORMS, PLATFORM_ORDER, RULE_VERSION, clipWindow, composeCopy, countVariant, formatDuration, normalizeTargets, sanitizeVariant, validateCopy, validateVideo, variantIsEmpty } from './publish/rules.js'
@@ -1872,17 +1872,12 @@ async function route(ctx, store, req, res) {
         return json(res, 200, { candidates, region, era, field, hook, count })
       }
       if (op === 'add') {
+        const parsed = normalizeNewIdea(body)
+        if (parsed.error) return json(res, 400, { error: parsed.error })
         const idea = {
+          ...parsed.idea,
           id: newId('idea'),
-          title,
-          angle: String(body.angle ?? '').trim().slice(0, 300),
-          kind: String(body.kind ?? 'history').slice(0, 20),
-          region: String(body.region ?? '').trim().slice(0, 20),
-          era: String(body.era ?? '').trim().slice(0, 20),
-          field: String(body.field ?? '').trim().slice(0, 20),
-          hook: String(body.hook ?? '').trim().slice(0, 20),
           status: 'new',
-          source: String(body.source ?? '').trim().slice(0, 300),
           at: new Date().toISOString(),
           usedBy: null,
         }
