@@ -201,7 +201,9 @@ export async function writeScript(ctx, { topic, rawText, settings, signal, route
   const segmentSeconds = Math.min(90, Math.max(12, Number(settings?.segmentSeconds) || 40))
   const requested = Math.max(3, Math.min(40, Math.round(300 / segmentSeconds)))
   // 分段按目标时长算：整体先按 5 分钟基线，用户改了段长就跟着变
-  const perSegmentChars = Math.max(90, Math.min(260, Math.round(segmentSeconds * 4.2)))
+  // 下限必须跟着段长走：原来写死 90 字，12/15/20 秒全被顶成 90 字（实际念 21 秒），
+  // 界面上这三个档位等于失效——设 12 秒和设 20 秒写出来的稿子一模一样长。
+  const perSegmentChars = Math.max(40, Math.min(260, Math.round(segmentSeconds * 4.2)))
   const segmentCount = Math.max(3, Math.min(40, Math.round((Number(settings?.targetMinutes) || 5) * 60 / segmentSeconds) || requested))
   const tone = settings?.tone ?? 'storyteller'
   const { text } = await callModel(ctx, {
