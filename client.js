@@ -2173,7 +2173,11 @@ window.__ModuleLoader__.load({
       const recording = task?.running && task.kind === 'tts'
       const missing = item.counts.segments - item.counts.voiced
       const ready = item.counts.segments > 0 && missing === 0
-      const pickedLabel = data.voices.find(row => row.id === settings.voice)?.label ?? settings.voice
+      // 声线列表跟着服务商走：MiMo 和 MiniMax 的 id 不通用
+      const voiceList = data.settings?.ttsProvider === 'minimax'
+        ? (data.minimaxVoices ?? [])
+        : (data.mimoVoices ?? data.voices ?? [])
+      const pickedLabel = voiceList.find(row => row.id === settings.voice)?.label ?? settings.voice
       const [loadingVoice, setLoadingVoice] = useState(null)
       const [error, setError] = useState(null)
 
@@ -2219,7 +2223,7 @@ window.__ModuleLoader__.load({
             `用这期稿子的开头（约 15 秒）。点名字就选中并试听，没听过的现场生成，不用等全部。推荐从「白桦」开始。`),
 
           h('div', { className: 'sd-voices' },
-            data.voices.map((row, index) => {
+            voiceList.map((row, index) => {
               const isPicked = settings.voice === row.id
               const loading = loadingVoice === row.id
               const has = Boolean(samples[row.id])
@@ -4499,7 +4503,14 @@ window.__ModuleLoader__.load({
         setTest(prev => ({ ...prev, tts: null }))
         const preset = (data.ttsPresets ?? []).find(row => row.id === id)
         if (!preset) return
-        setForm(prev => ({ ...prev, ttsEndpoint: preset.endpoint, ttsModel: preset.model }))
+        setForm(prev => ({
+          ...prev,
+          ttsEndpoint: preset.endpoint,
+          ttsModel: preset.model,
+          ttsProvider: preset.provider ?? 'mimo',
+          // 换服务商时声线要跟着换，否则会拿 MiMo 的 id 去请求 MiniMax
+          voice: (preset.provider === 'minimax' ? data.minimaxVoices : data.mimoVoices)?.[0]?.id ?? prev.voice,
+        }))
       }
 
       const runTest = async target => {
@@ -4703,6 +4714,15 @@ window.__ModuleLoader__.load({
                 className: 'sd-input', value: form.ttsModel, placeholder: 'mimo-v2.5-tts',
                 onChange: event => { set('ttsModel', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
               })),
+            form.ttsProvider === 'minimax'
+              ? h('div', { className: 'sd-field' },
+                h('label', null, 'GroupId'),
+                h('input', {
+                  className: 'sd-input', value: form.ttsGroupId ?? '', spellCheck: false,
+                  placeholder: 'MiniMax 控制台「账户信息」里的那串数字',
+                  onChange: event => { set('ttsGroupId', event.target.value); setTest(prev => ({ ...prev, tts: null })) },
+                }))
+              : null,
             h('div', { className: 'sd-field' },
               h('label', null, `密钥${data.secrets.ttsKey ? '（已配置，留空不改）' : ''}`),
               h('input', {
@@ -4714,7 +4734,8 @@ window.__ModuleLoader__.load({
               h('div', { className: 'sd-field', style: { flex: 1 } },
                 h('label', null, '音色'),
                 h('select', { className: 'sd-select', value: form.voice, onChange: event => set('voice', event.target.value) },
-                  data.voices.map(row => h('option', { key: row.id, value: row.id }, row.label)))),
+                  (form.ttsProvider === 'minimax' ? data.minimaxVoices : data.mimoVoices ?? data.voices)
+                    .map(row => h('option', { key: row.id, value: row.id }, row.label)))),
               h('div', { className: 'sd-field', style: { flex: 1 } },
                 h('label', null, '每段时长（秒）'),
                 h('input', {

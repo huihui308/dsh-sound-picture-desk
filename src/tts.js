@@ -16,11 +16,24 @@ const VOICES = [
 
 export const TTS_VOICES = VOICES.map(row => ({ ...row }))
 
+/** MiniMax 官方 T2A 的声线。id 就是它家的 voice_id。 */
+export const MINIMAX_VOICES = [
+  { id: 'presenter_male', label: '男性主持人', note: '播报感强，讲历史最像电台' },
+  { id: 'audiobook_male_1', label: '男声有声书 1', note: '叙述腔，句子收得稳' },
+  { id: 'audiobook_male_2', label: '男声有声书 2', note: '比 1 更沉，适合正剧' },
+  { id: 'male-qn-jingying', label: '精英青年', note: '偏年轻的男声，节奏快' },
+  { id: 'male-qn-badao', label: '霸道青年', note: '低音足，压得住场面' },
+  { id: 'presenter_female', label: '女性主持人', note: '干净利落' },
+  { id: 'audiobook_female_1', label: '女声有声书 1', note: '温和叙述' },
+  { id: 'female-yujie', label: '御姐', note: '偏低的女声，不甜' },
+]
+
 /** 预设：只填好地址与模型，密钥由用户自己填。 */
 export const TTS_PRESETS = [
   {
     id: 'mimo',
     label: '小米 MiMo',
+    provider: 'mimo',
     endpoint: 'https://token-plan-cn.xiaomimimo.com/v1',
     model: 'mimo-v2.5-tts',
     note: 'token-plan 计费入口，适合按套餐用量走。',
@@ -28,11 +41,25 @@ export const TTS_PRESETS = [
   {
     id: 'mimo-public',
     label: '小米 MiMo（公众版）',
+    provider: 'mimo',
     endpoint: 'https://api.xiaomimimo.com/v1',
     model: 'mimo-v2.5-tts',
     note: '按量付费的公开入口，key 和 token-plan 的不通用。',
   },
+  {
+    id: 'minimax',
+    label: 'MiniMax 官方',
+    provider: 'minimax',
+    endpoint: 'https://api.minimax.chat/v1',
+    model: 'speech-2.8-hd',
+    note: '要用 GroupId（控制台「账户信息」里那串数字），走 t2a_v2 接口。',
+  },
 ]
+
+/** 按服务商给可选声线。 */
+export function voicesFor(provider) {
+  return (provider === 'minimax' ? MINIMAX_VOICES : VOICES).map(row => ({ ...row }))
+}
 
 const INSTRUCTION = '请朗读下面这段旁白。语气平稳克制，像在给朋友讲一件旧事，句与句之间留一点停顿，不要播音腔。'
 // 英文要单独给指令：中文那条会让模型带中文韵律去读英文，重音全错
@@ -71,14 +98,69 @@ function describeFailure(status, body) {
   return `音频合成失败（HTTP ${status}）：${message}`
 }
 
+
+/**
+ * MiniMax 官方 T2A：和 MiMo 完全是另一套协议。
+ * 返回的是 hex 字符串（不是 base64），URL 上要带 GroupId。
+ */
+async function synthesizeMinimax({ endpoint, model, key, voice, content, signal, groupId }) {
+  const base = String(endpoint).replace(/\/+$/, '')
+  const url = `${base}/t2a_v2${groupId ? `?GroupId=${encodeURIComponent(groupId)}` : ''}`
+  const voiceId = MINIMAX_VOICES.some(row => row.id === voice) ? voice : 'presenter_male'
+  const body = {
+    model: model || 'speech-2.8-hd',
+    text: content,
+    voice_setting: { voice_id: voiceId, speed: 1, vol: 1, pitch: 0 },
+    audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 },
+    stream: false,
+  }
+  let response
+  let raw
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify(body),
+      signal: combineSignals(signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)),
+    })
+    raw = await response.text()
+  } catch (err) {
+    if (signal?.aborted) throw err
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+      throw new Error(`音频服务超时（${REQUEST_TIMEOUT_MS / 1000} 秒），地址可达但没返回结果`)
+    }
+    throw new Error(`连不上音频服务（${url}）：${err?.message ?? err}`)
+  }
+  if (!response.ok) throw new Error(describeFailure(response.status, raw))
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('音频服务返回的不是 JSON')
+  }
+  const code = parsed?.base_resp?.status_code
+  if (code !== undefined && code !== 0) {
+    const msg = parsed?.base_resp?.status_msg || '未知错误'
+    // 1004 是认证失败，1008 是余额不足，这两个最常见，直接给人话
+    const hint = code === 1004 ? '：密钥或 GroupId 不对' : code === 1008 ? '：账户余额不足' : ''
+    throw new Error(`MiniMax 拒绝了请求（${code}）${msg}${hint}`)
+  }
+  const hex = parsed?.data?.audio
+  if (typeof hex !== 'string' || !hex) throw new Error('音频服务没有返回音频（这条文字可能被判定不可朗读）')
+  return Buffer.from(hex, 'hex')
+}
+
 /**
  * 合成一段旁白音频。
  * @returns {Promise<Buffer>} mp3 字节。
  */
-export async function synthesize({ endpoint, model, key, voice, text, signal, language = 'zh' }) {
+export async function synthesize({ endpoint, model, key, voice, text, signal, language = 'zh', provider = 'mimo', groupId = '' }) {
   if (!key) throw new Error('还没有配置音频密钥，去设置里填一次')
   const content = String(text ?? '').trim()
   if (!content) throw new Error('这一段没有文字，无法合成')
+  if (provider === 'minimax') {
+    return synthesizeMinimax({ endpoint, model, key, voice, content, signal, groupId })
+  }
   const url = `${String(endpoint).replace(/\/+$/, '')}/chat/completions`
   const body = {
     model,

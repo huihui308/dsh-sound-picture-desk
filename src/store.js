@@ -49,6 +49,9 @@ export const DEFAULT_SETTINGS = {
   imageModel: 'qwen-image-2.1-turbo',
   ttsEndpoint: 'https://token-plan-cn.xiaomimimo.com/v1',
   ttsModel: 'mimo-v2.5-tts',
+  // 服务商决定请求协议：mimo 走 chat/completions，minimax 走 t2a_v2
+  ttsProvider: 'mimo',
+  ttsGroupId: '',
 }
 
 /** 每条时间轴分段都要齐了才算进入下一阶段，所以阶段是派生的，不单独存。 */

@@ -9,7 +9,7 @@ import { cpus, homedir } from 'node:os'
 
 import { DEFAULT_SETTINGS, STAGES, STAGE_LABEL, Store, dshHome, newId, stageOf } from './store.js'
 import { TONES, VISUAL_STYLES, styleLabel, writeScript } from './script.js'
-import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel } from './tts.js'
+import { TTS_PRESETS, TTS_VOICES, synthesize, testTtsChannel, voicesFor } from './tts.js'
 import { encoderArgsSync, encoderInfo, maxParallelSessions, resolveEncoder } from './encoders.js'
 import { IMAGE_PRESETS, generateImage, testImageChannel } from './images.js'
 import { buildAss, buildSrt, burnSubtitles, concatShots, concatWithFade, probeDuration, renderIntroCard, renderShot } from './render.js'
@@ -671,6 +671,8 @@ async function runVoiceBody(store, secrets, itemId, onlyIds, report, signal) {
       text: row.text,
       signal,
       language: item.language === 'en' ? 'en' : 'zh',
+      provider: settings.ttsProvider,
+      groupId: settings.ttsGroupId,
     })
     const name = `s${String(row.idx + 1).padStart(3, '0')}.mp3`
     const file = join(dirs.audio, name)
@@ -868,7 +870,7 @@ async function startVoiceSamples(store, secrets, itemId) {
   await mkdir(join(dirs.base, 'samples'), { recursive: true })
   if (!secrets.ttsKey) throw Object.assign(new Error('还没有配置音频密钥，去设置里填一次'), { status: 400 })
   const sample = String(item.segments[0]?.text || VOICE_SAMPLE_FALLBACK).slice(0, FIFTEEN_SECONDS_CHARS)
-  const voices = TTS_VOICES.map(row => row.id)
+  const voices = voicesFor(settings.ttsProvider).map(row => row.id)
   return startTask(itemId, 'voice-samples', voices.length, async ({ report, signal }) => {
     let done = 0
     for (const voice of voices) {
@@ -881,6 +883,8 @@ async function startVoiceSamples(store, secrets, itemId) {
         voice,
         text: sample,
         signal,
+        provider: settings.ttsProvider,
+        groupId: settings.ttsGroupId,
       })
       const rel = `samples/voice-${voice.replace(/[^\w\u4e00-\u9fa5-]/g, '_')}.mp3`
       await writeFile(join(dirs.base, rel), buffer)
@@ -1614,6 +1618,9 @@ async function route(ctx, store, req, res) {
         settings: publicSettings(settings),
         secrets: { ttsKey: Boolean(secrets.ttsKey), imageKey: Boolean(secrets.imageKey) },
         voices: TTS_VOICES,
+        // 两套声线都带上，前端按当前服务商切换
+        minimaxVoices: voicesFor('minimax'),
+        mimoVoices: voicesFor('mimo'),
         styles: Object.entries(VISUAL_STYLES).map(([id, row]) => ({ id, label: row.label })),
         tones: Object.entries(TONES).map(([id, row]) => ({ id, label: row.label })),
         stages: STAGES.map(id => ({ id, label: STAGE_LABEL[id] })),
@@ -1700,12 +1707,12 @@ async function route(ctx, store, req, res) {
       const voice = String(body.voice ?? '')
       const state = await store.read()
       const item = findItem(state, id)
-      if (!TTS_VOICES.some(row => row.id === voice)) {
+      const settings = effectiveSettings(state, item)
+      if (!voicesFor(settings.ttsProvider).some(row => row.id === voice)) {
         throw Object.assign(new Error('没有这个音色'), { status: 400 })
       }
       const secrets = await store.readSecrets()
       if (!secrets.ttsKey) throw Object.assign(new Error('还没有配置音频密钥'), { status: 400 })
-      const settings = effectiveSettings(state, item)
       const dirs = await store.ensureItemDirs(id)
       await mkdir(join(dirs.base, 'samples'), { recursive: true })
       const sample = String(item.segments[0]?.text || '话说这一桩旧事，得从头讲起，藏着一桩没人愿意提的往事。').slice(0, FIFTEEN_SECONDS_CHARS)
@@ -1715,6 +1722,8 @@ async function route(ctx, store, req, res) {
         key: secrets.ttsKey,
         voice,
         text: sample,
+        provider: settings.ttsProvider,
+        groupId: settings.ttsGroupId,
       })
       const rel = `samples/voice-${voice.replace(/[^\w\u4e00-\u9fa5-]/g, '_')}.mp3`
       await writeFile(join(dirs.base, rel), buffer)
