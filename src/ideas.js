@@ -19,16 +19,20 @@ export const IDEA_SYSTEM = `你在给一个历史科普短视频账号想选题�
 2. 标题 22 字以内，要带钩子；角度 45 字以内，说清反常识在哪。
 3. 必须能追到具体文献。source 写书名加篇名（例：《旧唐书·食货志》）。确实想不出就留空字符串，绝对不许编。
 4. 不要和已有选题重复，换个说法重述也不行。
+5. 只写目标地区的历史。选了日本就只给日本的事件、日本的材料、日本的史料，不许拿中国或其他地区的史实顶替。
+6. 标题里的专有名词（人名、地名、器物名）必须是你确信真实存在的；不确定就换一个确定的说法，不许生造。
 
 只输出 JSON，不要别的文字：
 {"ideas":[{"title":"...","angle":"...","source":"..."}]}`
 
 /** 拼一次生成的 user 消息：格子 + 钩子 + 已有标题。 */
-export function buildIdeaPrompt({ era, field, hook, taken = [] }) {
+export function buildIdeaPrompt({ region, era, field, hook, taken = [] }) {
   const hint = HOOK_HINTS[hook] || '不限，但要有一个抓人的切口'
   const lines = taken.map((title, index) => `${index + 1}. ${title}`).join('\n')
-  return `补这一格：${era || '不限时代'} · ${field || '不限领域'}
-钩子方向：${hook || '不限'}（${hint}）
+  const scope = [region, era, field].filter(Boolean).join(' · ') || '不限地域 / 时代 / 领域'
+  const lock = region ? `地域是硬约束：所有候选都必须属于${region}的历史，一条都不能跑题。\n` : ''
+  return `补这个范围：${scope}
+${lock}钩子方向：${hook || '不限'}（${hint}）
 
 已经有这些选题，必须避开：
 ${taken.length ? lines : '（池子还是空的）'}

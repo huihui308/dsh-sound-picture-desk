@@ -92,6 +92,7 @@ export function migrateState(raw) {
   state.ideas = Array.isArray(state.ideas) ? state.ideas : []
   // era / field / hook 三件套是矩阵视图的分组依据，老条目可能没有，补空串
   state.ideas.forEach(row => {
+    row.region = typeof row.region === 'string' ? row.region : ''
     row.era = typeof row.era === 'string' ? row.era : ''
     row.field = typeof row.field === 'string' ? row.field : ''
     row.hook = typeof row.hook === 'string' ? row.hook : ''

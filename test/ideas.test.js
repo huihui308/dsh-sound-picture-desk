@@ -13,7 +13,7 @@ test('buildIdeaPrompt：把格子、钩子、已有标题都写进去', () => {
 
 test('buildIdeaPrompt：空池子给明确占位，不留空行', () => {
   const text = buildIdeaPrompt({ era: '', field: '', hook: '' })
-  assert.match(text, /不限时代 · 不限领域/)
+  assert.match(text, /不限地域 \/ 时代 \/ 领域/)
   assert.match(text, /池子还是空的/)
   assert.match(text, /钩子方向：不限/)
 })

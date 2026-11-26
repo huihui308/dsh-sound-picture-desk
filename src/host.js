@@ -1849,21 +1849,22 @@ async function route(ctx, store, req, res) {
       }
       if (op === 'generate') {
         // 按「时代 · 领域」补空位：把池子里已有的标题一起交给模型，让它避开
+        const region = String(body.region ?? '').trim().slice(0, 20)
         const era = String(body.era ?? '').trim().slice(0, 20)
         const field = String(body.field ?? '').trim().slice(0, 20)
         const hook = String(body.hook ?? '').trim().slice(0, 20) || '不限'
-        if (!era && !field) return json(res, 400, { error: '先点一个格子' })
+        if (!region && !era && !field) return json(res, 400, { error: '先选一个范围' })
         const state = await store.read()
         const taken = (state.ideas ?? []).map(row => row.title).filter(Boolean).slice(0, 80)
         const { text } = await callModel(ctx, {
           maxTokens: 2400,
           signal: AbortSignal.timeout(150_000),
           system: IDEA_SYSTEM,
-          user: buildIdeaPrompt({ era, field, hook, taken }),
+          user: buildIdeaPrompt({ region, era, field, hook, taken }),
         })
         const candidates = normalizeIdeaCandidates(extractJson(text))
         if (!candidates.length) return json(res, 502, { error: '模型没给出可用的选题，再试一次' })
-        return json(res, 200, { candidates, era, field, hook })
+        return json(res, 200, { candidates, region, era, field, hook })
       }
       if (op === 'add') {
         const idea = {
@@ -1871,6 +1872,7 @@ async function route(ctx, store, req, res) {
           title,
           angle: String(body.angle ?? '').trim().slice(0, 300),
           kind: String(body.kind ?? 'history').slice(0, 20),
+          region: String(body.region ?? '').trim().slice(0, 20),
           era: String(body.era ?? '').trim().slice(0, 20),
           field: String(body.field ?? '').trim().slice(0, 20),
           hook: String(body.hook ?? '').trim().slice(0, 20),
@@ -1895,6 +1897,7 @@ async function route(ctx, store, req, res) {
           if (typeof patch.title === 'string' && patch.title.trim()) hit.title = patch.title.trim().slice(0, 120)
           if (typeof patch.angle === 'string') hit.angle = patch.angle.trim().slice(0, 300)
           if (typeof patch.source === 'string') hit.source = patch.source.trim().slice(0, 300)
+          if (typeof patch.region === 'string') hit.region = patch.region.trim().slice(0, 20)
           if (typeof patch.era === 'string') hit.era = patch.era.trim().slice(0, 20)
           if (typeof patch.field === 'string') hit.field = patch.field.trim().slice(0, 20)
           if (typeof patch.hook === 'string') hit.hook = patch.hook.trim().slice(0, 20)
