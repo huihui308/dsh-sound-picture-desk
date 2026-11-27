@@ -4806,25 +4806,7 @@ window.__ModuleLoader__.load({
                 onChange: event => { setImageKey(event.target.value); setTest(prev => ({ ...prev, image: null })) },
               })),
             imagePreset?.note ? h('div', { className: 'sd-hint', style: { marginTop: 4 } }, imagePreset.note) : null,
-            h('div', { className: 'sd-row', style: { gap: 12, marginTop: 4 } },
-              h('div', { className: 'sd-field', style: { flex: 1 } },
-                h('label', null, '画面风格（新建项目默认值）'),
-                h('select', { className: 'sd-select', value: form.visualStyle, onChange: event => set('visualStyle', event.target.value) },
-                  data.styles.map(row => h('option', { key: row.id, value: row.id }, row.label)))),
-              h('div', { className: 'sd-field', style: { flex: 1 } },
-                h('label', null, '画面比例'),
-                h('select', {
-                  className: 'sd-select', value: `${form.width}x${form.height}`,
-                  onChange: event => {
-                    const [w, hh] = event.target.value.split('x').map(Number)
-                    set('width', w); set('height', hh)
-                    // 生图长边固定 1792，另一条边按画幅推，保证落在本机服务认的档位上
-                    set('imageWidth', hh >= w ? 1024 : 1792)
-                    set('imageHeight', hh >= w ? 1792 : 1024)
-                  },
-                },
-                  h('option', { value: '1080x1920' }, '9:16 竖屏'),
-                  h('option', { value: '1920x1080' }, '16:9 横屏')))),
+            // 画面风格与比例不在这里：它们在新项目弹窗里定、在分镜图页能改，第三处只会让人猜哪一处生效
             h('div', { className: 'sd-row', style: { marginTop: 10, gap: 8 } },
               h('button', {
                 className: 'sd-btn', type: 'button',
